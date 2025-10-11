@@ -97,11 +97,16 @@ class BackgroundRemover:
             # Manual preprocessing for models without processor
             image_array = np.array(image)
             image_tensor = torch.from_numpy(image_array).permute(2, 0, 1).unsqueeze(0).float() / 255.0
-            inputs = {"pixel_values": image_tensor.to(self.device)}
+            inputs = image_tensor.to(self.device)
         
         # Generate mask
         with torch.no_grad():
-            outputs = self.model(**inputs)
+            # Call model - handle different calling conventions
+            if isinstance(inputs, dict):
+                outputs = self.model(**inputs)
+            else:
+                # For models like RMBG that expect tensor directly
+                outputs = self.model(inputs)
             
             # Handle different output formats
             if hasattr(outputs, 'logits'):
