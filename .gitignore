@@ -1,27 +1,69 @@
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Build outputs
-dist/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
-*.log
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Virtual Environment
+venv/
+env/
+ENV/
 
-# Editor directories and files
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# OS files
+# Models and Data
+models/
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+dataset/
+data/
+
+# Output and Test Data
+output/
+processed/
+test_data/
+*.png
+*.jpg
+*.jpeg
+*.webp
+!examples/*.png
+!examples/*.jpg
+
+# Logs
+*.log
+logs/
+training_history.json
+
+# OS
+.DS_Store
 Thumbs.db
 
+# Jupyter
+.ipynb_checkpoints/
+
+# HuggingFace cache
+.cache/
+huggingface/
