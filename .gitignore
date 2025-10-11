@@ -45,6 +45,7 @@ data/
 output/
 processed/
 test_data/
+test_output/
 *.png
 *.jpg
 *.jpeg

@@ -2,6 +2,17 @@
 
 An AI-powered fashion styling assistant that generates personalized outfit recommendations from users' existing wardrobes.
 
+## 🚀 Quick Test (2 minutes)
+
+```bash
+pip install -r requirements.txt
+python test_simple.py
+```
+
+**→ See [TEST.md](TEST.md) for detailed test instructions**
+
+---
+
 ## Overview
 
 StyleMe helps users create stylish, cohesive outfits from their existing wardrobes using AI. The app features:

@@ -1,0 +1,47 @@
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║   STYLEME BACKGROUND REMOVAL - START HERE                     ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📦 STEP 1: INSTALL
+────────────────────────────────────────────────────────────────
+pip install -r requirements.txt
+
+
+🧪 STEP 2: TEST
+────────────────────────────────────────────────────────────────
+python test_simple.py
+
+This will:
+  ✓ Check everything is working
+  ✓ Download AI model (2GB, first time only)
+  ✓ Create test image
+  ✓ Remove background
+  ✓ Save results to test_output/
+
+
+🎨 STEP 3: USE WITH YOUR IMAGE
+────────────────────────────────────────────────────────────────
+Single image:
+  python background_removal.py --input photo.jpg --output result.png
+
+Multiple images:
+  python batch_processor.py --input ./photos --output ./results
+
+
+📚 NEED MORE HELP?
+────────────────────────────────────────────────────────────────
+  TEST.md                      → Quick test guide
+  BACKGROUND_REMOVAL_GUIDE.md  → Full documentation
+  examples/                    → Code examples
+
+
+⚡ TROUBLESHOOTING
+────────────────────────────────────────────────────────────────
+"ModuleNotFoundError"  → Run: pip install -r requirements.txt
+"CUDA out of memory"   → Will auto-use CPU (slower but works)
+Model download slow    → Normal for first time (~2GB)
+
+
+That's it! Start with Step 1 above. ⬆
