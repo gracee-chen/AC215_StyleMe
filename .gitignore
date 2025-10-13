@@ -1,27 +1,58 @@
-# Dependencies
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Scraped data directories
+farfetch_data/
+my_scraping_results/
 
-# Build outputs
-dist/
+# Downloaded images and datasets
+data/images/
+data/men_data/*.json
+data/images/failed_downloads*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
-*.log
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
 
-# Editor directories and files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# OS files
+# Logs
+*.log
+farfetch_scraper.log
+
+# OS
+.DS_Store
 Thumbs.db
 
+# URLs file (if it contains sensitive data)
+urls.txt
+
+# Temporary files
+*.tmp
+*.bak
