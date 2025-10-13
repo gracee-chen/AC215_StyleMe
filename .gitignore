@@ -2,10 +2,9 @@
 farfetch_data/
 my_scraping_results/
 
-# Downloaded images and datasets
-data/images/
-data/men_data/*.json
+# Temporary and log files
 data/images/failed_downloads*.txt
+data/images/failed_downloads_old.txt
 
 # Python
 __pycache__/
