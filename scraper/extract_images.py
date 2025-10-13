@@ -28,7 +28,7 @@ def find_json_files(data_dir):
     if not data_path.exists():
         raise FileNotFoundError(f"Directory not found: {data_dir}")
     
-    json_files = list(data_path.glob("dataset_farfetch_*.json"))
+    json_files = list(data_path.glob("*.json"))
     return sorted(json_files)
 
 
@@ -200,6 +200,7 @@ def process_data_directory(data_dir, output_dir='data/images', max_workers=15):
     # Find all JSON files
     print(f"\nScanning directory: {data_dir}")
     json_files = find_json_files(data_dir)
+    print(json_files)
     
     if not json_files:
         print(f"✗ No dataset files found in {data_dir}")
@@ -243,14 +244,14 @@ def process_data_directory(data_dir, output_dir='data/images', max_workers=15):
 
 def main():
     # Configuration
-    DATA_DIR = '../data/men_data'  # Relative to scraper directory
+    DATA_DIR = '../data/women_data'  # Relative to scraper directory
     OUTPUT_DIR = '../data/images'  # Output to data/images
     MAX_WORKERS = 20  # Increased to 20 threads for faster downloads
     
     # Optional: Specify which files to process (leave empty to process all)
     # To process only specific files, uncomment and add their names here:
-    SPECIFIC_FILES = ['dataset_farfetch_2025-10-13_02-53-52-563.json']
-    # SPECIFIC_FILES = []  # Empty = process all files
+    # SPECIFIC_FILES = ['dataset_farfetch_2025-10-13_02-53-52-563.json']
+    SPECIFIC_FILES = []  # Empty = process all files
     
     # Process the data directory
     if SPECIFIC_FILES:

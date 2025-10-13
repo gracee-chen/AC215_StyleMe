@@ -43,7 +43,7 @@ def extract_product_info(filename):
 def find_image_url(product_id, index, data_dir):
     """Find the URL for a specific product image from dataset files"""
     data_path = Path(data_dir)
-    json_files = list(data_path.glob("dataset_farfetch_*.json"))
+    json_files = list(data_path.glob("*.json"))
     
     for json_file in json_files:
         try:
@@ -199,7 +199,7 @@ def retry_failed_images(failed_log, data_dir, output_dir, max_workers=5):
 
 def main():
     # Configuration
-    DATA_DIR = '../data/men_data'
+    DATA_DIR = '../data/women_data'
     OUTPUT_DIR = '../data/images'
     FAILED_LOG = '../data/images/failed_downloads.txt'
     MAX_WORKERS = 5  # Reduced workers for more stable connections
