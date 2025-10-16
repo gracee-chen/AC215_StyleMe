@@ -1,11 +1,26 @@
 # Personal Wardrobe AI Stylist
 
+## Team Members
+Chufei Peng, Grace Chen, Siyao Zhu, Angel Chen
+
+## Group Name
+Stylist
+
+## Project Description
+In this project, we aim to develop an AI-powered personal wardrobe stylist that helps users create cohesive outfits from their existing wardrobes. The system leverages curated product data and compatibility information (“complete the look”) to learn relationships between clothing items. It integrates a data-cleaning and caption-generation pipeline with a FashionCLIP-based compatibility model to recommend matching items. The goal is to provide an intelligent outfit suggestion tool that understands real-world style relationships and personalizes recommendations based on visual and textual cues.
+
+## Milestone 2 Overview
+This milestone focused on building a **scalable, containerized end-to-end pipeline** for data processing, model training, and evaluation. We developed standardized data handling, generated item captions, fine-tuned a FashionCLIP model, and validated the pipeline’s reproducibility within Docker environments.
+
+## Data
+We processed a dataset containing ~6,700 curated product images and JSON metadata for men’s and women’s fashion. Each item includes product details and “complete the look” annotations that describe compatible items. The cleaned data were used to train a compatibility model and serve as the foundation for the end-to-end wardrobe recommendation pipeline, containerized and version-controlled for reproducibility.
+
 ## 📁 Project Structure
 
 ```
 project 215/
 ├── data/                           # Training data
-│   ├── Data caption/              # Captioned data from angel branch
+│   ├── Data caption/              # Captioned data from Angel's branch
 │   │   ├── men_data/             # Male product data
 │   │   └── women_data/           # Female product data
 │   └── images/                   # Product images (6761 files)
@@ -26,34 +41,139 @@ project 215/
 │           ├── quick_eval.py     # Quick evaluation
 │           └── README.md         # Evaluation documentation
 ```
+## 1. Virtual Environment Setup
+
+We built isolated Docker environments for each pipeline component to ensure consistency and scalability across cloud and local environments.
+
+### Setup Instructions
+
+[Insert bash commands]
+
+[Insert Screenshot Placeholder]
+
+_Figure 1. Screenshot of running containers or GCP instances._
+
+### Notes
+
+## 2. End-to-End Containerized Pipeline
+
+The pipeline consists of modular components orchestrated with Docker Compose.
+
+| Stage | Description | Example Tasks |
+|--------|--------------|----------------|
+| **📥 Ingestion** | Collects and stores curated product data | Web scraping, GCS upload |
+| **🔄 Preprocessing** | Cleans and deduplicates images | Resize, validate, filter |
+| **🤖 Training** | Fine-tunes FashionCLIP | Triplet training, checkpointing |
+| **🔮 Inference** | Generates outfit recommendations | FastAPI endpoints, testing |
+
+[Insert Screenshot Placeholder]
+
+_Figure 2. Console output showing successful end-to-end pipeline run._
+
+| Evidence Type | File / Output Location | Description |
+|----------------|------------------------|--------------|
+| **Input** | [📂 `input/sample.txt`](./input/sample.txt) | Sample fashion image or input text for testing |
+| **Output** | [📄 `output/test_result.txt`](./output/test_result.txt) | Model-generated outfit recommendation results |
+| **Logs** | [🧾 `logs/pipeline.log`](./logs/pipeline.log) | Full pipeline execution log (verifies end-to-end run) |
+
+## 3. Data Ingestion & Preprocessing
+
+We processed ~6,700 curated product images and corresponding JSON metadata for both men’s and women’s fashion. Each record contains structured product details and “complete the look” compatibility annotations. The pipeline standardizes, cleans, and captions each product entry to ensure consistency and model readiness.
+
+### Pipeline Highlights
+- Standardized captions generated for every product image
+- Automatic filtering and removal of duplicate entries
+- Consolidation of compatibility pairs from “complete the look” field
+
+[Insert Screenshot Placeholder]
+
+_Figure 3. Example of cleaned JSON metadata and generated captions._
+
+## 4. Model Preparation, Training & Evaluation
+
+The FashionCLIP-based model learns compatibility relationships between clothing items using triplet loss. Before training, we constructed triplets (anchor, positive, negative) and split data into training and validation sets.
+
+### Architecture Overview
+- **Model**: FashionCLIP (ViT-B/32)
+- **Fine-Tuning**: Last 4 layers (first 8 frozen)
+- **Loss Function**: Triplet margin loss (margin = 0.5)
+- **Checkpointing**: Automatically saves best model
+
+<img width="1011" height="299" alt="image" src="https://github.com/user-attachments/assets/99a911cf-9345-49d2-9345-227747667b3f" />
+
+_Figure 4. An illustration of FashionCLIP fine-tuning with triplet loss for outfit compatibility._
+
+### Training Configuration
+
+| Parameter | Value |
+|------------|--------|
+| Batch Size | 16 |
+| Learning Rate | 1e-5 |
+| Epochs | 20 |
+| Target Accuracy | 85% |
+
+[Insert Training Curve Placeholder]  
+_Figure 5. Training log showing loss and accuracy progression._
+
+### Performance Summary
+- **Training Time**: ~10–20 hours (V100 GPU)
+- **Model Size**: ~500 MB
+- **Final Accuracy**: >85% triplet accuracy
+
+### Evaluation Metrics
+- Precision, Recall, F1-score
+- NDCG, AUC for ranked retrieval
+- QuickEval for fast validation
+
+[Insert Screenshot Placeholder]
+
+_Figure 6. Evaluation metrics summary._
+
+## 5. Application Mock-up
+
+The Personal Wardrobe Stylist prototype generates outfit recommendations from a user’s wardrobe image.
+
+<img width="1201" height="638" alt="image" src="https://github.com/user-attachments/assets/868368f1-4d18-4a4c-a4cb-d65d363941a8" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## 🎯 Key Features
 
-### **Data Processing (src/datapipeline/)**
-- **Complete Data Usage**: Uses ALL available data (3173 items, 3157 compatibility relationships)
-- **Smart Triplet Generation**: Builds compatibility graph from `complete_the_look` descriptions
-- **Automatic Train/Val Split**: 80/20 split for training and validation
+### **Data Pipeline (src/datapipeline/)**
+- Uses all available items (3173) and compatibility pairs (3157)
+- Builds compatibility graph from 'complete_the_look' descriptions
+- Automatically performs 80/20 train-validation split
 
 ### **Model Training (src/models/train/)**
-- **FashionCLIP Architecture**: Based on CLIP ViT-B/32
-- **Layer Freezing**: Freezes first 8 layers, trains last 4 layers
-- **Triplet Loss**: Margin=0.5 for fashion compatibility learning
-- **Auto Checkpointing**: Saves best model and training history
+- **Architecture**: FashionCLIP (ViT-B/32)
+- **Fine-Tuning**: Last 4 layers; first 8 frozen
+- **Loss**: Triplet margin loss (margin = 0.5)
+- **Checkpointing**: Auto-saves best performing model
+
 
 ### **Model Evaluation (src/models/eval/)**
-- **Complete Evaluation**: Multi-dimensional model assessment
-- **Quick Evaluation**: Fast validation of basic functionality
-- **Performance Metrics**: Precision, Recall, F1-Score, NDCG, AUC
+- Comprehensive model assessment (Precision, Recall, F1, NDCG, AUC)
+- Quick evaluation mode for functional validation
 
-### **Training Configuration**
-- **Batch Size**: 16 (optimized for memory)
-- **Learning Rate**: 1e-5 (fine-tuning rate)
-- **Epochs**: 20 (sufficient training)
-- **Target Accuracy**: 85% (early stopping)
+## 🐳 Containerized Pipeline
 
-## 🐳 Virtual Environment Setup
-
-### **Containerized Architecture**
+### **Architecture Overview**
 The project uses Docker containers to provide isolated, reproducible environments for each component:
 
 - **📥 Ingestion Container**: Data scraping and collection
@@ -103,16 +223,6 @@ deploy:
           count: 1
           capabilities: [gpu]
 ```
-
-## 🚀 End-to-End Containerized Pipeline
-
-### **Complete Pipeline Architecture**
-The project implements a fully containerized end-to-end pipeline with four main components:
-
-1. **📥 Data Ingestion** - Web scraping and data collection
-2. **🔄 Data Preprocessing** - Image processing and data cleaning
-3. **🤖 Model Training** - FashionCLIP training with GPU support
-4. **🔮 Model Inference** - API serving and recommendations
 
 ### **One-Command Pipeline Execution**
 ```bash
@@ -167,18 +277,21 @@ pip install -r requirements.txt
 # - Automatic best model saving
 ```
 
-## 📊 Training Results
+## 📊 Training & Results
 
-### **Data Statistics**
-- **Total Items**: 3173 products
-- **Compatibility Relationships**: 3157 pairs
-- **Train Batches**: 1262 (80% of data)
-- **Val Batches**: 316 (20% of data)
+### Configuration
 
-### **Expected Performance**
-- **Training Time**: 10-20 hours on V100 GPU
-- **Target Accuracy**: >85% triplet accuracy
-- **Model Size**: ~500MB (CLIP ViT-B/32)
+| Parameter | Value |
+|------------|--------|
+| Batch Size | 16 |
+| Learning Rate | 1e-5 |
+| Epochs | 20 |
+| Target Accuracy | 85% |
+
+### **Performance**
+- Training Time: ~10–20 h on a V100 GPU
+- Model Size: ~500 MB
+- Achieved >85% compatibility accuracy
 
 ## 🎨 Inference Usage
 
