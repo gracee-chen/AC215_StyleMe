@@ -56,7 +56,6 @@ make run
 
 Figure 1. Screenshot of running containers or GCP instances.
 
-**Notes**: [Insert notes]
 
 ## 2. End-to-End Containerized Pipeline
 
