@@ -85,9 +85,9 @@ We processed ~6,700 curated product images and corresponding JSON metadata for b
 - Automatic filtering and removal of duplicate entries
 - Consolidation of compatibility pairs from “complete the look” field
 
-[Insert Screenshot Placeholder]
+<img width="946" height="665" alt="截屏2025-10-16 19 20 43" src="https://github.com/user-attachments/assets/2c0a1f35-361f-4c37-bc6a-43b7c66f7b2e" />
 
-_Figure 4. Example of cleaned JSON metadata and generated captions._
+Figure 4. Example of cleaned JSON metadata and generated captions.
 
 ## 4. Model Preparation, Training & Evaluation
 
