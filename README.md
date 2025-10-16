@@ -53,7 +53,7 @@ We built isolated Docker environments for each pipeline component to ensure cons
 
 _Figure 1. Screenshot of running containers or GCP instances._
 
-### Notes
+**Notes**: [Insert notes]
 
 ## 2. End-to-End Containerized Pipeline
 
@@ -150,7 +150,7 @@ The Personal Wardrobe Stylist prototype generates outfit recommendations from a 
 
 
 
-
+Grace's draft:
 
 
 ## 🎯 Key Features
