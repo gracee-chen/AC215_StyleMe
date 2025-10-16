@@ -47,11 +47,14 @@ We built isolated Docker environments for each pipeline component to ensure cons
 
 ### Setup Instructions
 
-[Insert bash commands]
+```
+make build
+make run
+```
 
-[Insert Screenshot Placeholder]
+<img width="1374" height="728" alt="1eb0b34a740bd87dcd64581b13fa7ca6" src="https://github.com/user-attachments/assets/8ef0add6-9a4b-4a6a-acb9-957a99b5a4d9" />
 
-_Figure 1. Screenshot of running containers or GCP instances._
+Figure 1. Screenshot of running containers or GCP instances.
 
 **Notes**: [Insert notes]
 
