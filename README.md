@@ -73,11 +73,9 @@ The pipeline consists of modular components orchestrated with Docker Compose.
 
 _Figure 2. Console output showing successful end-to-end pipeline run._
 
-| Evidence Type | File / Output Location | Description |
-|----------------|------------------------|--------------|
-| **Input** | [📂 `input/sample.txt`](./input/sample.txt) | Sample fashion image or input text for testing |
-| **Output** | [📄 `output/test_result.txt`](./output/test_result.txt) | Model-generated outfit recommendation results |
-| **Logs** | [🧾 `logs/pipeline.log`](./logs/pipeline.log) | Full pipeline execution log (verifies end-to-end run) |
+[Insert Screenshot]
+
+_Figure 3. XXX_
 
 ## 3. Data Ingestion & Preprocessing
 
@@ -90,7 +88,7 @@ We processed ~6,700 curated product images and corresponding JSON metadata for b
 
 [Insert Screenshot Placeholder]
 
-_Figure 3. Example of cleaned JSON metadata and generated captions._
+_Figure 4. Example of cleaned JSON metadata and generated captions._
 
 ## 4. Model Preparation, Training & Evaluation
 
@@ -104,7 +102,7 @@ The FashionCLIP-based model learns compatibility relationships between clothing 
 
 <img width="1011" height="299" alt="image" src="https://github.com/user-attachments/assets/99a911cf-9345-49d2-9345-227747667b3f" />
 
-_Figure 4. An illustration of FashionCLIP fine-tuning with triplet loss for outfit compatibility._
+_Figure 5. An illustration of FashionCLIP fine-tuning with triplet loss for outfit compatibility._
 
 ### Training Configuration
 
@@ -116,7 +114,7 @@ _Figure 4. An illustration of FashionCLIP fine-tuning with triplet loss for outf
 | Target Accuracy | 85% |
 
 [Insert Training Curve Placeholder]  
-_Figure 5. Training log showing loss and accuracy progression._
+_Figure 6. Training log showing loss and accuracy progression._
 
 ### Performance Summary
 - **Training Time**: ~10–20 hours (V100 GPU)
@@ -130,7 +128,7 @@ _Figure 5. Training log showing loss and accuracy progression._
 
 [Insert Screenshot Placeholder]
 
-_Figure 6. Evaluation metrics summary._
+_Figure 7. Evaluation metrics summary._
 
 ## 5. Application Mock-up
 
