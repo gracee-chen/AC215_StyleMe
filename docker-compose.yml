@@ -1,0 +1,78 @@
+services:
+  # Data Ingestion Service
+  ingestion:
+    build:
+      context: .
+      dockerfile: containers/ingestion/Dockerfile
+    container_name: styleme-ingestion
+    volumes:
+      - ./data:/app/data
+      - /home/grace_chen/data:/home/grace_chen/data:ro
+      - ./logs:/app/logs
+    environment:
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=INFO
+    profiles:
+      - pipeline
+      - ingestion
+    networks:
+      - styleme-network
+
+  # Data Preprocessing Service
+  preprocessing:
+    build:
+      context: .
+      dockerfile: containers/preprocessing/Dockerfile
+    container_name: styleme-preprocessing
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DATA_DIR=/app/data
+      - LOG_LEVEL=INFO
+    depends_on:
+      - ingestion
+    profiles:
+      - pipeline
+      - preprocessing
+    networks:
+      - styleme-network
+
+  # Model Training Service
+  training:
+    build:
+      context: .
+      dockerfile: containers/training/Dockerfile
+    container_name: styleme-training
+    volumes:
+      - ./data:/app/data
+      - ./src/models/train/experiments:/app/experiments
+      - ./logs:/app/logs
+    environment:
+      - DATA_DIR=/app/data
+      - EXPERIMENTS_DIR=/app/experiments
+      - CUDA_VISIBLE_DEVICES=0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - preprocessing
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - pipeline
+      - training
+    networks:
+      - styleme-network
+
+networks:
+  styleme-network:
+    driver: bridge
+
+volumes:
+  data:
+  experiments:
+  logs:

@@ -9,13 +9,7 @@ DATA_CONFIG = {
     'max_samples_per_file': None,  # None = use all data, int = limit samples per file
     'compatibility_threshold': 1,  # Compatibility matching threshold (lowered for more data)
     'max_compatible_items': 5,  # Maximum compatible items per product (increased for diversity)
-    
-    # GCP Storage configuration
-    'use_gcp_storage': False,  # Set to True when training on GCP
-    'gcp_bucket_name': 'styleme-data-bucket',
-    'gcp_project_id': 'styleme-475201',
-    'gcp_data_prefix': 'data/',  # Prefix for data files in bucket
-    'gcp_images_prefix': 'images/',  # Prefix for images in bucket
+
 }
 
 # Training configuration - Optimized for 75% target accuracy
