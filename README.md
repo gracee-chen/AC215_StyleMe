@@ -89,7 +89,7 @@ The pipeline consists of modular components orchestrated with Docker Compose.
 make build
 make run
 ```
-[INSERT MAKE RUN SCREENSHOT]
+<img width="1184" height="850" alt="image" src="https://github.com/user-attachments/assets/1512e319-423e-45d4-8caf-9a0e7fcf57a7" />
 
 <img width="1314" height="1280" alt="image" src="https://github.com/user-attachments/assets/bfe621ce-3b12-4851-beca-2571e4e1f4d9" />
 
@@ -145,9 +145,6 @@ _Figure 4. An illustration of FashionCLIP fine-tuning with triplet loss for outf
 - **Epochs**: 30
 - **Learning Rate**: 1e-5
 - **Patience**: 8
-
-### Evaluation Metrics
-
 
 ## 5. Application Mock-up
 
