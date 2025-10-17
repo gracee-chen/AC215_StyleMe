@@ -1,0 +1,167 @@
+{
+  "experiments": {
+    "EXP_001": {
+      "date": "2024-10-15",
+      "description": "Simple cosine similarity evaluation",
+      "config": {
+        "model": {
+          "architecture": "CLIP ViT-B/32",
+          "frozen_layers": 8,
+          "feature_dimension": 512
+        },
+        "training": {
+          "epochs": 20,
+          "batch_size": 16,
+          "learning_rate": 1e-05,
+          "optimizer": "AdamW",
+          "scheduler": "CosineAnnealingLR",
+          "patience": 5,
+          "target_accuracy": 0.98
+        },
+        "evaluation": {
+          "method": "simple_cosine_similarity",
+          "description": "Basic cosine similarity between features"
+        },
+        "dataset": {
+          "total_items": 6776,
+          "men_files": 7,
+          "women_files": 13,
+          "compatibility_relationships": 58623,
+          "train_batches": 148,
+          "val_batches": 31,
+          "test_batches": 31
+        }
+      },
+      "results": {
+        "best_score": 0.9849,
+        "epochs_trained": 1,
+        "training_time": "3 minutes",
+        "final_train_loss": 0.0455,
+        "final_val_loss": 0.0103,
+        "convergence": "early_stopping_target_achieved"
+      }
+    },
+    "EXP_002": {
+      "date": "2024-10-15",
+      "description": "Strict fashion compatibility evaluation",
+      "config": {
+        "model": {
+          "architecture": "CLIP ViT-B/32",
+          "frozen_layers": 8,
+          "feature_dimension": 512
+        },
+        "training": {
+          "epochs": 20,
+          "batch_size": 16,
+          "learning_rate": 1e-05,
+          "optimizer": "AdamW",
+          "scheduler": "CosineAnnealingLR",
+          "patience": 5,
+          "target_accuracy": 0.75
+        },
+        "evaluation": {
+          "method": "strict_fashion_compatibility",
+          "description": "Multi-dimensional fashion evaluation with style and color consistency",
+          "criteria": {
+            "cosine_similarity": 0.3,
+            "euclidean_distance": 0.3,
+            "manhattan_distance": 0.2,
+            "style_consistency": 0.6,
+            "color_consistency": 0.4
+          }
+        },
+        "dataset": {
+          "total_items": 6776,
+          "men_files": 7,
+          "women_files": 13,
+          "compatibility_relationships": 58623,
+          "train_batches": 148,
+          "val_batches": 31,
+          "test_batches": 31
+        }
+      },
+      "results": {
+        "best_score": 0.4226,
+        "epochs_trained": 20,
+        "training_time": "1 hour",
+        "final_train_loss": 0.0006,
+        "final_val_loss": 0.0003,
+        "convergence": "full_training_completed"
+      }
+    },
+    "EXP_003": {
+      "date": "2025-10-16",
+      "description": "Strict Fashion Compatibility Evaluation - Third Training Run",
+      "config": {
+        "model": {
+          "architecture": "CLIP ViT-B/32",
+          "frozen_layers": 8,
+          "feature_dimension": 512
+        },
+        "training": {
+          "epochs": 40,
+          "batch_size": 32,
+          "learning_rate": 1e-05,
+          "optimizer": "AdamW",
+          "scheduler": "CosineAnnealingLR",
+          "patience": 5,
+          "target_accuracy": 0.85
+        },
+        "evaluation": {
+          "method": "strict_evaluation",
+          "description": "Strict Fashion Compatibility Evaluation"
+        }
+      },
+      "results": {
+        "best_score": 0.3443548487078759,
+        "epochs_trained": 16,
+        "final_train_loss": 0.00270845610144976,
+        "final_val_loss": 0.0011509108927942092,
+        "convergence": "early_stopping"
+      }
+    },
+    "exp_004": {
+      "date": "20251016_035902",
+      "description": "Strict Fashion Compatibility Evaluation",
+      "config": {
+        "model": {
+          "architecture": "CLIP ViT-B/32",
+          "frozen_layers": 8,
+          "feature_dimension": 512
+        },
+        "training": {
+          "epochs": 30,
+          "batch_size": 16,
+          "learning_rate": 1e-05,
+          "optimizer": "AdamW",
+          "scheduler": "CosineAnnealingLR",
+          "patience": 8,
+          "target_accuracy": 0.75
+        },
+        "evaluation": {
+          "method": "strict_evaluation",
+          "description": "Strict Fashion Compatibility Evaluation"
+        }
+      },
+      "results": {
+        "best_score": 0.43373017320557244,
+        "epochs_trained": 30,
+        "final_train_loss": 0.0003801038790796254,
+        "final_val_loss": 0.0007231398116028498,
+        "convergence": "completed"
+      }
+    }
+  },
+  "summary": {
+    "total_experiments": 4,
+    "best_performing": "EXP_002",
+    "recommended_for_production": "EXP_002",
+    "key_insights": [
+      "Evaluation method significantly affects perceived performance",
+      "Strict fashion evaluation provides more realistic results",
+      "42.26% compatibility is acceptable for personal wardrobe recommendations",
+      "Third training run achieved 34.44% compatibility with early stopping"
+    ],
+    "latest_experiment": "exp_004"
+  }
+}

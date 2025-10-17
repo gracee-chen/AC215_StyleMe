@@ -63,13 +63,6 @@ data/json/
 *.mp4
 *.avi
 
-# Model outputs
-experiments/
-checkpoints/
-fashion_clip_checkpoints/
-temp_training_output/
-*.log
-
 # Temporary files
 *.tmp
 *.temp
