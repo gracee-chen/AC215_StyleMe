@@ -65,8 +65,9 @@ Console:          https://console.cloud.google.com/compute/instancesDetail/zones
 gcloud compute ssh styleme-dev2 --zone=us-central1-c --project=styleme-475201
 nvidia-smi  # Verify GPU
 ```
+<img width="1460" height="1064" alt="image" src="https://github.com/user-attachments/assets/3dd8ae94-d4d9-431c-aebe-8416f14b8957" />
 
-
+<img width="1418" height="604" alt="image" src="https://github.com/user-attachments/assets/58358c4e-ab38-4002-9f5c-05a7ceabce60" />
 
 <img width="1374" height="728" alt="1eb0b34a740bd87dcd64581b13fa7ca6" src="https://github.com/user-attachments/assets/8ef0add6-9a4b-4a6a-acb9-957a99b5a4d9" />
 
@@ -82,7 +83,7 @@ The pipeline consists of modular components orchestrated with Docker Compose.
 | **📥 Ingestion** | Collects and stores curated product data | Web scraping, GCS upload |
 | **🔄 Preprocessing** | Cleans and deduplicates images | Resize, validate, filter |
 | **🤖 Training** | Fine-tunes FashionCLIP | Triplet training, checkpointing |
-| **🔮 Inference** | Generates outfit recommendations | FastAPI endpoints, testing |
+
 
 ### Run Instruction
 
@@ -90,15 +91,17 @@ The pipeline consists of modular components orchestrated with Docker Compose.
 make build
 make run
 ```
+[INSERT MAKE RUN SCREENSHOT]
 
-[Insert Screenshot Placeholder]
+<img width="1314" height="1280" alt="image" src="https://github.com/user-attachments/assets/bfe621ce-3b12-4851-beca-2571e4e1f4d9" />
+
 
 _Figure 2. Console output showing successful end-to-end pipeline run._
 
 
 ## 3. Data Ingestion & Preprocessing
 
-We processed ~6,700 curated product images and corresponding JSON metadata for both men’s and women’s fashion. Each record contains structured product details and “complete the look” compatibility annotations. The pipeline standardizes, cleans, and captions each product entry to ensure consistency and model readiness.
+We processed ~13k curated product images and corresponding JSON metadata for both men’s and women’s fashion. Each record contains structured product details and “complete the look” compatibility annotations. Our preprocessing pipeline standardizes, cleans, and captions each product entry to ensure consistency and data readiness.
 
 ### Pipeline Highlights
 - Standardized captions generated for every product image
@@ -119,26 +122,34 @@ The FashionCLIP-based model learns compatibility relationships between clothing 
 - **Loss Function**: Triplet margin loss (margin = 0.5)
 - **Checkpointing**: Automatically saves best model
 
-<img width="1011" height="299" alt="image" src="https://github.com/user-attachments/assets/99a911cf-9345-49d2-9345-227747667b3f" />
+<img width="848" height="286" alt="image" src="https://github.com/user-attachments/assets/f26890db-c401-4fa8-9745-763972343019" />
+
 
 _Figure 4. An illustration of FashionCLIP fine-tuning with triplet loss for outfit compatibility._
 
-### Training Configuration
+### Training Experiment
+#### Experiment 1
+<img width="4470" height="1466" alt="image" src="https://github.com/user-attachments/assets/cef27aa1-25c5-4221-a6e8-6cdb06732033" />
 
-| Parameter | Value |
-|------------|--------|
-| Batch Size | 16 |
-| Learning Rate | 1e-5 |
-| Epochs | 20 |
-| Target Accuracy | 85% |
+#### Configurations:
+- **Target Accuracy**: 0.75
+- **Batch Size**: 32
+- **Epochs**: 20
+- **Learning Rate**: 1e-6
+- **Patience**: 5
 
-[Insert Training Curve Placeholder]  
-_Figure 5. Training log showing loss and accuracy progression._
+#### Experimet 2
+<img width="4470" height="1466" alt="image" src="https://github.com/user-attachments/assets/8625de81-592d-440d-b90b-efea8c1164ed" />
+
+#### Configurations:
+- **Target Accuracy**: 0.75
+- **Batch Size**: 16
+- **Epochs**: 30
+- **Learning Rate**: 1e-5
+- **Patience**: 8
 
 ### Evaluation Metrics
-- Precision, Recall, F1-score
-- NDCG, AUC for ranked retrieval
-- QuickEval for fast validation
+
 
 ## 5. Application Mock-up
 
