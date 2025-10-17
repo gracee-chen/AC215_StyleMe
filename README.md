@@ -67,11 +67,9 @@ nvidia-smi  # Verify GPU
 ```
 <img width="1460" height="1064" alt="image" src="https://github.com/user-attachments/assets/3dd8ae94-d4d9-431c-aebe-8416f14b8957" />
 
-<img width="1418" height="604" alt="image" src="https://github.com/user-attachments/assets/58358c4e-ab38-4002-9f5c-05a7ceabce60" />
-
 <img width="1374" height="728" alt="1eb0b34a740bd87dcd64581b13fa7ca6" src="https://github.com/user-attachments/assets/8ef0add6-9a4b-4a6a-acb9-957a99b5a4d9" />
 
-_Figure 1. Screenshot of running containers or GCP instances._
+_Figure 1. Screenshots of GCP instance and running container._
 
 
 ## 2. End-to-End Containerized Pipeline
