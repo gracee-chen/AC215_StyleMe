@@ -56,12 +56,7 @@ Thumbs.db
 # Data files (large files)
 data/images/
 data/json/
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.mp4
-*.avi
+
 
 # Temporary files
 *.tmp
