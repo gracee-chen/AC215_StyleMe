@@ -1,0 +1,8 @@
+{
+  "version": "v_2025-10-24_model-b1",
+  "built_at": "2025-10-24T22:43:35.154043",
+  "model": "FashionCLIP",
+  "dimension": 512,
+  "num_items": 6776,
+  "index_type": "IndexFlatL2"
+}

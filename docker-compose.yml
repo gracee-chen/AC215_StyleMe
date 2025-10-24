@@ -68,6 +68,34 @@ services:
     networks:
       - styleme-network
 
+  # Inference Service
+  inference:
+    build:
+      context: .
+      dockerfile: containers/inference/Dockerfile
+    container_name: styleme-inference
+    volumes:
+      - ./data:/app/data
+      - ./src/models/train/experiments:/app/experiments
+      - ./catalog:/app/catalog
+      - ./wardrobes:/app/wardrobes
+      - ./queries:/app/queries
+      - ./results:/app/results
+      - ./logs:/app/logs
+    environment:
+      - EXPERIMENTS_DIR=/app/experiments
+      - CATALOG_DIR=/app/catalog
+      - WARDROBES_DIR=/app/wardrobes
+      - QUERIES_DIR=/app/queries
+      - RESULTS_DIR=/app/results
+      - LOGS_DIR=/app/logs
+      - LOG_LEVEL=INFO
+    profiles:
+      - pipeline
+      - inference
+    networks:
+      - styleme-network
+
 networks:
   styleme-network:
     driver: bridge
@@ -76,3 +104,7 @@ volumes:
   data:
   experiments:
   logs:
+  catalog:
+  wardrobes:
+  queries:
+  results:
