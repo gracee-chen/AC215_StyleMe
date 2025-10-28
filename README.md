@@ -4,7 +4,7 @@
 Chufei Peng, Grace Chen, Siyao Zhu, Angel Chen
 
 ## Group Name
-Stylist
+StyleMe
 
 ## Project Description
 In this project, we aim to develop an AI-powered personal wardrobe stylist that helps users create cohesive outfits from their existing wardrobes. The system leverages curated product data and compatibility information ("complete the look") to learn relationships between clothing items. It integrates a data-cleaning and caption-generation pipeline with a FashionCLIP-based compatibility model to recommend matching items. The goal is to provide an intelligent outfit suggestion tool that understands real-world style relationships and personalizes recommendations based on visual and textual cues.
