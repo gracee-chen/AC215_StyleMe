@@ -19,20 +19,16 @@ StyleMe/
 ├── midterm_presentation/                          
 │   ├── StyleMeMidterm.pdf 
 ├── containers/                   # Dockerfiles
-│   ├── ...
 │   ├── inference/                  
 │   └── ...
 ├── queries/                     # User Input
 │   ├── user1/
-│   ├── user2/
 │   ├── ...
 ├── results/                     # Inference Output
 │   ├── user1/
-│   ├── user2/
 │   ├── ...
 ├── wardrobes/                   # User uploaded wardrobes
 │   ├── user1/
-│   ├── user2/
 │   ├── ...                     
 ├── src/                          
 │   ├── datapipeline/             # Data processing module
@@ -46,7 +42,7 @@ StyleMe/
 │       │   ├── config_gpu.py     # GPU configuration
 │       │   ├── experiments/      # Experiment results
 │       │   └── ...    
-│       └── eval/                 # Evaluation Rubrics
+│       └── eval/                 # Evaluation rubrics
 │           ├── evaluation.py     
 │           └── quick_eval.py     
 ├── install_nvidia_driver.sh     # GPU driver installation
