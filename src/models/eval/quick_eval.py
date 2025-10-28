@@ -43,11 +43,12 @@ def quick_triplet_evaluation(model_path: str, num_batches: int = 10) -> Dict:
     # Create data loader
     try:
         train_loader, val_loader, test_loader = create_dataloader(
-            data_dir=config.DATA_CONFIG['data_dir'],
-            image_dir=config.DATA_CONFIG['image_dir'],
+            gcp_bucket_name=config.DATA_CONFIG['gcp_bucket_name'],
+            gcp_project_id=config.DATA_CONFIG['gcp_project_id'],
+            data_prefix=config.DATA_CONFIG['data_prefix'],
+            images_prefix=config.DATA_CONFIG['images_prefix'],
             batch_size=config.TRAINING_CONFIG['batch_size'],
             num_workers=config.TRAINING_CONFIG['num_workers'],
-            shuffle=True,
             max_samples_per_file=100  # Limit for quick evaluation
         )
         
@@ -145,11 +146,12 @@ def test_data_loading() -> bool:
     
     try:
         train_loader, val_loader, test_loader = create_dataloader(
-            data_dir=config.DATA_CONFIG['data_dir'],
-            image_dir=config.DATA_CONFIG['image_dir'],
+            gcp_bucket_name=config.DATA_CONFIG['gcp_bucket_name'],
+            gcp_project_id=config.DATA_CONFIG['gcp_project_id'],
+            data_prefix=config.DATA_CONFIG['data_prefix'],
+            images_prefix=config.DATA_CONFIG['images_prefix'],
             batch_size=2,  # Small batch for testing
             num_workers=0,  # No multiprocessing for testing
-            shuffle=False,
             max_samples_per_file=10  # Limit for testing
         )
         

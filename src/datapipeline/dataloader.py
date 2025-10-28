@@ -1,6 +1,7 @@
 """
 FashionCLIP Dataloader for Triplet Loss Training
 Process Farfetch data and build triplet pairs for fashion compatibility learning
+Supports both local filesystem and Google Cloud Storage
 """
 
 import json
@@ -14,6 +15,9 @@ from typing import List, Dict, Tuple, Optional
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
+from google.cloud import storage
+import io
+import tempfile
 
 
 class FashionTripletDataset(Dataset):
@@ -26,18 +30,28 @@ class FashionTripletDataset(Dataset):
     - negative: incompatible product image (randomly selected)
     """
     
-    def __init__(self, data_dir: str, image_dir: str, transform=None, max_samples_per_file: int = None):
+    def __init__(self, gcp_bucket_name: str = None, gcp_project_id: str = None, 
+                 data_prefix: str = "data/json", images_prefix: str = "data/images",
+                 transform=None, max_samples_per_file: int = None):
         """
         Args:
-            data_dir: JSON data files directory
-            image_dir: image files directory
+            gcp_bucket_name: GCS bucket name
+            gcp_project_id: GCP project ID
+            data_prefix: prefix for JSON data files in GCS
+            images_prefix: prefix for image files in GCS
             transform: image transformations
-            max_samples_per_file: maximum samples per file (None = use all data) (None = use all data)
+            max_samples_per_file: maximum samples per file (None = use all data)
         """
-        self.data_dir = Path(data_dir).expanduser()
-        self.image_dir = Path(image_dir).expanduser()
+        self.gcp_bucket_name = gcp_bucket_name or "styleme-data-bucket"
+        self.gcp_project_id = gcp_project_id or "styleme-475201"
+        self.data_prefix = data_prefix
+        self.images_prefix = images_prefix
         self.transform = transform or self._get_default_transform()
-        self.max_samples_per_file = max_samples_per_file  # None means use all data
+        self.max_samples_per_file = max_samples_per_file
+        
+        # Initialize GCS client
+        self.gcs_client = storage.Client(project=self.gcp_project_id)
+        self.bucket = self.gcs_client.bucket(self.gcp_bucket_name)
         
         # Load all data
         self.items = self._load_all_data()
@@ -46,9 +60,13 @@ class FashionTripletDataset(Dataset):
         # Build compatibility graph
         self.compatibility_graph = self._build_compatibility_graph()
         
+        # Image cache to avoid re-downloading from GCS
+        self._image_cache = {}
+        
         print(f"\n🎉 Dataset initialization complete!")
         print(f"📦 Total items: {len(self.items):,}")
         print(f"🔗 Compatibility relationships: {len(self.compatibility_graph):,}")
+        print(f"☁️ Using GCS bucket: {self.gcp_bucket_name}")
     
     def _get_default_transform(self):
         """Default image transformations"""
@@ -60,40 +78,43 @@ class FashionTripletDataset(Dataset):
         ])
     
     def _load_all_data(self) -> Dict:
-        """Load all JSON data files"""
+        """Load all JSON data files from GCS"""
         items = {}
         
-        print("🔄 Loading fashion data...")
+        print("🔄 Loading fashion data from GCS...")
         
         # Load men_data
-        men_data_dir = self.data_dir / "json" / "men_data"
-        if men_data_dir.exists():
-            json_files = list(men_data_dir.glob("*.json"))
-            print(f"📁 Found {len(json_files)} men's data files")
-            
-            for json_file in tqdm(json_files, desc="Loading men's data", unit="file"):
-                file_items = self._load_json_file(json_file)
-                items.update(file_items)
+        men_data_prefix = f"{self.data_prefix}/men_data/"
+        men_blobs = list(self.bucket.list_blobs(prefix=men_data_prefix))
+        men_json_blobs = [blob for blob in men_blobs if blob.name.endswith('.json')]
+        
+        print(f"📁 Found {len(men_json_blobs)} men's data files in GCS")
+        
+        for blob in tqdm(men_json_blobs, desc="Loading men's data", unit="file"):
+            file_items = self._load_json_from_gcs(blob)
+            items.update(file_items)
         
         # Load women_data
-        women_data_dir = self.data_dir / "json" / "women_data"
-        if women_data_dir.exists():
-            json_files = list(women_data_dir.glob("*.json"))
-            print(f"📁 Found {len(json_files)} women's data files")
-            
-            for json_file in tqdm(json_files, desc="Loading women's data", unit="file"):
-                file_items = self._load_json_file(json_file)
-                items.update(file_items)
+        women_data_prefix = f"{self.data_prefix}/women_data/"
+        women_blobs = list(self.bucket.list_blobs(prefix=women_data_prefix))
+        women_json_blobs = [blob for blob in women_blobs if blob.name.endswith('.json')]
+        
+        print(f"📁 Found {len(women_json_blobs)} women's data files in GCS")
+        
+        for blob in tqdm(women_json_blobs, desc="Loading women's data", unit="file"):
+            file_items = self._load_json_from_gcs(blob)
+            items.update(file_items)
         
         print(f"✅ Total items loaded: {len(items):,}")
         return items
     
-    def _load_json_file(self, json_file: Path) -> Dict:
-        """Load single JSON file"""
+    def _load_json_from_gcs(self, blob) -> Dict:
+        """Load single JSON file from GCS"""
         items = {}
         try:
-            with open(json_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            # Download JSON content from GCS
+            json_content = blob.download_as_text(encoding='utf-8')
+            data = json.loads(json_content)
             
             # Use all data if max_samples_per_file is None, otherwise limit
             items_to_process = data if self.max_samples_per_file is None else data[:self.max_samples_per_file]
@@ -101,10 +122,18 @@ class FashionTripletDataset(Dataset):
             for item in items_to_process:
                 item_id = item.get('source', {}).get('id')
                 if item_id and 'complete_the_look' in item:
+                    # Add gender information based on file path
+                    if 'men_data' in blob.name:
+                        item['gender'] = 'men'
+                    elif 'women_data' in blob.name:
+                        item['gender'] = 'women'
+                    else:
+                        item['gender'] = 'unknown'
+                    
                     items[item_id] = item
                     
         except Exception as e:
-            print(f"❌ Error loading {json_file}: {e}")
+            print(f"❌ Error loading {blob.name} from GCS: {e}")
         
         return items
     
@@ -150,7 +179,7 @@ class FashionTripletDataset(Dataset):
         return compatibility_graph
     
     def _find_compatible_items(self, look_item: Dict, exclude_id: str) -> List[str]:
-        """Find compatible items based on complete_the_look description"""
+        """Find compatible items based on complete_the_look description with improved constraints"""
         compatible_ids = []
         target_item = look_item.get('item', '').lower()
         target_color = look_item.get('color', '').lower()
@@ -163,20 +192,33 @@ class FashionTripletDataset(Dataset):
         # Get the category of the target item to avoid same-category matches
         target_category = self._get_item_category(target_item)
         
+        # Get gender of the anchor item
+        anchor_item = self.items.get(exclude_id, {})
+        anchor_gender = anchor_item.get('gender', 'unknown')
+        
         # Use all items for better compatibility matching
         items_to_search = list(self.items.items())
         
         for item_id, item in items_to_search:
             if item_id == exclude_id:
                 continue
-                
+            
+            # 1. Gender consistency check - 性别一致性检查
+            item_gender = item.get('gender', 'unknown')
+            if anchor_gender != 'unknown' and item_gender != 'unknown' and anchor_gender != item_gender:
+                continue
+            
             # Check if product description matches
             description = item.get('description', '').lower()
             categories = [cat.lower() for cat in item.get('categories', [])]
             
-            # Skip items in the same category to avoid duplicates (e.g., shirt matching shirt)
+            # 2. Category consistency check - 类别一致性检查（更严格）
             item_category = self._get_item_category(description)
             if target_category and item_category and target_category == item_category:
+                continue
+            
+            # Additional category consistency checks
+            if self._is_same_category_strict(target_item, description, categories):
                 continue
             
             # Improved matching logic with more flexible matching
@@ -240,18 +282,80 @@ class FashionTripletDataset(Dataset):
         
         return 'unknown'
     
-    def _get_image_path(self, item_id: str) -> Optional[Path]:
-        """Get product image path"""
-        # Try different image naming formats
-        possible_paths = [
-            self.image_dir / f"{item_id}_index1.jpg",
-            self.image_dir / f"{item_id}_index2.jpg",
-            self.image_dir / f"{item_id}.jpg"
+    def _is_same_category_strict(self, target_item: str, description: str, categories: List[str]) -> bool:
+        """Strict category consistency check to prevent same-category matches"""
+        target_lower = target_item.lower()
+        desc_lower = description.lower()
+        cats_lower = [cat.lower() for cat in categories]
+        
+        # Define strict category mappings
+        category_groups = {
+            'tops': ['shirt', 't-shirt', 'blouse', 'top', 'tee', 'polo', 'tank', 'camisole', 'crop'],
+            'bottoms': ['pants', 'trousers', 'jeans', 'leggings', 'shorts', 'skirt', 'culottes'],
+            'shoes': ['shoes', 'sneakers', 'boots', 'sandals', 'heels', 'flats', 'loafers', 'oxfords'],
+            'bags': ['bag', 'handbag', 'backpack', 'purse', 'tote', 'clutch', 'satchel', 'crossbody'],
+            'outerwear': ['jacket', 'blazer', 'coat', 'cardigan', 'hoodie', 'sweater', 'vest'],
+            'dresses': ['dress', 'gown', 'jumpsuit', 'romper', 'maxi', 'mini', 'midi'],
+            'accessories': ['belt', 'scarf', 'hat', 'watch', 'jewelry', 'sunglasses', 'gloves']
+        }
+        
+        # Check if target and item belong to the same category group
+        target_group = None
+        item_group = None
+        
+        for group_name, keywords in category_groups.items():
+            # Check target item
+            if any(keyword in target_lower for keyword in keywords):
+                target_group = group_name
+            
+            # Check item description and categories
+            if any(keyword in desc_lower for keyword in keywords) or \
+               any(keyword in ' '.join(cats_lower) for keyword in keywords):
+                item_group = group_name
+        
+        # If both items belong to the same category group, they are incompatible
+        if target_group and item_group and target_group == item_group:
+            return True
+        
+        # Additional specific checks
+        specific_checks = [
+            ('pants', 'trousers'), ('shirt', 'blouse'), ('shoes', 'boots'),
+            ('bag', 'handbag'), ('dress', 'gown'), ('jacket', 'blazer')
         ]
         
-        for path in possible_paths:
-            if path.exists():
-                return path
+        for check1, check2 in specific_checks:
+            if (check1 in target_lower and check2 in desc_lower) or \
+               (check2 in target_lower and check1 in desc_lower):
+                return True
+        
+        return False
+    
+    def _get_image_from_gcs(self, item_id: str) -> Optional[Image.Image]:
+        """Get product image from GCS with caching"""
+        # Check cache first
+        if item_id in self._image_cache:
+            return self._image_cache[item_id]
+        
+        # Try different image naming formats
+        possible_paths = [
+            f"{self.images_prefix}/{item_id}_index1.jpg",
+            f"{self.images_prefix}/{item_id}_index2.jpg",
+            f"{self.images_prefix}/{item_id}.jpg"
+        ]
+        
+        for image_path in possible_paths:
+            try:
+                blob = self.bucket.blob(image_path)
+                if blob.exists():
+                    # Download image data
+                    image_data = blob.download_as_bytes()
+                    # Convert to PIL Image
+                    image = Image.open(io.BytesIO(image_data)).convert('RGB')
+                    # Cache the image
+                    self._image_cache[item_id] = image
+                    return image
+            except Exception as e:
+                continue
         
         return None
     
@@ -273,15 +377,14 @@ class FashionTripletDataset(Dataset):
             anchor_id = list(self.compatibility_graph.keys())[current_idx]
             anchor_item = self.items[anchor_id]
             
-            # Get anchor image
-            anchor_path = self._get_image_path(anchor_id)
-            if anchor_path is not None:
+            # Get anchor image from GCS
+            anchor_image = self._get_image_from_gcs(anchor_id)
+            if anchor_image is not None:
                 break
         else:
             # If no valid image found, create a dummy sample
             return self._create_dummy_sample()
         
-        anchor_image = Image.open(anchor_path).convert('RGB')
         anchor_image = self.transform(anchor_image)
         
         # Get positive sample (compatible items)
@@ -291,22 +394,20 @@ class FashionTripletDataset(Dataset):
             return self.__getitem__((idx + 1) % len(self))
         
         positive_id = random.choice(positive_ids)
-        positive_path = self._get_image_path(positive_id)
+        positive_image = self._get_image_from_gcs(positive_id)
         
-        if positive_path is None:
+        if positive_image is None:
             return self.__getitem__((idx + 1) % len(self))
         
-        positive_image = Image.open(positive_path).convert('RGB')
         positive_image = self.transform(positive_image)
         
         # Get negative sample (incompatible items) - try multiple times for better diversity
         negative_image = None
         for _ in range(5):  # Try up to 5 times to find a good negative sample
             negative_id = self._get_negative_sample(anchor_id, positive_ids)
-            negative_path = self._get_image_path(negative_id)
+            negative_image = self._get_image_from_gcs(negative_id)
             
-            if negative_path is not None:
-                negative_image = Image.open(negative_path).convert('RGB')
+            if negative_image is not None:
                 negative_image = self.transform(negative_image)
                 break
         
@@ -329,107 +430,119 @@ class FashionTripletDataset(Dataset):
         return random.choice(available_ids)
 
 
-def create_dataloader(data_dir: str, image_dir: str, batch_size: int = 32, 
-                     num_workers: int = 4, shuffle: bool = True, 
+def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket", 
+                     gcp_project_id: str = "styleme-475201",
+                     data_prefix: str = "data/json",
+                     images_prefix: str = "data/images",
+                     batch_size: int = 32, 
+                     num_workers: int = 4, 
+                     shuffle: bool = True, 
                      max_samples_per_file: int = None,
-                     use_gcp_storage: bool = False, gcp_config: dict = None) -> Tuple[DataLoader, DataLoader, DataLoader]:
+                     train_split: float = 0.7,
+                     val_split: float = 0.05) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
-    Create DataLoader for training, validation and test
+    Create DataLoader for training, validation and test using GCS data
     
     Args:
-        data_dir: data directory (ignored if use_gcp_storage=True)
-        image_dir: image directory (ignored if use_gcp_storage=True)
+        gcp_bucket_name: GCS bucket name
+        gcp_project_id: GCP project ID
+        data_prefix: prefix for JSON data files in GCS
+        images_prefix: prefix for image files in GCS
         batch_size: batch size
         num_workers: number of worker processes
         shuffle: whether to shuffle data
         max_samples_per_file: maximum samples per file (None = use all data)
-        use_gcp_storage: whether to use GCP Storage
-        gcp_config: GCP configuration dictionary
+        train_split: fraction of data for training
+        val_split: fraction of data for validation
     
     Returns:
         Tuple of (train_loader, val_loader, test_loader)
     """
-    if use_gcp_storage and gcp_config:
-        # Use GCP Storage dataloader
-        from gcp_dataloader import create_gcp_dataloader
-        
-        return create_gcp_dataloader(
-            bucket_name=gcp_config['gcp_bucket_name'],
-            project_id=gcp_config['gcp_project_id'],
-            data_prefix=gcp_config['gcp_data_prefix'],
-            images_prefix=gcp_config['gcp_images_prefix'],
-            batch_size=batch_size,
-            num_workers=num_workers,
-            max_samples_per_file=max_samples_per_file,
-            train_split=0.7,
-            val_split=0.15
-        )
-    else:
-        # Use local dataloader
-        # Create dataset
-        dataset = FashionTripletDataset(data_dir, image_dir, max_samples_per_file=max_samples_per_file)
-        
-        # Split dataset into train, validation and test (70/15/15)
-        total_size = len(dataset)
-        train_size = int(0.7 * total_size)
-        val_size = int(0.15 * total_size)
-        test_size = total_size - train_size - val_size
-        
-        train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
-            dataset, [train_size, val_size, test_size]
-        )
-    
-    # Create train dataloader
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True
+    # Create dataset using GCS
+    dataset = FashionTripletDataset(
+        gcp_bucket_name=gcp_bucket_name,
+        gcp_project_id=gcp_project_id,
+        data_prefix=data_prefix,
+        images_prefix=images_prefix,
+        max_samples_per_file=max_samples_per_file
     )
+    
+    # Split dataset into train, validation and test
+    total_size = len(dataset)
+    train_size = int(train_split * total_size)
+    val_size = int(val_split * total_size)
+    test_size = total_size - train_size - val_size
+    
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
+        dataset, [train_size, val_size, test_size]
+    )
+    
+    # Create train dataloader with conditional prefetch_factor
+    train_loader_kwargs = {
+        'dataset': train_dataset,
+        'batch_size': batch_size,
+        'shuffle': shuffle,
+        'num_workers': min(num_workers, 2),  # Limit workers to avoid shared memory issues
+        'pin_memory': True,
+        'drop_last': True,
+        'persistent_workers': False
+    }
+    if num_workers > 0:
+        train_loader_kwargs['prefetch_factor'] = 1
+    train_loader = DataLoader(**train_loader_kwargs)
     
     # Create validation dataloader
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,  # No shuffle for validation
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True
-    )
+    val_loader_kwargs = {
+        'dataset': val_dataset,
+        'batch_size': batch_size,
+        'shuffle': False,
+        'num_workers': min(num_workers, 2),
+        'pin_memory': True,
+        'drop_last': True,
+        'persistent_workers': False
+    }
+    if num_workers > 0:
+        val_loader_kwargs['prefetch_factor'] = 1
+    val_loader = DataLoader(**val_loader_kwargs)
     
     # Create test dataloader
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,  # No shuffle for test
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True
-    )
+    test_loader_kwargs = {
+        'dataset': test_dataset,
+        'batch_size': batch_size,
+        'shuffle': False,
+        'num_workers': num_workers,
+        'pin_memory': True,
+        'drop_last': True,
+        'persistent_workers': True if num_workers > 0 else False
+    }
+    if num_workers > 0:
+        test_loader_kwargs['prefetch_factor'] = 2
+    test_loader = DataLoader(**test_loader_kwargs)
     
     return train_loader, val_loader, test_loader
 
 
 def test_dataloader():
-    """Test dataloader functionality"""
-    data_dir = "../data"
-    image_dir = "../data/images"
+    """Test dataloader functionality with GCS"""
+    print("Creating GCS dataloader...")
+    train_loader, val_loader, test_loader = create_dataloader(
+        gcp_bucket_name="styleme-data-bucket",
+        gcp_project_id="styleme-475201",
+        batch_size=4, 
+        num_workers=0
+    )
     
-    print("Creating dataloader...")
-    dataloader = create_dataloader(data_dir, image_dir, batch_size=4, num_workers=0)
-    
-    print(f"Dataset size: {len(dataloader.dataset)}")
-    print(f"Number of batches: {len(dataloader)}")
+    print(f"Train dataset size: {len(train_loader.dataset)}")
+    print(f"Validation dataset size: {len(val_loader.dataset)}")
+    print(f"Test dataset size: {len(test_loader.dataset)}")
+    print(f"Number of train batches: {len(train_loader)}")
     
     # Test one batch
-    for batch in dataloader:
+    for batch in train_loader:
         print(f"Batch shapes:")
-        print(f"  Anchor: {batch['anchor'].shape}")
-        print(f"  Positive: {batch['positive'].shape}")
-        print(f"  Negative: {batch['negative'].shape}")
-        print(f"  Anchor IDs: {batch['anchor_id']}")
+        print(f"  Anchor: {batch[0].shape}")
+        print(f"  Positive: {batch[1].shape}")
+        print(f"  Negative: {batch[2].shape}")
         break
 
 

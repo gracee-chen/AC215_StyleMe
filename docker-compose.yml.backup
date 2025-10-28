@@ -53,12 +53,11 @@ services:
     environment:
       - GCP_BUCKET_NAME=styleme-data-bucket
       - GCP_PROJECT_ID=styleme-475201
-      - DATA_PREFIX=json
-      - IMAGES_PREFIX=images
+      - DATA_PREFIX=data/json
+      - IMAGES_PREFIX=data/images
       - EXPERIMENTS_DIR=/app/experiments
       - CUDA_VISIBLE_DEVICES=0
       - LOG_LEVEL=INFO
-    shm_size: 2gb  # Increase shared memory to avoid DataLoader issues
     depends_on:
       - preprocessing
     deploy:
@@ -90,8 +89,8 @@ services:
     environment:
       - GCP_BUCKET_NAME=styleme-data-bucket
       - GCP_PROJECT_ID=styleme-475201
-      - DATA_PREFIX=json
-      - IMAGES_PREFIX=images
+      - DATA_PREFIX=data/json
+      - IMAGES_PREFIX=data/images
       - EXPERIMENTS_DIR=/app/experiments
       - CATALOG_DIR=/app/catalog
       - WARDROBES_DIR=/app/wardrobes

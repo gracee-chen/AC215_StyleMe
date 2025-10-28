@@ -3,15 +3,17 @@
 echo "🤖 Starting Model Training Pipeline"
 echo "================================="
 
-# Check if data exists
-if [ ! -d "$DATA_DIR/json" ] || [ ! "$(ls -A $DATA_DIR/json)" ]; then
-    echo "❌ No data found in $DATA_DIR/json. Please run ingestion and preprocessing first."
-    exit 1
-fi
+# GCS Configuration
+GCP_BUCKET_NAME=${GCP_BUCKET_NAME:-"styleme-data-bucket"}
+GCP_PROJECT_ID=${GCP_PROJECT_ID:-"styleme-475201"}
+DATA_PREFIX=${DATA_PREFIX:-"json"}
+IMAGES_PREFIX=${IMAGES_PREFIX:-"images"}
 
-echo "📊 Found data:"
-find $DATA_DIR/json -name "*.json" | wc -l | xargs echo "   JSON files:"
-find $DATA_DIR/images -name "*.jpg" 2>/dev/null | wc -l | xargs echo "   Images:"
+echo "☁️ Using GCS data source:"
+echo "   Bucket: $GCP_BUCKET_NAME"
+echo "   Project: $GCP_PROJECT_ID"
+echo "   Data prefix: $DATA_PREFIX"
+echo "   Images prefix: $IMAGES_PREFIX"
 
 # Check GPU availability
 echo "🎮 Checking GPU availability..."
@@ -34,42 +36,44 @@ Training configuration file - Container version
 """
 import os
 
-# Data configuration - Container paths
+# Data configuration - GCS configuration
 DATA_CONFIG = {
-    'data_dir': '/app/data',  # Container data directory
-    'image_dir': '/app/data/images',  # Container images directory
+    'gcp_bucket_name': 'styleme-data-bucket',  # GCS bucket name
+    'gcp_project_id': 'styleme-475201',  # GCP project ID
+    'data_prefix': 'json',  # JSON data prefix in GCS (actual structure)
+    'images_prefix': 'images',  # Images prefix in GCS (actual structure)
     'max_samples_per_file': None,  # None = use all data, int = limit samples per file
     'compatibility_threshold': 1,  # Compatibility matching threshold (lowered for more data)
     'max_compatible_items': 5,  # Maximum compatible items per product (increased for diversity)
 }
 
-# Training configuration - Optimized for 75% target accuracy
+# Training configuration - Optimized for training
 TRAINING_CONFIG = {
-    'batch_size': 16,  # Batch size (reduced for better gradient updates, matching EXP_002)
-    'epochs': 30,  # Number of training epochs (increased from 20 but not too high)
-    'learning_rate': 1e-5,  # Learning rate (keep same as successful EXP_002)
-    'num_workers': 2,  # Number of data loading worker processes
-    'patience': 8,  # Early stopping patience (increased to allow more training)
-    'target_accuracy': 0.75,  # Target accuracy (matching successful EXP_002)
+    'batch_size': 32,  # Larger batch size for faster training
+    'epochs': 20,  # Training epochs
+    'learning_rate': 5e-6,  # Learning rate
+    'num_workers': 0,  # Disabled to avoid shm issues (can't use parallel loading in Docker)
+    'patience': 10,  # Early stopping patience
+    'target_accuracy': 0.85,  # Target accuracy
 }
 
 # Model configuration
 MODEL_CONFIG = {
     'model_name': 'openai/clip-vit-base-patch32',
-    'freeze_layers': 8,  # Number of frozen layers
+    'freeze_layers': 4,  # Fewer frozen layers for better adaptation
     'feature_dim': 512,  # Feature dimension
 }
 
 # Triplet Loss configuration - Optimized for better separation
 TRIPLET_CONFIG = {
-    'margin': 0.7,  # Triplet Loss margin (increased for better feature separation)
+    'margin': 1.0,  # Higher margin for better feature separation
     'distance_metric': 'euclidean',  # Distance metric
 }
 
 # Optimizer configuration - Optimized for better convergence
 OPTIMIZER_CONFIG = {
     'optimizer': 'AdamW',
-    'weight_decay': 0.005,  # Reduced weight decay for less regularization
+    'weight_decay': 0.001,  # Lower weight decay for less regularization
     'scheduler': 'CosineAnnealingLR',
 }
 
@@ -92,16 +96,19 @@ EOF
 
 # Test data loader
 echo "🧪 Testing data loader..."
+export PYTHONPATH="/app/src:$PYTHONPATH"
 python3 -c "
 import sys
-sys.path.append('/app/src')
-from src.datapipeline.dataloader import create_dataloader
+sys.path.insert(0, '/app/src')
+from datapipeline.dataloader import create_dataloader
 from config_container import DATA_CONFIG
 print('Testing data loader...')
 try:
     train_loader, val_loader, test_loader = create_dataloader(
-        data_dir=DATA_CONFIG['data_dir'],
-        image_dir=DATA_CONFIG['image_dir'],
+        gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
+        gcp_project_id=DATA_CONFIG['gcp_project_id'],
+        data_prefix=DATA_CONFIG['data_prefix'],
+        images_prefix=DATA_CONFIG['images_prefix'],
         batch_size=4
     )
     print('✅ Data loader test successful!')
@@ -112,13 +119,15 @@ except Exception as e:
     print(f'❌ Data loader test failed: {e}')
     import traceback
     traceback.print_exc()
+    exit(1)
 "
 
 # Start training
 echo "🎯 Starting model training..."
+export PYTHONPATH="/app/src:$PYTHONPATH"
 python3 -c "
 import sys
-sys.path.append('/app/src')
+sys.path.insert(0, '/app/src')
 import os
 os.chdir('/app/src/models/train')
 

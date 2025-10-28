@@ -20,11 +20,18 @@ sys.path.append('/app/src')
 from src.models.train.model_training import FashionCLIPModel
 
 class CatalogIndexBuilder:
-    def __init__(self, data_dir, image_dir, experiments_dir, output_dir):
-        self.data_dir = Path(data_dir)
-        self.image_dir = Path(image_dir)
+    def __init__(self, gcp_bucket_name, gcp_project_id, data_prefix, images_prefix, experiments_dir, output_dir):
+        self.gcp_bucket_name = gcp_bucket_name or "styleme-data-bucket"
+        self.gcp_project_id = gcp_project_id or "styleme-475201"
+        self.data_prefix = data_prefix or "data/json"
+        self.images_prefix = images_prefix or "data/images"
         self.experiments_dir = Path(experiments_dir)
         self.output_dir = Path(output_dir)
+        
+        # Initialize GCS client
+        from google.cloud import storage
+        self.gcs_client = storage.Client(project=self.gcp_project_id)
+        self.bucket = self.gcs_client.bucket(self.gcp_bucket_name)
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"🔧 Using device: {self.device}")
@@ -76,15 +83,16 @@ class CatalogIndexBuilder:
         
         items = []
         
-        # Load men's data
-        men_dir = self.data_dir / "json" / "men_data"
-        if men_dir.exists():
-            json_files = list(men_dir.glob("*.json"))
-            print(f"   Found {len(json_files)} men's data files")
-            
-            for json_file in tqdm(json_files, desc="Loading men's data"):
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+        # Load men's data from GCS
+        men_prefix = f"{self.data_prefix}/men_data/"
+        men_blobs = list(self.bucket.list_blobs(prefix=men_prefix))
+        men_json_blobs = [blob for blob in men_blobs if blob.name.endswith('.json')]
+        print(f"   Found {len(men_json_blobs)} men's data files in GCS")
+        
+        for blob in tqdm(men_json_blobs, desc="Loading men's data"):
+            try:
+                json_content = blob.download_as_text(encoding='utf-8')
+                data = json.loads(json_content)
                 
                 for item in data:
                     item_id = item.get('source', {}).get('id')
@@ -104,15 +112,16 @@ class CatalogIndexBuilder:
                         'image_path': f"{item_id}_index1.jpg"
                     })
         
-        # Load women's data
-        women_dir = self.data_dir / "json" / "women_data"
-        if women_dir.exists():
-            json_files = list(women_dir.glob("*.json"))
-            print(f"   Found {len(json_files)} women's data files")
-            
-            for json_file in tqdm(json_files, desc="Loading women's data"):
-                with open(json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+        # Load women's data from GCS
+        women_prefix = f"{self.data_prefix}/women_data/"
+        women_blobs = list(self.bucket.list_blobs(prefix=women_prefix))
+        women_json_blobs = [blob for blob in women_blobs if blob.name.endswith('.json')]
+        print(f"   Found {len(women_json_blobs)} women's data files in GCS")
+        
+        for blob in tqdm(women_json_blobs, desc="Loading women's data"):
+            try:
+                json_content = blob.download_as_text(encoding='utf-8')
+                data = json.loads(json_content)
                 
                 for item in data:
                     item_id = item.get('source', {}).get('id')
@@ -150,20 +159,31 @@ class CatalogIndexBuilder:
         
         with torch.no_grad():
             for idx, row in tqdm(df.iterrows(), total=len(df), desc="Processing images"):
-                image_path = self.image_dir / row['image_path']
+                # Try different image paths in GCS
+                possible_paths = [
+                    f"{self.images_prefix}/{row['image_path']}",
+                    f"{self.images_prefix}/{row['id']}_index2.jpg",
+                    f"{self.images_prefix}/{row['id']}.jpg"
+                ]
                 
-                # Try alternative image paths
-                if not image_path.exists():
-                    image_path = self.image_dir / f"{row['id']}_index2.jpg"
-                if not image_path.exists():
-                    image_path = self.image_dir / f"{row['id']}.jpg"
+                image_data = None
+                for image_path in possible_paths:
+                    try:
+                        blob = self.bucket.blob(image_path)
+                        if blob.exists():
+                            image_data = blob.download_as_bytes()
+                            break
+                    except Exception:
+                        continue
                 
-                if not image_path.exists():
+                if image_data is None:
                     continue
                 
                 try:
-                    # Load and transform image
-                    image = Image.open(image_path).convert('RGB')
+                    # Load image from bytes
+                    from PIL import Image
+                    import io
+                    image = Image.open(io.BytesIO(image_data)).convert('RGB')
                     image_tensor = self.transform(image).unsqueeze(0).to(self.device)
                     
                     # Generate embedding
@@ -278,9 +298,11 @@ def main():
     """Main entry point"""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Build catalog index from Farfetch data')
-    parser.add_argument('--data-dir', default='/app/data', help='Data directory')
-    parser.add_argument('--image-dir', default='/app/data/images', help='Image directory')
+    parser = argparse.ArgumentParser(description='Build catalog index from GCS data')
+    parser.add_argument('--gcp-bucket-name', default='styleme-data-bucket', help='GCS bucket name')
+    parser.add_argument('--gcp-project-id', default='styleme-475201', help='GCP project ID')
+    parser.add_argument('--data-prefix', default='data/json', help='Data prefix in GCS')
+    parser.add_argument('--images-prefix', default='data/images', help='Images prefix in GCS')
     parser.add_argument('--experiments-dir', default='/app/experiments', help='Experiments directory')
     parser.add_argument('--output-dir', default='/app/catalog', help='Output directory')
     
@@ -288,8 +310,10 @@ def main():
     
     # Build catalog
     builder = CatalogIndexBuilder(
-        data_dir=args.data_dir,
-        image_dir=args.image_dir,
+        gcp_bucket_name=args.gcp_bucket_name,
+        gcp_project_id=args.gcp_project_id,
+        data_prefix=args.data_prefix,
+        images_prefix=args.images_prefix,
         experiments_dir=args.experiments_dir,
         output_dir=args.output_dir
     )
