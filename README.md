@@ -16,17 +16,24 @@ This milestone focused on **enhancing the containerized pipeline with GPU optimi
 
 ```
 StyleMe/
+├── midterm_presentation/                          
+│   ├── StyleMeMidterm.pdf 
 ├── containers/                   # Dockerfiles
-│   ├── ingestion/                
-│   ├── preprocessing/           
-│   └── training/     
-├── data/                         # Training data
-│   ├── json/                     # Captioned data
-│   │   ├── men_data/             
-│   │   └── women_data/           
-│   └── images/                   # Product images
-├── scripts/
-│   ├── run_pipeline.py
+│   ├── ...
+│   ├── inference/                  
+│   └── ...
+├── queries/                     # User Input
+│   ├── user1/
+│   ├── user2/
+│   ├── ...
+├── results/                     # Inference Output
+│   ├── user1/
+│   ├── user2/
+│   ├── ...
+├── wardrobes/                   # User uploaded wardrobes
+│   ├── user1/
+│   ├── user2/
+│   ├── ...                     
 ├── src/                          
 │   ├── datapipeline/             # Data processing module
 │   │   ├── dataloader.py           
@@ -49,125 +56,6 @@ StyleMe/
 ├── docker-compose.yml.backup    # Backup configuration
 └── README.md
 ```
-
-## 1. Virtual Environment Setup
-
-Virtual machine environment configured to support containerized deep learning and machine learning workloads. This instance provides GPU-accelerated computing with pre-installed deep learning frameworks, enabling efficient model training, inference, and deployment through Docker containers.
-
-### Configuration
-```
-Name:             styleme-dev2
-Project:          styleme-475201
-Zone:             us-central1-c
-Machine:          n1-standard-8 (8 vCPUs, 30 GB RAM, 1x NVIDIA V100)
-OS:               Debian 11 + PyTorch 2.4 + CUDA 12.4 + Python 3.10
-Storage:          200 GB Balanced Persistent Disk
-Network:          Internal: 10.128.0.3 | External: 35.232.244.20
-Console:          https://console.cloud.google.com/compute/instancesDetail/zones/us-central1-c/instances/styleme-dev2
-```
-
-### Access
-```bash
-gcloud compute ssh styleme-dev2 --zone=us-central1-c --project=styleme-475201
-nvidia-smi  # Verify GPU
-```
-<img width="1460" height="1064" alt="image" src="https://github.com/user-attachments/assets/3dd8ae94-d4d9-431c-aebe-8416f14b8957" />
-
-<img width="1374" height="728" alt="1eb0b34a740bd87dcd64581b13fa7ca6" src="https://github.com/user-attachments/assets/8ef0add6-9a4b-4a6a-acb9-957a99b5a4d9" />
-
-_Figure 1. Screenshots of GCP instance and running container._
-
-## 2. End-to-End Containerized Pipeline
-
-The pipeline consists of modular components orchestrated with Docker Compose, now enhanced with GPU acceleration and improved container management.
-
-| Stage | Description | Example Tasks |
-|--------|--------------|----------------|
-| **📥 Ingestion** | Collects and stores curated product data | Web scraping, GCS upload |
-| **🔄 Preprocessing** | Cleans and deduplicates images | Resize, validate, filter |
-| **🤖 Training** | Fine-tunes FashionCLIP with GPU acceleration | Triplet training, checkpointing, GPU optimization |
-
-### Run Instruction
-
-```bash
-# Build all containers
-make build
-
-# Run the complete pipeline
-make run
-
-# GPU-specific training
-docker-compose up training
-```
-
-<img width="1184" height="850" alt="image" src="https://github.com/user-attachments/assets/1512e319-423e-45d4-8caf-9a0e7fcf57a7" />
-
-<img width="1314" height="1280" alt="image" src="https://github.com/user-attachments/assets/bfe621ce-3b12-4851-beca-2571e4e1f4d9" />
-
-_Figure 2. Console output showing successful end-to-end pipeline run._
-
-## 3. Data Ingestion & Preprocessing
-
-We processed ~13k curated product images and corresponding JSON metadata for both men's and women's fashion. Each record contains structured product details and "complete the look" compatibility annotations. Our preprocessing pipeline standardizes, cleans, and captions each product entry to ensure consistency and data readiness.
-
-### Pipeline Highlights
-- Standardized captions generated for every product image
-- Automatic filtering and removal of duplicate entries
-- Consolidation of compatibility pairs from "complete the look" field
-- Enhanced data validation and error handling
-
-<img width="946" height="665" alt="截屏2025-10-16 19 20 43" src="https://github.com/user-attachments/assets/2c0a1f35-361f-4c37-bc6a-43b7c66f7b2e" />
-
-_Figure 3. Example of cleaned JSON metadata and generated captions._
-
-## 4. Model Preparation, Training & Evaluation
-
-The FashionCLIP-based model learns compatibility relationships between clothing items using triplet loss. Before training, we constructed triplets (anchor, positive, negative) and split data into training and validation sets. The training process now includes GPU optimization and enhanced monitoring.
-
-### Architecture Overview
-- **Model**: FashionCLIP (ViT-B/32)
-- **Fine-Tuning**: Last 4 layers (first 8 frozen)
-- **Loss Function**: Triplet margin loss (margin = 0.5)
-- **Checkpointing**: Automatically saves best model
-- **GPU Acceleration**: CUDA-enabled training with NVIDIA V100
-
-<img width="848" height="286" alt="image" src="https://github.com/user-attachments/assets/f26890db-c401-4fa8-9745-763972343019" />
-
-_Figure 4. An illustration of FashionCLIP fine-tuning with triplet loss for outfit compatibility._
-
-### Training Experiments
-
-#### Experiment 1: Initial Configuration
-<img width="4470" height="1466" alt="image" src="https://github.com/user-attachments/assets/cef27aa1-25c5-4221-a6e8-6cdb06732033" />
-
-**Configurations:**
-- **Target Accuracy**: 0.75
-- **Batch Size**: 32
-- **Epochs**: 20
-- **Learning Rate**: 1e-6
-- **Patience**: 5
-- **GPU Memory**: Optimized for V100
-
-#### Experiment 2: Refined Hyperparameters
-<img width="4470" height="1466" alt="image" src="https://github.com/user-attachments/assets/8625de81-592d-440d-b90b-efea8c1164ed" />
-
-**Configurations:**
-- **Target Accuracy**: 0.75
-- **Batch Size**: 16 (reduced for stability)
-- **Epochs**: 30 (increased for convergence)
-- **Learning Rate**: 1e-5 (increased for faster learning)
-- **Patience**: 8 (extended early stopping)
-- **Monitoring**: Enhanced training progress tracking
-
-### Training Results
-- **Best Validation Accuracy**: 0.78
-- **Training Time**: ~45 minutes per epoch
-- **Model Checkpoints**: Automatically saved at best performance
-- **Loss Convergence**: Stable triplet loss reduction observed
-
-## 5. Updates from Milestone 2
-
-This milestone represents significant enhancements to our Personal Wardrobe AI Stylist system, building upon the foundation established in Milestone 2. 
 
 ### Data Management and Security
 
@@ -212,8 +100,6 @@ We developed a comprehensive evaluation framework with two specialized modules: 
 
 We designed a user-based inference pipeline centered around personalized retrieval and dynamic decision-making. The system operates through two main stages: a Wardrobe Index for user-owned items and a Catalog Index for global recommendations. Upon receiving a query image, our pipeline first generates its embedding using the fine-tuned Fashion-CLIP model and compares it against the user’s wardrobe embeddings to identify the most compatible pieces based on cosine similarity. If the wardrobe lacks suitable matches or the top similarity score falls below a defined threshold, the system seamlessly transitions to the global catalog index, retrieving the top-3 purchasable items with associated metadata such as title, price, brand, and shopping URL. This two-tier inference structure ensures both personalization and scalability—leveraging pre-computed embeddings, fast approximate nearest-neighbor search, and adaptive similarity thresholds for real-time performance.
 
-## 6. Application Mock-up
+### Midterm Presentation
 
-The Personal Wardrobe Stylist prototype generates outfit recommendations from a user's wardrobe image, now with improved inference capabilities and better compatibility scoring.
-
-<img width="1201" height="638" alt="image" src="https://github.com/user-attachments/assets/868368f1-4d18-4a4c-a4cb-d65d363941a8" />
+Filename: StyleMeMidterm.pdf
