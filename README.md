@@ -210,6 +210,8 @@ We developed a comprehensive evaluation framework with two specialized modules: 
 
 ### User-based Inference
 
+We designed a user-based inference pipeline centered around personalized retrieval and dynamic decision-making. The system operates through two main stages: a Wardrobe Index for user-owned items and a Catalog Index for global recommendations. Upon receiving a query image, our pipeline first generates its embedding using the fine-tuned Fashion-CLIP model and compares it against the user’s wardrobe embeddings to identify the most compatible pieces based on cosine similarity. If the wardrobe lacks suitable matches or the top similarity score falls below a defined threshold, the system seamlessly transitions to the global catalog index, retrieving the top-3 purchasable items with associated metadata such as title, price, brand, and shopping URL. This two-tier inference structure ensures both personalization and scalability—leveraging pre-computed embeddings, fast approximate nearest-neighbor search, and adaptive similarity thresholds for real-time performance.
+
 ## 6. Application Mock-up
 
 The Personal Wardrobe Stylist prototype generates outfit recommendations from a user's wardrobe image, now with improved inference capabilities and better compatibility scoring.
