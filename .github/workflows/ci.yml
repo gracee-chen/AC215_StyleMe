@@ -86,11 +86,14 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
+        # Install CI dependencies first (includes compatible torch/transformers)
         pip install -r CI/requirements-dev.txt
-        # Install project dependencies from containers
+        # Install project dependencies, but skip conflicting packages already installed
         pip install -r containers/training/requirements.txt || true
         pip install -r containers/inference/requirements.txt || true
         pip install -r containers/preprocessing/requirements.txt || true
+        # Ensure compatible versions are installed (override any conflicts)
+        pip install "torch>=2.0.0,<2.2.0" "torchvision>=0.15.0,<0.18.0" "transformers>=4.35.0,<5.0.0" --upgrade || true
         # Clean pip cache to save space
         pip cache purge || true
     
