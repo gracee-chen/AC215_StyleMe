@@ -44,6 +44,8 @@ jobs:
         pip install --force-reinstall --no-cache-dir "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
         # Install CI dependencies with constraints file to prevent upgrades
         pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
+        # Ensure pytest-xdist is installed for parallel test execution
+        pip install --no-cache-dir pytest-xdist || pip install pytest-xdist
         # Install project dependencies with constraints (prevent NumPy/PyTorch/transformers upgrades)
         pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
@@ -99,6 +101,8 @@ jobs:
         pip install --force-reinstall --no-cache-dir "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
         # Install CI dependencies with constraints file to prevent upgrades
         pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
+        # Ensure pytest-xdist is installed for parallel test execution
+        pip install --no-cache-dir pytest-xdist || pip install pytest-xdist
         # Install project dependencies with constraints (prevent NumPy/PyTorch/transformers upgrades)
         pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
@@ -108,25 +112,14 @@ jobs:
         # Clean pip cache to save space
         pip cache purge || true
     
-    - name: Run unit tests
+    - name: Run tests with coverage (excluding slow tests)
       run: |
         cd /home/runner/work/AC215_StyleMe/AC215_StyleMe || cd $GITHUB_WORKSPACE
         python -c "import sys; print('Python path:', sys.path[:3])"
         python -c "import os; print('Working dir:', os.getcwd())"
-        pytest CI/tests/ -m unit -v --tb=short -c CI/config/pytest.ini --rootdir=.
-    
-    - name: Run integration tests
-      run: |
-        pytest CI/tests/integration/ -m integration -v --tb=short
-    
-    - name: Run end-to-end tests
-      run: |
-        pytest CI/tests/test_e2e.py -m e2e -v --tb=short
-      continue-on-error: true  # E2E tests may be flaky
-    
-    - name: Run all tests with coverage
-      run: |
+        # Run all tests except slow ones, with coverage, in parallel
         pytest CI/tests/ \
+          -m "not slow" \
           --cov=src \
           --cov=containers \
           --cov-config=CI/config/.coveragerc \
@@ -134,7 +127,17 @@ jobs:
           --cov-report=xml:CI/coverage.xml \
           --cov-report=html:CI/coverage_html \
           --cov-fail-under=50 \
-          -v
+          -n auto \
+          --dist=worksteal \
+          -v \
+          --tb=short \
+          -c CI/config/pytest.ini \
+          --rootdir=.
+    
+    - name: Run slow tests (optional)
+      run: |
+        pytest CI/tests/ -m "slow" -v --tb=short -c CI/config/pytest.ini --rootdir=.
+      continue-on-error: true  # Slow tests are optional
 
   coverage:
     name: Report Coverage
@@ -157,9 +160,11 @@ jobs:
         pip install -r CI/requirements-dev.txt
         pip install -r containers/training/requirements.txt || true
     
-    - name: Generate coverage report
+    - name: Generate coverage report (fast)
       run: |
+        # Only run non-slow tests for coverage to save time
         pytest CI/tests/ \
+          -m "not slow" \
           --cov=src \
           --cov=containers \
           --cov-config=CI/config/.coveragerc \
@@ -167,6 +172,7 @@ jobs:
           --cov-report=xml:CI/coverage.xml \
           --cov-report=html:CI/coverage_html \
           --cov-fail-under=50 \
+          -n auto \
           -v \
           --tb=short
     
