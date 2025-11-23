@@ -25,8 +25,10 @@ from config import DATA_CONFIG
 print('Testing data loader...')
 try:
     train_loader, val_loader, test_loader = create_dataloader(
-        data_dir=DATA_CONFIG['data_dir'],
-        image_dir=DATA_CONFIG['image_dir'],
+        gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
+        gcp_project_id=DATA_CONFIG['gcp_project_id'],
+        data_prefix=DATA_CONFIG['data_prefix'],
+        images_prefix=DATA_CONFIG['images_prefix'],
         batch_size=4
     )
     print('✅ Data loader test successful!')

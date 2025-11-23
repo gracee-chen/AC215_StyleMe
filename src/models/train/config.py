@@ -2,24 +2,25 @@
 Training configuration file
 """
 
-# Data configuration - Fixed paths for local training
+# Data configuration - GCS configuration
 DATA_CONFIG = {
-    'data_dir': '/home/grace_chen/data',  # Base data directory (contains json/ and images/)
-    'image_dir': '/home/grace_chen/data/images',  # Images directory
+    'gcp_bucket_name': 'styleme-data-bucket',  # GCS bucket name
+    'gcp_project_id': 'styleme-475201',  # GCP project ID
+    'data_prefix': 'json',  # JSON data prefix in GCS (actual structure)
+    'images_prefix': 'images',  # Images prefix in GCS (actual structure)
     'max_samples_per_file': None,  # None = use all data, int = limit samples per file
     'compatibility_threshold': 1,  # Compatibility matching threshold (lowered for more data)
     'max_compatible_items': 5,  # Maximum compatible items per product (increased for diversity)
-
 }
 
-# Training configuration - Optimized for 75% target accuracy
+# Training configuration - Optimized for GPU training with parallel loading
 TRAINING_CONFIG = {
-    'batch_size': 16,  # Batch size (reduced for better gradient updates, matching EXP_002)
-    'epochs': 30,  # Number of training epochs (increased from 20 but not too high)
-    'learning_rate': 1e-5,  # Learning rate (keep same as successful EXP_002)
-    'num_workers': 2,  # Number of data loading worker processes
-    'patience': 8,  # Early stopping patience (increased to allow more training)
-    'target_accuracy': 0.75,  # Target accuracy (matching successful EXP_002)
+    'batch_size': 32,  # Larger batch size for GPU training
+    'epochs': 20,  # Training epochs
+    'learning_rate': 5e-6,  # Learning rate
+    'num_workers': 4,  # Multi-threaded data loading (enabled for parallel loading)
+    'patience': 10,  # Early stopping patience
+    'target_accuracy': 0.85,  # Target accuracy
 }
 
 # Model configuration

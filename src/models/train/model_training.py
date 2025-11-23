@@ -215,17 +215,23 @@ class FashionTrainer:
             loss.backward()
             optimizer.step()
             
-            # Calculate strict fashion compatibility score
+            # Calculate improved fashion compatibility score
             accuracy = self._compute_fashion_specific_score(anchor_features, positive_features, negative_features)
+            recommendation_score = self._compute_fashion_recommendation_score(anchor_features, positive_features, negative_features)
+            
+            # Combined score for training monitoring
+            combined_score = (accuracy + recommendation_score) / 2
             
             total_loss += loss.item()
-            total_accuracy += accuracy
+            total_accuracy += combined_score
             num_batches += 1
             
             # Update progress bar
             progress_bar.set_postfix({
                 'Loss': f'{loss.item():.4f}',
-                'Fashion': f'{accuracy:.4f}'
+                'Fashion': f'{accuracy:.4f}',
+                'Recommendation': f'{recommendation_score:.4f}',
+                'Combined': f'{combined_score:.4f}'
             })
         
         avg_loss = total_loss / num_batches
@@ -259,17 +265,23 @@ class FashionTrainer:
                 # Calculate loss
                 loss = self.triplet_loss(anchor_features, positive_features, negative_features)
                 
-                # Calculate strict fashion compatibility score
+                # Calculate improved fashion compatibility score
                 accuracy = self._compute_fashion_specific_score(anchor_features, positive_features, negative_features)
+                recommendation_score = self._compute_fashion_recommendation_score(anchor_features, positive_features, negative_features)
+                
+                # Combined score for validation monitoring
+                combined_score = (accuracy + recommendation_score) / 2
                 
                 total_loss += loss.item()
-                total_accuracy += accuracy
+                total_accuracy += combined_score
                 num_batches += 1
                 
                 # Update progress bar
                 progress_bar.set_postfix({
                     'Loss': f'{loss.item():.4f}',
-                    'Fashion': f'{accuracy:.4f}'
+                    'Fashion': f'{accuracy:.4f}',
+                    'Recommendation': f'{recommendation_score:.4f}',
+                    'Combined': f'{combined_score:.4f}'
                 })
         
         avg_loss = total_loss / num_batches
@@ -336,40 +348,62 @@ class FashionTrainer:
         return strict_compatibility
     
     def _compute_fashion_specific_score(self, anchor, positive, negative) -> float:
-        """Compute fashion-specific compatibility score with style consistency"""
-        # Normalize features
-        anchor_norm = torch.nn.functional.normalize(anchor, p=2, dim=1)
-        positive_norm = torch.nn.functional.normalize(positive, p=2, dim=1)
-        negative_norm = torch.nn.functional.normalize(negative, p=2, dim=1)
+        """
+        Compute improved fashion compatibility score
+        Focuses on learning effectiveness, not just ranking metrics
+        """
+        # Use Euclidean distance (better for triplet loss optimization)
+        pos_dist = F.pairwise_distance(anchor, positive, p=2)
+        neg_dist = F.pairwise_distance(anchor, negative, p=2)
         
-        # 1. Style consistency (high-level features)
-        # Use top 50% of features (assumed to be style-related)
-        feature_dim = anchor.shape[1]
-        style_features = feature_dim // 2
+        # 1. Triplet accuracy - direct measure of training effectiveness
+        triplet_acc = (pos_dist < neg_dist).float().mean().item()
         
-        anchor_style = anchor_norm[:, :style_features]
-        positive_style = positive_norm[:, :style_features]
-        negative_style = negative_norm[:, :style_features]
+        # 2. Margin-based score - how well separated positive vs negative are
+        margin = pos_dist - neg_dist
+        margin_score = torch.sigmoid(margin).mean().item()
         
-        pos_style_sim = torch.sum(anchor_style * positive_style, dim=1)
-        neg_style_sim = torch.sum(anchor_style * negative_style, dim=1)
+        # 3. Distance ratio - measures relative distance quality
+        avg_pos_dist = pos_dist.mean().item()
+        avg_neg_dist = neg_dist.mean().item()
+        distance_ratio = avg_neg_dist / (avg_pos_dist + 1e-6)
+        # Higher is better (negative should be farther than positive)
+        distance_ratio_score = min(1.0, distance_ratio / 2.0)  # Cap at 1.0
         
-        # 2. Color/texture consistency (middle features)
-        color_features = anchor_norm[:, style_features:style_features*2]
-        positive_color = positive_norm[:, style_features:style_features*2]
-        negative_color = negative_norm[:, style_features:style_features*2]
+        # 4. Separation quality - absolute separation
+        separation = (neg_dist - pos_dist).mean().item()
+        separation_score = torch.sigmoid(torch.tensor(separation / 2.0)).item()
         
-        pos_color_sim = torch.sum(color_features * positive_color, dim=1)
-        neg_color_sim = torch.sum(color_features * negative_color, dim=1)
+        # Combined score (weighted toward triplet accuracy and separation)
+        modern_score = (
+            triplet_acc * 0.50 +          # 50% - direct triplet accuracy
+            margin_score * 0.25 +          # 25% - margin quality
+            separation_score * 0.15 +     # 15% - absolute separation
+            distance_ratio_score * 0.10  # 10% - distance ratio
+        )
         
-        # 3. Overall compatibility with strict thresholds
-        style_consistency = (pos_style_sim > neg_style_sim + 0.15).float()  # 15% margin
-        color_consistency = (pos_color_sim > neg_color_sim + 0.1).float()   # 10% margin
+        return modern_score
+    
+    def _compute_fashion_recommendation_score(self, anchor, positive, negative) -> float:
+        """
+        Compute simplified fashion recommendation quality score
+        Focuses on triplet learning quality
+        """
+        # Use the same triplet accuracy as main score
+        pos_dist = F.pairwise_distance(anchor, positive, p=2)
+        neg_dist = F.pairwise_distance(anchor, negative, p=2)
         
-        # 4. Combined fashion score (both must be high)
-        fashion_score = (style_consistency * 0.6 + color_consistency * 0.4).mean().item()
+        # Simple triplet accuracy
+        triplet_acc = (pos_dist < neg_dist).float().mean().item()
         
-        return fashion_score
+        # Margin quality
+        margin = pos_dist - neg_dist
+        margin_quality = torch.sigmoid(margin).mean().item()
+        
+        # Combined score (simplified)
+        recommendation_score = (triplet_acc * 0.6 + margin_quality * 0.4)
+        
+        return recommendation_score
     
     def train(self, train_loader: DataLoader, val_loader: DataLoader, 
               epochs: int = 20, learning_rate: float = 5e-6, 
@@ -755,8 +789,10 @@ This experiment used {exp_name.lower()} and achieved {best_accuracy*100:.2f}% co
 def main():
     """Main training function"""
     # Load parameters from config file
-    data_dir = DATA_CONFIG['data_dir']
-    image_dir = DATA_CONFIG['image_dir']
+    gcp_bucket_name = DATA_CONFIG['gcp_bucket_name']
+    gcp_project_id = DATA_CONFIG['gcp_project_id']
+    data_prefix = DATA_CONFIG['data_prefix']
+    images_prefix = DATA_CONFIG['images_prefix']
     batch_size = TRAINING_CONFIG['batch_size']
     epochs = TRAINING_CONFIG['epochs']
     learning_rate = TRAINING_CONFIG['learning_rate']
@@ -773,18 +809,21 @@ def main():
     print(f"   - Learning Rate: {learning_rate}")
     print(f"   - Patience: {patience} (increased for more training)")
     print(f"   - Target Accuracy: {target_accuracy}")
-    print(f"   - Data Dir: {data_dir}")
-    print(f"   - Image Dir: {image_dir}")
+    print(f"   - GCS Bucket: {gcp_bucket_name}")
+    print(f"   - GCP Project: {gcp_project_id}")
+    print(f"   - Data Prefix: {data_prefix}")
+    print(f"   - Images Prefix: {images_prefix}")
     print("=" * 50)
     
     # Create data loaders
     print("Creating data loaders...")
     train_loader, val_loader, test_loader = create_dataloader(
-        data_dir=data_dir,
-        image_dir=image_dir,
+        gcp_bucket_name=gcp_bucket_name,
+        gcp_project_id=gcp_project_id,
+        data_prefix=data_prefix,
+        images_prefix=images_prefix,
         batch_size=batch_size,
         num_workers=num_workers,
-        shuffle=True,
         max_samples_per_file=DATA_CONFIG['max_samples_per_file']
     )
     

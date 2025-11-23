@@ -1,352 +1,101 @@
 # Personal Wardrobe AI Stylist
 
+## Team Members
+Chufei Peng, Grace Chen, Siyao Zhu, Angel Chen
+
+## Group Name
+StyleMe
+
+## Project Description
+In this project, we aim to develop an AI-powered personal wardrobe stylist that helps users create cohesive outfits from their existing wardrobes. The system leverages curated product data and compatibility information ("complete the look") to learn relationships between clothing items. It integrates a data-cleaning and caption-generation pipeline with a FashionCLIP-based compatibility model to recommend matching items. The goal is to provide an intelligent outfit suggestion tool that understands real-world style relationships and personalizes recommendations based on visual and textual cues.
+
+## Milestone 3 Overview
+This milestone focused on **enhancing the containerized pipeline with GPU optimization, improved model training configurations, and comprehensive evaluation metrics**. We implemented GPU-accelerated training, refined hyperparameter tuning, and developed robust evaluation frameworks to validate model performance across different training scenarios.
+
 ## 📁 Project Structure
 
 ```
-project 215/
-├── data/                           # Training data
-│   ├── Data caption/              # Captioned data from angel branch
-│   │   ├── men_data/             # Male product data
-│   │   └── women_data/           # Female product data
-│   └── images/                   # Product images (6761 files)
-├── src/                           # Source code
-│   ├── datapipeline/              # Data processing module
-│   │   ├── __init__.py           # Package initialization
-│   │   └── dataloader.py         # Data loader and triplet generation
-│   └── models/                    # Model training and inference
-│       ├── __init__.py           # Package initialization
+StyleMe/
+├── midterm_presentation/                          
+│   ├── StyleMeMidterm.pdf 
+├── containers/                   # Dockerfiles
+│   ├── inference/                  
+│   └── ...
+├── queries/                     # User Input
+│   ├── user1/
+│   ├── ...
+├── results/                     # Inference Output
+│   ├── user1/
+│   ├── ...
+├── wardrobes/                   # User uploaded wardrobes
+│   ├── user1/
+│   ├── ...                     
+├── src/                          
+│   ├── datapipeline/             # Data processing module
+│   │   ├── dataloader.py           
+│   │   └── ...        
+│   └── models/                   # Model training and inference
 │       ├── train/                # Training module
-│       │   ├── config.py         # Configuration management
-│       │   ├── requirements.txt  # Python dependencies
-│       │   ├── run_training.sh   # Training script
+│       │   ├── requirements.txt  
+│       │   ├── config.py         
 │       │   ├── model_training.py # FashionCLIP training
-│       │   └── inference.py      # Personal wardrobe AI stylist
-│       └── eval/                 # Evaluation module
-│           ├── evaluation.py     # Complete evaluation
-│           ├── quick_eval.py     # Quick evaluation
-│           └── README.md         # Evaluation documentation
+│       │   ├── config_gpu.py     # GPU configuration
+│       │   ├── experiments/      # Experiment results
+│       │   └── ...    
+│       └── eval/                 # Evaluation rubrics
+│           ├── evaluation.py     
+│           └── quick_eval.py     
+├── install_nvidia_driver.sh     # GPU driver installation
+├── cuda_installer.py            # CUDA setup automation
+├── install_gpu_driver.py        # GPU driver management
+├── docker-compose.yml           # Container orchestration
+├── docker-compose.yml.backup    # Backup configuration
+└── README.md
 ```
 
-## 🎯 Key Features
+### Data Management and Security
 
-### **Data Processing (src/datapipeline/)**
-- **Complete Data Usage**: Uses ALL available data (3173 items, 3157 compatibility relationships)
-- **Smart Triplet Generation**: Builds compatibility graph from `complete_the_look` descriptions
-- **Automatic Train/Val Split**: 80/20 split for training and validation
+We have successfully migrated our entire data infrastructure to Google Cloud Platform (GCP), which has significantly improved our data management capabilities. The migration to **GCS (Google Cloud Storage)** provides us with robust data versioning and automatic backup systems that ensure we never lose important training data. Our ~13k curated product images and corresponding JSON metadata are now securely stored in versioned buckets with proper access controls and encryption. To maintain data quality, we implemented automated validation pipelines that check data integrity throughout different processing stages. The containerized architecture ensures secure data access through environment-based configuration and isolated service boundaries.
 
-### **Model Training (src/models/train/)**
-- **FashionCLIP Architecture**: Based on CLIP ViT-B/32
-- **Layer Freezing**: Freezes first 8 layers, trains last 4 layers
-- **Triplet Loss**: Margin=0.5 for fashion compatibility learning
-- **Auto Checkpointing**: Saves best model and training history
+<img width="1656" height="470" alt="image" src="https://github.com/user-attachments/assets/2a859fd3-6d27-421e-92c7-8ed6552d4dc7" />
 
-### **Model Evaluation (src/models/eval/)**
-- **Complete Evaluation**: Multi-dimensional model assessment
-- **Quick Evaluation**: Fast validation of basic functionality
-- **Performance Metrics**: Precision, Recall, F1-Score, NDCG, AUC
 
-### **Training Configuration**
-- **Batch Size**: 16 (optimized for memory)
-- **Learning Rate**: 1e-5 (fine-tuning rate)
-- **Epochs**: 20 (sufficient training)
-- **Target Accuracy**: 85% (early stopping)
+_Figure 5. GCP Cloud Storage bucket showing organized data structure with images and JSON folders_
 
-## 🐳 Virtual Environment Setup
+### Infrastructure Enhancements
 
-### **Containerized Architecture**
-The project uses Docker containers to provide isolated, reproducible environments for each component:
+Our infrastructure has undergone significant improvements with a comprehensive four-service architecture that supports end-to-end data processing and model training. We implemented a robust Docker Compose configuration featuring four specialized containers: **ingestion** for data collection, **preprocessing** for data cleaning and validation, **training** for model development with GPU support, and **inference** for serving recommendations. Each service operates independently while maintaining seamless communication through our custom `styleme-network`.
 
-- **📥 Ingestion Container**: Data scraping and collection
-- **🔄 Preprocessing Container**: Image processing and data cleaning  
-- **🤖 Training Container**: Model training with GPU support
-- **🔮 Inference Container**: Model serving and API endpoints
+The architecture includes sophisticated dependency management where preprocessing depends on ingestion, and training depends on preprocessing, ensuring proper data flow through the pipeline. We implemented comprehensive logging across all services with centralized log management, and each container has optimized resource allocation including GPU support for the training service. The system supports flexible deployment through Docker profiles, allowing us to run individual services or the complete pipeline as needed.
 
-### **Quick Setup with Docker**
-```bash
-# Build all containers
-make build
+<img width="2638" height="1242" alt="Docker Compose Infrastructure" src="https://github.com/user-attachments/assets/4e06d506-ad78-40a4-926e-f7cd3b6d9557" />
 
-# Run complete pipeline
-make run
+_Figure 6. Docker Compose infrastructure showing multi-service architecture with ingestion, preprocessing, training, and inference containers_
 
-# Or run individual services
-make run-ingestion    # Data collection
-make run-preprocessing # Data processing
-make run-training     # Model training
-make run-inference    # Model serving
-```
 
-### **Development Environment**
-```bash
-# Set up local development environment
-make dev-setup
+### Model Training Optimization
 
-# This installs all dependencies using uv package manager
-# Creates isolated environments for each service
-```
+Our model training process has been substantially refined through systematic hyperparameter optimization. We implemented comprehensive hyperparameter tuning that explores different learning rates and batch sizes to achieve optimal convergence patterns. The training system includes improved early stopping mechanisms to prevent overfitting, automated checkpoint management to save models at peak performance, and comprehensive training monitoring with real-time loss and accuracy visualization. The training pipeline supports efficient batch processing and memory management for handling large datasets effectively.
 
-### **Container Configuration**
-Each container has its own:
-- **Base Image**: Optimized for the specific task (PyTorch for ML, Python slim for data processing)
-- **Dependencies**: Managed via `pyproject.toml` with `uv` package manager
-- **Environment Variables**: Properly configured for each service
-- **Volume Mounts**: Persistent data and experiment storage
+**Configurations:**
+- **Target Accuracy**: 0.85
+- **Batch Size**: 32 (optimized for GPU training)
+- **Epochs**: 20
+- **Learning Rate**: 5e-6 (fine-tuned for stable convergence)
+- **Patience**: 10 (early stopping)
+- **Optimizer**: AdamW with weight decay 0.005
+- **Scheduler**: CosineAnnealingLR
+- **Triplet Margin**: 0.7 (increased for better feature separation)
+- **Data Workers**: 4 (parallel data loading)
 
-### **GPU Support**
-Training containers include NVIDIA GPU support:
-```yaml
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: 1
-          capabilities: [gpu]
-```
+### Evaluation Framework Development
 
-## 🚀 End-to-End Containerized Pipeline
+We developed a comprehensive evaluation framework with two specialized modules: `quick_eval.py` for rapid model validation and `evaluation.py` for in-depth assessment. During training, we monitor a composite fashion compatibility score that combines multiple metrics to provide a holistic view of model performance. This training score consists of **Triplet Accuracy (50%)** measuring how well the model distinguishes compatible from incompatible items, **Margin Score (25%)** evaluating the separation quality between positive and negative pairs, **Separation Score (15%)** assessing absolute distance separation, and **Distance Ratio Score (10%)** measuring relative distance quality. Our scoring methodology is inspired by recent advances in vision-language models and metric learning, particularly the CLIP architecture (Radford et al., 2021) and triplet loss optimization techniques (Hermans et al., 2017). We set performance thresholds at 85%+ for production readiness and 70%+ for promising performance, following industry standards for fashion recommendation systems.
 
-### **Complete Pipeline Architecture**
-The project implements a fully containerized end-to-end pipeline with four main components:
+### User-based Inference
 
-1. **📥 Data Ingestion** - Web scraping and data collection
-2. **🔄 Data Preprocessing** - Image processing and data cleaning
-3. **🤖 Model Training** - FashionCLIP training with GPU support
-4. **🔮 Model Inference** - API serving and recommendations
+We designed a user-based inference pipeline centered around personalized retrieval and dynamic decision-making. The system operates through two main stages: a Wardrobe Index for user-owned items and a Catalog Index for global recommendations. Upon receiving a query image, our pipeline first generates its embedding using the fine-tuned Fashion-CLIP model and compares it against the user’s wardrobe embeddings to identify the most compatible pieces based on cosine similarity. If the wardrobe lacks suitable matches or the top similarity score falls below a defined threshold, the system seamlessly transitions to the global catalog index, retrieving the top-3 purchasable items with associated metadata such as title, price, brand, and shopping URL. This two-tier inference structure ensures both personalization and scalability—leveraging pre-computed embeddings, fast approximate nearest-neighbor search, and adaptive similarity thresholds for real-time performance.
 
-### **One-Command Pipeline Execution**
-```bash
-# Run complete pipeline from start to finish
-make run
+### Midterm Presentation
 
-# Or using docker compose directly
-docker compose --profile pipeline up --build
-```
-
-### **Individual Component Execution**
-```bash
-# Build all containers
-make build
-
-# Run individual services
-make run-ingestion     # Data collection only
-make run-preprocessing # Data processing only  
-make run-training      # Model training only
-make run-inference     # Model serving only
-
-# Test with sample data
-make test
-```
-
-### **Pipeline Evidence**
-- **Input**: `input/sample.txt` - Sample fashion image for testing
-- **Output**: `output/test_result.txt` - Pipeline execution results
-- **Logs**: `logs/pipeline.log` - Complete execution logs
-
-## 🚀 Quick Start
-
-### **1. Container Setup (Recommended)**
-```bash
-# Build and run complete pipeline
-make build
-make run
-```
-
-### **2. Traditional Setup (Alternative)**
-```bash
-cd src/models/train
-pip install -r requirements.txt
-./run_training.sh
-```
-
-### **3. Monitor Training**
-```bash
-# Training will show real-time progress:
-# - Loss decreasing from 1.0+ to 0.3-
-# - Accuracy increasing from 0.0 to 85%+
-# - Automatic best model saving
-```
-
-## 📊 Training Results
-
-### **Data Statistics**
-- **Total Items**: 3173 products
-- **Compatibility Relationships**: 3157 pairs
-- **Train Batches**: 1262 (80% of data)
-- **Val Batches**: 316 (20% of data)
-
-### **Expected Performance**
-- **Training Time**: 10-20 hours on V100 GPU
-- **Target Accuracy**: >85% triplet accuracy
-- **Model Size**: ~500MB (CLIP ViT-B/32)
-
-## 🎨 Inference Usage
-
-### **Personal Wardrobe Stylist**
-```python
-from src.models.train.inference import FashionStylist
-
-# Initialize stylist
-stylist = FashionStylist('fashion_clip_checkpoints/best_model.pth')
-
-# Load user wardrobe
-stylist.load_user_wardrobe('user_wardrobe/')
-
-# Get outfit recommendations
-recommendations = stylist.get_complete_outfit('shirt_001.jpg')
-```
-
-## 🔧 Configuration
-
-### **Data Settings**
-```python
-DATA_CONFIG = {
-    'data_dir': 'data',
-    'image_dir': 'data/images',
-    'max_samples_per_file': None,  # Use ALL data
-    'compatibility_threshold': 2,
-    'max_compatible_items': 3,
-}
-```
-
-### **Training Settings**
-```python
-TRAINING_CONFIG = {
-    'batch_size': 16,
-    'epochs': 20,
-    'learning_rate': 1e-5,
-    'target_accuracy': 0.85,
-}
-```
-
-## 📈 Monitoring
-
-### **Real-time Metrics**
-- **Loss**: Real-time loss decrease
-- **Accuracy**: Triplet accuracy improvement
-- **Learning Rate**: Automatic adjustment
-
-### **Saved Files**
-```
-fashion_clip_checkpoints/
-├── best_model.pth              # Best performing model
-├── final_model.pth             # Final epoch model
-├── training_history.json       # Complete training log
-└── training_curves.png         # Loss/accuracy curves
-```
-
-## 🏗️ Container Services Details
-
-### **Service Architecture**
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Ingestion     │───▶│  Preprocessing   │───▶│    Training     │───▶│   Inference     │
-│                 │    │                  │    │                 │    │                 │
-│ • Data scraping │    │ • Image cleaning │    │ • Model training│    │ • API serving   │
-│ • Web crawling  │    │ • Background rm  │    │ • GPU support   │    │ • FastAPI       │
-│ • Data storage  │    │ • Data validation│    │ • Checkpointing │    │ • Port 8000     │
-└─────────────────┘    └──────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### **Container Specifications**
-
-| Service | Base Image | Dependencies | Purpose |
-|---------|------------|--------------|---------|
-| **Ingestion** | `python:3.9-slim` | requests, beautifulsoup4, selenium | Web scraping and data collection |
-| **Preprocessing** | `python:3.9-slim` | opencv-python, pillow, torch | Image processing and cleaning |
-| **Training** | `pytorch/pytorch:2.0.1-cuda11.7` | torch, transformers, scikit-learn | Model training with GPU |
-| **Inference** | `pytorch/pytorch:2.0.1-cuda11.7` | fastapi, uvicorn, torch | Model serving and API |
-
-### **Volume Mounts**
-```yaml
-volumes:
-  - ./data:/app/data              # Training data
-  - ./experiments:/app/experiments # Model checkpoints
-  - ./input:/app/input            # Inference input
-  - ./output:/app/output          # Inference output
-  - ./logs:/app/logs              # Application logs
-```
-
-### **Environment Variables**
-```bash
-# Common variables
-PYTHONPATH=/app/src
-DATA_DIR=/app/data
-LOG_LEVEL=INFO
-
-# Training specific
-CUDA_VISIBLE_DEVICES=0
-EXPERIMENTS_DIR=/app/experiments
-
-# Inference specific
-MODEL_PATH=/app/experiments
-INPUT_DIR=/app/input
-OUTPUT_DIR=/app/output
-```
-
-## 🎯 GCP Deployment
-
-### **Recommended Instance**
-```
-Machine Type: n1-standard-4
-GPU: 1x NVIDIA Tesla V100
-Cost: ~$50 for 20 hours
-```
-
-### **Container Deployment Steps**
-1. Upload code to GCP
-2. Build containers: `make build`
-3. Run pipeline: `make run`
-4. Monitor via Docker logs: `make logs`
-
-### **Traditional Deployment (Alternative)**
-1. Upload code to GCP
-2. Install dependencies: `pip install -r requirements.txt`
-3. Start training: `./run_training.sh`
-4. Monitor via SSH
-
-## 📦 Pipeline Deliverables
-
-### **Dockerfiles + Build Instructions**
-- ✅ `containers/ingestion/Dockerfile` - Data scraping container
-- ✅ `containers/preprocessing/Dockerfile` - Data processing container  
-- ✅ `containers/training/Dockerfile` - Model training container
-- ✅ `containers/inference/Dockerfile` - Model serving container
-
-### **pyproject.toml (using uv) for Each Container**
-- ✅ `containers/ingestion/pyproject.toml` - Web scraping dependencies
-- ✅ `containers/preprocessing/pyproject.toml` - Image processing dependencies
-- ✅ `containers/training/pyproject.toml` - ML training dependencies
-- ✅ `containers/inference/pyproject.toml` - API serving dependencies
-
-### **Scripts and docker-compose.yml**
-- ✅ `docker-compose.yml` - Complete service orchestration
-- ✅ `scripts/run_pipeline.py` - End-to-end pipeline execution
-- ✅ `scripts/test_pipeline.py` - Pipeline testing and validation
-- ✅ `Makefile` - Simplified build and run commands
-
-### **Documentation and Run Instructions**
-- ✅ `README.md` - Complete setup and usage documentation
-- ✅ `PIPELINE_DOCUMENTATION.md` - Detailed pipeline architecture
-- ✅ One-command execution: `make run` or `docker compose --profile pipeline up --build`
-
-### **Evidence of End-to-End Functionality**
-- ✅ **Input**: `input/sample.txt` - Sample test data
-- ✅ **Output**: `output/test_result.txt` - Pipeline execution results
-- ✅ **Logs**: `logs/pipeline.log` - Complete execution logs
-- ✅ **Pipeline Script**: `scripts/run_pipeline.py` - Automated end-to-end execution
-
-## 💡 Key Improvements
-
-1. **Complete Data Usage**: No artificial limits, uses all 3173 items
-2. **Modular Structure**: Clean separation of data processing and models
-3. **Containerized Environment**: Isolated, reproducible Docker containers for each service
-4. **Modern Package Management**: Uses `uv` for fast, reliable dependency management
-5. **GPU-Ready Training**: NVIDIA GPU support with proper resource allocation
-6. **Service Orchestration**: Docker Compose for easy pipeline management
-7. **Development Tools**: Makefile for simplified container operations
-8. **Automatic Optimization**: Smart batch sizing and learning rate scheduling
-9. **Robust Monitoring**: Comprehensive checkpointing and visualization
-10. **End-to-End Pipeline**: Complete containerized workflow from data ingestion to inference
-
-**Ready for production training on GCP with full containerization!** 🚀
+Filename: StyleMeMidterm.pdf
