@@ -39,15 +39,15 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         # Install exact compatible versions FIRST (tested stable - avoids register_pytree_node error)
-        pip install "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2"
+        pip install "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
         # Install CI dependencies (will use already installed compatible versions)
         pip install -r CI/requirements-dev.txt
-        # Install project dependencies (will skip already installed packages)
-        pip install -r containers/training/requirements.txt || true
-        pip install -r containers/inference/requirements.txt || true
-        pip install -r containers/preprocessing/requirements.txt || true
-        # Verify versions
-        python -c "import numpy; import torch; import transformers; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Install project dependencies with constraints to prevent NumPy upgrade
+        pip install -r containers/training/requirements.txt --constraint <(echo "numpy==1.26.4") || true
+        pip install -r containers/inference/requirements.txt --constraint <(echo "numpy==1.26.4") || true
+        pip install -r containers/preprocessing/requirements.txt --constraint <(echo "numpy==1.26.4") || true
+        # Verify versions and enforce exact NumPy version
+        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy version {numpy.__version__} is not 1.26.4!'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
         # Clean pip cache to save space
         pip cache purge || true
     
@@ -93,14 +93,14 @@ jobs:
         python -m pip install --upgrade pip
         # Install exact compatible versions FIRST (tested stable - avoids register_pytree_node error)
         pip install "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
-        # Install CI dependencies with NumPy constraint
-        pip install -r CI/requirements-dev.txt --constraint <(echo "numpy<2.0.0")
-        # Install project dependencies with NumPy constraint (prevent NumPy 2.x upgrade)
-        pip install -r containers/training/requirements.txt --constraint <(echo "numpy<2.0.0") || true
-        pip install -r containers/inference/requirements.txt --constraint <(echo "numpy<2.0.0") || true
-        pip install -r containers/preprocessing/requirements.txt --constraint <(echo "numpy<2.0.0") || true
-        # Verify versions and enforce NumPy < 2.0
-        python -c "import numpy; import torch; import transformers; assert numpy.__version__.startswith('1.'), f'NumPy version {numpy.__version__} is >= 2.0!'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Install CI dependencies (will use already installed compatible versions)
+        pip install -r CI/requirements-dev.txt
+        # Install project dependencies with constraints to prevent NumPy upgrade
+        pip install -r containers/training/requirements.txt --constraint <(echo "numpy==1.26.4") || true
+        pip install -r containers/inference/requirements.txt --constraint <(echo "numpy==1.26.4") || true
+        pip install -r containers/preprocessing/requirements.txt --constraint <(echo "numpy==1.26.4") || true
+        # Verify versions and enforce exact NumPy version
+        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy version {numpy.__version__} is not 1.26.4!'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
         # Clean pip cache to save space
         pip cache purge || true
     
