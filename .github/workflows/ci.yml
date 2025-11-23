@@ -134,10 +134,12 @@ jobs:
           -c CI/config/pytest.ini \
           --rootdir=.
     
-    - name: Run slow tests (optional)
-      run: |
-        pytest CI/tests/ -m "slow" -v --tb=short -c CI/config/pytest.ini --rootdir=.
-      continue-on-error: true  # Slow tests are optional
+    # Slow tests are skipped - they require GCS access and full model setup
+    # Uncomment below to run slow tests (they are optional and may fail)
+    # - name: Run slow tests (optional)
+    #   run: |
+    #     pytest CI/tests/ -m "slow" -v --tb=short -c CI/config/pytest.ini --rootdir=.
+    #   continue-on-error: true  # Slow tests are optional
 
   coverage:
     name: Report Coverage
