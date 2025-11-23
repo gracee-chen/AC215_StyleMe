@@ -48,8 +48,8 @@ jobs:
         pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/preprocessing/requirements.txt -c CI/constraints.txt || true
-        # Verify versions and fail if wrong
-        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__ == '2.1.2', f'PyTorch {torch.__version__} != 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Verify versions and fail if wrong (PyTorch version may include CUDA suffix like +cu121)
+        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__.startswith('2.1.2'), f'PyTorch {torch.__version__} does not start with 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
         # Clean pip cache to save space
         pip cache purge || true
     
@@ -103,8 +103,8 @@ jobs:
         pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/preprocessing/requirements.txt -c CI/constraints.txt || true
-        # Verify versions and fail if wrong
-        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__ == '2.1.2', f'PyTorch {torch.__version__} != 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Verify versions and fail if wrong (PyTorch version may include CUDA suffix like +cu121)
+        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__.startswith('2.1.2'), f'PyTorch {torch.__version__} does not start with 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
         # Clean pip cache to save space
         pip cache purge || true
     
