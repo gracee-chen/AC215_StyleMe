@@ -154,7 +154,7 @@ class FashionTrainer:
     FashionCLIP trainer
     """
     
-    def __init__(self, model: FashionCLIPModel, loss_fn: TripletLoss, device = None, require_gpu: bool = False):
+    def __init__(self, model: FashionCLIPModel, loss_fn: TripletLoss, device=None, require_gpu: bool = False):
         # Explicitly check and set device
         if device is None:
             if torch.cuda.is_available():
