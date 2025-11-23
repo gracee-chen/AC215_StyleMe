@@ -1,0 +1,6 @@
+outs:
+- md5: 5b976e079fe32c93707d255b0b896674.dir
+  size: 28545937
+  nfiles: 5
+  hash: md5
+  path: v_2025-10-24_model-b1
