@@ -93,7 +93,7 @@ jobs:
         pip install -r containers/inference/requirements.txt || true
         pip install -r containers/preprocessing/requirements.txt || true
         # Ensure compatible versions are installed (override any conflicts)
-        pip install "torch>=2.0.0,<2.2.0" "torchvision>=0.15.0,<0.18.0" "transformers>=4.35.0,<5.0.0" --upgrade || true
+        pip install "torch==2.1.0" "torchvision==0.16.0" "transformers==4.35.0" --upgrade --force-reinstall || true
         # Clean pip cache to save space
         pip cache purge || true
     
