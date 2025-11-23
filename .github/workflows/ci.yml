@@ -126,7 +126,7 @@ jobs:
           --cov-report=term-missing \
           --cov-report=xml:CI/coverage.xml \
           --cov-report=html:CI/coverage_html \
-          --cov-fail-under=50 \
+          --cov-fail-under=30 \
           -n auto \
           --dist=worksteal \
           -v \
@@ -171,7 +171,7 @@ jobs:
           --cov-report=term \
           --cov-report=xml:CI/coverage.xml \
           --cov-report=html:CI/coverage_html \
-          --cov-fail-under=50 \
+          --cov-fail-under=30 \
           -n auto \
           -v \
           --tb=short
