@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClothingItem } from './mockData';
+import { ClothingItem } from '../services/api';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import {
   Select,

@@ -63,8 +63,14 @@ echo "   Queries:   $QUERIES_DIR"
 echo "   Results:   $RESULTS_DIR"
 echo ""
 
-# If arguments provided, run inference_service.py with those args
-if [ $# -gt 0 ]; then
+# Check if we should run API server
+if [ "$RUN_API_SERVER" = "true" ] || [ "$1" = "api" ]; then
+    echo ""
+    echo "🚀 Starting API Server..."
+    echo "   API will be available at http://0.0.0.0:${PORT:-5000}"
+    echo ""
+    exec python /app/api_server.py
+elif [ $# -gt 0 ]; then
     echo "🔮 Running inference with provided arguments..."
     exec python /app/inference_service.py "$@"
 else

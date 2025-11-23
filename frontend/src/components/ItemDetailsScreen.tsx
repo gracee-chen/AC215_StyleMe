@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { ClothingItem } from './mockData';
+import { ClothingItem } from '../services/api';
 import { useState } from 'react';
 
 interface ItemDetailsScreenProps {

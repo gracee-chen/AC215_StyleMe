@@ -1,7 +1,8 @@
-import { Plus, Image as ImageIcon, Camera } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { ClothingItem } from './mockData';
+import { ClothingItem } from '../services/api';
+import { UploadScreen } from './UploadScreen';
 import {
   Dialog,
   DialogContent,
@@ -12,11 +13,12 @@ import {
 
 interface HomeScreenProps {
   items: ClothingItem[];
-  onAddItem: (item: any) => void;
+  userId: string;
+  onAddItem: (file: File) => Promise<void>;
   onItemClick: (item: ClothingItem) => void;
 }
 
-export function HomeScreen({ items, onAddItem, onItemClick }: HomeScreenProps) {
+export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreenProps) {
   const recentItems = items.slice(0, 4);
 
   return (
@@ -43,20 +45,15 @@ export function HomeScreen({ items, onAddItem, onItemClick }: HomeScreenProps) {
                         <span className="font-medium text-lg">ADD ITEM</span>
                     </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-[90vw] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Add New Item</DialogTitle>
                     </DialogHeader>
-                    <div className="grid grid-cols-2 gap-4 py-4">
-                        <Button variant="outline" className="h-32 flex flex-col gap-2" onClick={onAddItem}>
-                            <Camera size={24} />
-                            Camera
-                        </Button>
-                        <Button variant="outline" className="h-32 flex flex-col gap-2" onClick={onAddItem}>
-                            <ImageIcon size={24} />
-                            Library
-                        </Button>
-                    </div>
+                    <UploadScreen 
+                      userId={userId}
+                      onUpload={onAddItem}
+                      onComplete={() => {}}
+                    />
                 </DialogContent>
             </Dialog>
         </div>

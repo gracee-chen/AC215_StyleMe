@@ -99,9 +99,15 @@ services:
       - RESULTS_DIR=/app/results
       - LOGS_DIR=/app/logs
       - LOG_LEVEL=INFO
+      - RUN_API_SERVER=true
+      - PORT=5000
+      - FLASK_DEBUG=false
+    ports:
+      - "5001:5000"
     profiles:
       - pipeline
       - inference
+      - api
     networks:
       - styleme-network
 

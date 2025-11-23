@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     git \
     wget \
     curl \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -34,7 +34,12 @@ ENV RESULTS_DIR=/app/results
 ENV LOGS_DIR=/app/logs
 
 # Create directories
-RUN mkdir -p /app/catalog /app/wardrobes /app/queries /app/results /app/logs/inference
+RUN mkdir -p /app/catalog /app/wardrobes /app/queries /app/results /app/logs/inference /app/uploads
+
+# Set environment variables for API
+ENV PORT=5000
+ENV FLASK_DEBUG=False
+ENV UPLOAD_FOLDER=/app/uploads
 
 # Set entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]

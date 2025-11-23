@@ -1,14 +1,24 @@
-import { useState } from 'react';
-import { Camera, Upload, Image, Sparkles, Tag, Check } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Camera, Upload, Image as ImageIcon, Sparkles, Tag, Check } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 
-export function UploadScreen() {
-  const [uploadStep, setUploadStep] = useState('upload'); // 'upload', 'processing', 'tagging'
+interface UploadScreenProps {
+  userId: string;
+  onUpload: (file: File) => Promise<void>;
+  onComplete?: () => void;
+}
+
+export function UploadScreen({ userId, onUpload, onComplete }: UploadScreenProps) {
+  const [uploadStep, setUploadStep] = useState('upload'); // 'upload', 'processing', 'tagging', 'success'
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const suggestedTags = [
     'Casual', 'Formal', 'Summer', 'Winter', 'Work', 'Weekend',
@@ -24,18 +34,43 @@ export function UploadScreen() {
     );
   };
 
-  const handleUpload = () => {
-    setUploadStep('processing');
-    // Simulate processing time
-    setTimeout(() => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
       setUploadStep('tagging');
-    }, 2000);
+    }
   };
 
-  const handleFinish = () => {
-    setUploadStep('upload');
-    setSelectedTags([]);
-    // Would typically save to closet here
+  const handleUploadClick = (source: 'camera' | 'gallery') => {
+    if (source === 'camera') {
+      cameraInputRef.current?.click();
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleFinish = async () => {
+    if (!selectedFile) return;
+    
+    setUploadStep('processing');
+    try {
+      await onUpload(selectedFile);
+      setUploadStep('success');
+      setTimeout(() => {
+        setUploadStep('upload');
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setSelectedTags([]);
+        if (onComplete) onComplete();
+      }, 2000);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      setUploadStep('upload');
+      alert('Failed to upload image. Please try again.');
+    }
   };
 
   if (uploadStep === 'processing') {
@@ -49,18 +84,32 @@ export function UploadScreen() {
           <p className="text-gray-600 mb-4">Our AI is removing the background and analyzing your item...</p>
           <div className="space-y-2 text-sm text-gray-500">
             <div className="flex items-center justify-center gap-2">
-              <Check className="w-4 h-4 text-green-500" />
-              <span>Background removed</span>
-            </div>
-            <div className="flex items-center justify-center gap-2">
-              <Check className="w-4 h-4 text-green-500" />
-              <span>Item identified</span>
+              <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <span>Uploading image...</span>
             </div>
             <div className="flex items-center justify-center gap-2">
               <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-              <span>Generating tags...</span>
+              <span>Removing background...</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <span>Adding to wardrobe...</span>
             </div>
           </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (uploadStep === 'success') {
+    return (
+      <div className="p-4 flex items-center justify-center min-h-[600px]">
+        <Card className="bg-white/70 backdrop-blur-sm border-0 rounded-3xl p-8 text-center max-w-sm w-full">
+          <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+            <Check className="w-8 h-8 text-green-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Upload Successful!</h2>
+          <p className="text-gray-600">Your item has been added to your wardrobe.</p>
         </Card>
       </div>
     );
@@ -75,10 +124,16 @@ export function UploadScreen() {
         </div>
 
         <Card className="bg-white/70 backdrop-blur-sm border-0 rounded-3xl p-6">
-          <div className="w-32 h-32 mx-auto bg-gray-100 rounded-2xl mb-4 flex items-center justify-center">
-            <Image className="w-16 h-16 text-gray-400" />
-          </div>
-          <p className="text-center text-gray-600 mb-6">Preview of your processed item</p>
+          {previewUrl ? (
+            <div className="w-32 h-32 mx-auto rounded-2xl mb-4 overflow-hidden">
+              <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-32 h-32 mx-auto bg-gray-100 rounded-2xl mb-4 flex items-center justify-center">
+              <ImageIcon className="w-16 h-16 text-gray-400" />
+            </div>
+          )}
+          <p className="text-center text-gray-600 mb-6">Preview of your item</p>
 
           <div className="space-y-4">
             <div>
@@ -151,11 +206,28 @@ export function UploadScreen() {
         <p className="text-gray-600 mt-1">Add new items to your virtual closet</p>
       </div>
 
+      {/* Hidden file inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={cameraInputRef}
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
       {/* Upload Options */}
       <div className="space-y-4">
         <Card className="bg-white/70 backdrop-blur-sm border-0 rounded-3xl p-6 hover:shadow-lg transition-all duration-200">
           <button 
-            onClick={handleUpload}
+            onClick={() => handleUploadClick('camera')}
             className="w-full text-left"
           >
             <div className="flex items-center gap-4">
@@ -172,7 +244,7 @@ export function UploadScreen() {
 
         <Card className="bg-white/70 backdrop-blur-sm border-0 rounded-3xl p-6 hover:shadow-lg transition-all duration-200">
           <button 
-            onClick={handleUpload}
+            onClick={() => handleUploadClick('gallery')}
             className="w-full text-left"
           >
             <div className="flex items-center gap-4">
@@ -213,17 +285,7 @@ export function UploadScreen() {
         </div>
       </Card>
 
-      {/* Recent Uploads */}
-      <div>
-        <h3 className="font-semibold text-gray-800 mb-3">Recent Uploads</h3>
-        <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="aspect-square bg-gray-100 rounded-2xl flex items-center justify-center">
-              <Image className="w-8 h-8 text-gray-400" />
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
+}
 }

@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { ClothingItem } from './mockData';
+import { useState, useEffect } from 'react';
+import { ClothingItem, getRecommendations, fileToBase64 } from '../services/api';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Button } from './ui/button';
-import { Save, Shirt } from 'lucide-react';
+import { Save, Shirt, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,17 +14,68 @@ import {
 interface RecommendationScreenProps {
   items: ClothingItem[];
   selectedItem: ClothingItem | null;
+  userId: string;
   onSelectItem: (item: ClothingItem) => void;
 }
 
-export function RecommendationScreen({ items, selectedItem, onSelectItem }: RecommendationScreenProps) {
+export function RecommendationScreen({ items, selectedItem, userId, onSelectItem }: RecommendationScreenProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [recommendations, setRecommendations] = useState<ClothingItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock outfit construction
-  const outfit = {
-    top: selectedItem?.category === 'Tops' ? selectedItem : items.find(i => i.category === 'Tops'),
-    bottom: selectedItem?.category === 'Bottoms' ? selectedItem : items.find(i => i.category === 'Bottoms'),
-    shoes: selectedItem?.category === 'Shoes' ? selectedItem : items.find(i => i.category === 'Shoes'),
+  // Get recommendations when selectedItem changes
+  useEffect(() => {
+    if (selectedItem && selectedItem.image) {
+      loadRecommendations();
+    }
+  }, [selectedItem]);
+
+  const loadRecommendations = async () => {
+    if (!selectedItem) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Convert image URL to file if needed, or use base64
+      let imageData: string | File;
+      
+      // If image is a URL (from API or external), we need to fetch it first
+      if (selectedItem.image.startsWith('http')) {
+        try {
+          const response = await fetch(selectedItem.image);
+          if (!response.ok) throw new Error('Failed to fetch image');
+          const blob = await response.blob();
+          imageData = new File([blob], 'query.jpg', { type: 'image/jpeg' });
+        } catch (fetchError) {
+          // If fetch fails, try using the URL directly as base64
+          // For API URLs, we'll pass them as-is and let the backend handle it
+          imageData = selectedItem.image;
+        }
+      } else if (selectedItem.image.startsWith('data:')) {
+        // Already base64
+        imageData = selectedItem.image;
+      } else {
+        // Assume it's a file path - we'll need to handle this differently
+        // For now, try to fetch it as a URL
+        imageData = selectedItem.image;
+      }
+      
+      const result = await getRecommendations(userId, imageData, {
+        threshold: 0.7,
+        wardrobe_k: 5,
+        catalog_k: 3
+      });
+      
+      setRecommendations(result.items);
+    } catch (err) {
+      console.error('Failed to get recommendations:', err);
+      setError(err instanceof Error ? err.message : 'Failed to get recommendations');
+      setRecommendations([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleItemSelect = (item: ClothingItem) => {
@@ -91,33 +142,61 @@ export function RecommendationScreen({ items, selectedItem, onSelectItem }: Reco
         {/* Recommendations */}
         {selectedItem && (
             <>
-                {/* Full Outfit Block */}
-                <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Recommended Outfit</h3>
-                    <div className="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center gap-2">
-                         {[outfit.top, outfit.bottom, outfit.shoes].map((part, idx) => (
-                             <div key={idx} className="flex-1 aspect-[3/4] bg-gray-50 rounded-lg overflow-hidden">
-                                 {part ? (
-                                     <ImageWithFallback 
-                                        src={part.image}
-                                        alt="Outfit Part"
-                                        className="w-full h-full object-cover"
-                                     />
-                                 ) : (
-                                     <div className="w-full h-full flex items-center justify-center text-gray-300 bg-gray-100">
-                                         <span className="text-xs">?</span>
-                                     </div>
-                                 )}
-                             </div>
-                         ))}
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-pink-500 mb-4" />
+                        <p className="text-gray-600">Finding perfect matches...</p>
                     </div>
-                </div>
+                ) : error ? (
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
+                        <p className="text-red-600">{error}</p>
+                        <Button 
+                            onClick={loadRecommendations}
+                            variant="outline"
+                            className="mt-4"
+                        >
+                            Try Again
+                        </Button>
+                    </div>
+                ) : recommendations.length > 0 ? (
+                    <>
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                                Recommended Items ({recommendations.length})
+                            </h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                {recommendations.map((item) => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => onSelectItem(item)}
+                                        className="group relative aspect-square rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-all"
+                                    >
+                                        <ImageWithFallback 
+                                            src={item.image}
+                                            alt={item.title || item.category}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        />
+                                        {item.similarity && (
+                                            <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                                                {Math.round(item.similarity * 100)}%
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-                {/* Save Button */}
-                <Button className="w-full py-6 text-base font-semibold bg-pink-500 hover:bg-pink-600 text-white rounded-2xl shadow-lg shadow-pink-100">
-                    <Save className="mr-2" size={20} />
-                    Save Look
-                </Button>
+                        {/* Save Button */}
+                        <Button className="w-full py-6 text-base font-semibold bg-pink-500 hover:bg-pink-600 text-white rounded-2xl shadow-lg shadow-pink-100">
+                            <Save className="mr-2" size={20} />
+                            Save Look
+                        </Button>
+                    </>
+                ) : (
+                    <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
+                        <p className="text-gray-400">No recommendations found. Try a different item.</p>
+                    </div>
+                )}
             </>
         )}
       </div>
