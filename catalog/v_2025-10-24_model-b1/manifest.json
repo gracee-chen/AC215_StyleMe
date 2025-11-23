@@ -23,6 +23,44 @@
         "men": 7,
         "women": 0
       }
+    },
+    {
+      "bucket": "styleme-data-bucket",
+      "project_id": "styleme-475201",
+      "data_prefix": "json",
+      "images_prefix": "images",
+      "snapshot_time": "2025-11-23T16:27:06.053532Z",
+      "gender_filter": "all",
+      "file_list": {
+        "men": [
+          "json/men_data/dataset_farfetch_2025-10-12_22-49-15-151 2_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_00-02-20-351_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_00-35-31-838_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_01-12-20-021_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_01-49-00-699_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_02-23-17-869_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_02-53-52-563_captioned.json"
+        ],
+        "women": [
+          "json/women_data/ff-women-bags-1-5-516_captioned.json",
+          "json/women_data/ff-women-bags-6-10-498_captioned.json",
+          "json/women_data/ff-women-clothing-1-3-240_captioned.json",
+          "json/women_data/ff-women-clothing-10-11-182_captioned.json",
+          "json/women_data/ff-women-clothing-12-15-495_captioned.json",
+          "json/women_data/ff-women-clothing-16-20-599_captioned.json",
+          "json/women_data/ff-women-clothing-21-25-593_captioned.json",
+          "json/women_data/ff-women-clothing-26-28-245_captioned.json",
+          "json/women_data/ff-women-clothing-29-32-498_captioned.json",
+          "json/women_data/ff-women-clothing-4-6-245_captioned.json",
+          "json/women_data/ff-women-clothing-7-9-243_captioned.json",
+          "json/women_data/ff-women-shoes-1-5-597_captioned.json",
+          "json/women_data/ff-women-shoes-6-10-596_captioned.json"
+        ]
+      },
+      "total_files": {
+        "men": 7,
+        "women": 13
+      }
     }
   ],
   "gcs_source": {
@@ -30,8 +68,8 @@
     "project_id": "styleme-475201",
     "data_prefix": "json",
     "images_prefix": "images",
-    "snapshot_time": "2025-11-23T16:27:05.720296Z",
-    "gender_filter": "men",
+    "snapshot_time": "2025-11-23T16:27:06.053532Z",
+    "gender_filter": "all",
     "file_list": {
       "men": [
         "json/men_data/dataset_farfetch_2025-10-12_22-49-15-151 2_captioned.json",
@@ -42,11 +80,25 @@
         "json/men_data/dataset_farfetch_2025-10-13_02-23-17-869_captioned.json",
         "json/men_data/dataset_farfetch_2025-10-13_02-53-52-563_captioned.json"
       ],
-      "women": []
+      "women": [
+        "json/women_data/ff-women-bags-1-5-516_captioned.json",
+        "json/women_data/ff-women-bags-6-10-498_captioned.json",
+        "json/women_data/ff-women-clothing-1-3-240_captioned.json",
+        "json/women_data/ff-women-clothing-10-11-182_captioned.json",
+        "json/women_data/ff-women-clothing-12-15-495_captioned.json",
+        "json/women_data/ff-women-clothing-16-20-599_captioned.json",
+        "json/women_data/ff-women-clothing-21-25-593_captioned.json",
+        "json/women_data/ff-women-clothing-26-28-245_captioned.json",
+        "json/women_data/ff-women-clothing-29-32-498_captioned.json",
+        "json/women_data/ff-women-clothing-4-6-245_captioned.json",
+        "json/women_data/ff-women-clothing-7-9-243_captioned.json",
+        "json/women_data/ff-women-shoes-1-5-597_captioned.json",
+        "json/women_data/ff-women-shoes-6-10-596_captioned.json"
+      ]
     },
     "total_files": {
       "men": 7,
-      "women": 0
+      "women": 13
     }
   }
 }
