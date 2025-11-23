@@ -19,10 +19,10 @@ mock>=5.1.0
 responses>=0.23.1
 
 # Common dependencies (needed for tests)
-# Pin exact compatible versions (tested stable in CI - avoids register_pytree_node error)
+# Exact compatible versions (tested stable in CI - avoids register_pytree_node error)
+numpy==1.26.4
 torch==2.1.2
 torchvision==0.16.2
-numpy==1.26.4
 transformers==4.35.2
 huggingface-hub>=0.20.0,<0.22.0
 Pillow>=9.0.0
