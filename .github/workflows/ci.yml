@@ -91,8 +91,8 @@ jobs:
         python -m pip install --upgrade pip
         # Install NumPy < 2.0 FIRST (critical for PyTorch compatibility)
         pip install "numpy>=1.21.0,<2.0.0" --force-reinstall
-        # Install compatible PyTorch/transformers SECOND to avoid conflicts
-        pip install "torch==2.1.0" "torchvision==0.16.0" "transformers==4.40.0" "huggingface-hub>=0.20.0,<0.22.0"
+        # Install compatible PyTorch/transformers SECOND (PyTorch 2.2+ required for transformers)
+        pip install "torch>=2.2.0,<2.3.0" "torchvision>=0.17.0,<0.18.0" "transformers>=4.40.0,<5.0.0" "huggingface-hub>=0.20.0,<0.22.0"
         # Install CI dependencies (will use already installed packages)
         pip install -r CI/requirements-dev.txt
         # Install project dependencies (will skip already installed packages)

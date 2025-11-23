@@ -20,9 +20,10 @@ responses>=0.23.1
 
 # Common dependencies (needed for tests)
 # Pin specific compatible versions to avoid PyTorch/transformers conflicts
-torch==2.1.0
-torchvision==0.16.0
-transformers==4.40.0
+# Transformers requires PyTorch 2.2+ (per official documentation)
+torch>=2.2.0,<2.3.0
+torchvision>=0.17.0,<0.18.0
+transformers>=4.40.0,<5.0.0
 huggingface-hub>=0.20.0,<0.22.0
 Pillow>=9.0.0
 numpy>=1.21.0,<2.0.0
