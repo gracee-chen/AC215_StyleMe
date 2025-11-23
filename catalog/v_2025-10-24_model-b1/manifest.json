@@ -1,0 +1,52 @@
+{
+  "gcs_source_history": [
+    {
+      "bucket": "styleme-data-bucket",
+      "project_id": "styleme-475201",
+      "data_prefix": "json",
+      "images_prefix": "images",
+      "snapshot_time": "2025-11-23T16:27:05.720296Z",
+      "gender_filter": "men",
+      "file_list": {
+        "men": [
+          "json/men_data/dataset_farfetch_2025-10-12_22-49-15-151 2_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_00-02-20-351_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_00-35-31-838_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_01-12-20-021_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_01-49-00-699_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_02-23-17-869_captioned.json",
+          "json/men_data/dataset_farfetch_2025-10-13_02-53-52-563_captioned.json"
+        ],
+        "women": []
+      },
+      "total_files": {
+        "men": 7,
+        "women": 0
+      }
+    }
+  ],
+  "gcs_source": {
+    "bucket": "styleme-data-bucket",
+    "project_id": "styleme-475201",
+    "data_prefix": "json",
+    "images_prefix": "images",
+    "snapshot_time": "2025-11-23T16:27:05.720296Z",
+    "gender_filter": "men",
+    "file_list": {
+      "men": [
+        "json/men_data/dataset_farfetch_2025-10-12_22-49-15-151 2_captioned.json",
+        "json/men_data/dataset_farfetch_2025-10-13_00-02-20-351_captioned.json",
+        "json/men_data/dataset_farfetch_2025-10-13_00-35-31-838_captioned.json",
+        "json/men_data/dataset_farfetch_2025-10-13_01-12-20-021_captioned.json",
+        "json/men_data/dataset_farfetch_2025-10-13_01-49-00-699_captioned.json",
+        "json/men_data/dataset_farfetch_2025-10-13_02-23-17-869_captioned.json",
+        "json/men_data/dataset_farfetch_2025-10-13_02-53-52-563_captioned.json"
+      ],
+      "women": []
+    },
+    "total_files": {
+      "men": 7,
+      "women": 0
+    }
+  }
+}
