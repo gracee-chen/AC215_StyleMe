@@ -243,19 +243,60 @@ All experiments are tracked in:
    - Select best performing model based on validation accuracy
    - Update inference service to use new model
 
-2. **Performance Monitoring**:
+2. **Update Inference Service**:
+   
+   The inference service (`containers/inference/inference_service.py`) currently looks for models in `exp_*` directories. To use fine-tuned models from `fine_tune_*` directories, you have two options:
+   
+   **Option A: Update `_load_model()` method** (recommended):
+   ```python
+   def _load_model(self):
+       """Load trained FashionCLIP model"""
+       print("📦 Loading model...")
+       
+       # Find best model - check both exp_* and fine_tune_* directories
+       model_path = None
+       
+       # First, try fine_tune_* directories (newer fine-tuned models)
+       for exp_dir in sorted(self.experiments_dir.glob("fine_tune_*"), reverse=True):
+           best_model = exp_dir / "checkpoints" / "best_model.pth"
+           if best_model.exists():
+               model_path = best_model
+               break
+       
+       # Fallback to exp_* directories (baseline models)
+       if model_path is None:
+           for exp_dir in sorted(self.experiments_dir.glob("exp_*"), reverse=True):
+               best_model = exp_dir / "best_model.pth"
+               if best_model.exists():
+                   model_path = best_model
+                   break
+       
+       if model_path is None:
+           raise FileNotFoundError("No trained model found")
+       
+       print(f"   Model: {model_path}")
+       # ... rest of the method
+   ```
+   
+   **Option B: Create symlink** (quick fix):
+   ```bash
+   # Create symlink from exp_* to fine_tune_* checkpoint
+   ln -s experiments/fine_tune_XXX/checkpoints/best_model.pth \
+        experiments/exp_999_fine_tuned/best_model.pth
+   ```
+
+3. **Performance Monitoring**:
    - Track inference quality metrics
    - Monitor recommendation relevance
    - A/B test fine-tuned vs baseline model
 
-3. **Deployment Steps**:
+4. **Deployment Steps**:
    ```bash
    # 1. Identify best model
    python src/models/eval/evaluation.py \
        --model experiments/fine_tune_XXX/checkpoints/best_model.pth
    
-   # 2. Update inference service
-   # Update model path in inference_service.py or use symlink
+   # 2. Update inference service (see Option A or B above)
    
    # 3. Rebuild catalog index (if needed)
    python containers/inference/build_catalog_index.py \
