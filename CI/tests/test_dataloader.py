@@ -12,9 +12,64 @@ import sys
 import os
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
+project_root = os.path.join(os.path.dirname(__file__), '../../')
+sys.path.insert(0, project_root)
 
-from src.datapipeline.dataloader import FashionTripletDataset, create_dataloader
+# Diagnostic logging
+import inspect
+print("=" * 80)
+print("DIAGNOSTIC: Import Debug Information")
+print("=" * 80)
+print(f"Project root: {os.path.abspath(project_root)}")
+print(f"Current working directory: {os.getcwd()}")
+print(f"Python path (first 5 entries):")
+for i, p in enumerate(sys.path[:5]):
+    print(f"  [{i}] {p}")
+print(f"Looking for: src/datapipeline/dataloader.py")
+dataloader_path = os.path.join(project_root, 'src', 'datapipeline', 'dataloader.py')
+print(f"Expected path: {os.path.abspath(dataloader_path)}")
+print(f"File exists: {os.path.exists(dataloader_path)}")
+print("=" * 80)
+
+# Import with diagnostic logging
+try:
+    from src.datapipeline.dataloader import FashionTripletDataset, create_dataloader
+    print(f"✅ Successfully imported FashionTripletDataset from: {FashionTripletDataset.__module__}")
+    print(f"✅ Successfully imported create_dataloader from: {create_dataloader.__module__}")
+    
+    # Check signatures
+    print("\n📋 FashionTripletDataset.__init__ signature:")
+    sig = inspect.signature(FashionTripletDataset.__init__)
+    print(f"   {sig}")
+    print(f"   Parameters: {list(sig.parameters.keys())}")
+    
+    print("\n📋 create_dataloader signature:")
+    sig2 = inspect.signature(create_dataloader)
+    print(f"   {sig2}")
+    print(f"   Parameters: {list(sig2.parameters.keys())}")
+    
+    # Check if 'data_dir' is in parameters
+    init_params = list(sig.parameters.keys())
+    if 'data_dir' in init_params:
+        print(f"\n✅ 'data_dir' IS in FashionTripletDataset.__init__ parameters")
+    else:
+        print(f"\n❌ 'data_dir' is NOT in FashionTripletDataset.__init__ parameters!")
+        print(f"   Available parameters: {init_params}")
+    
+    create_params = list(sig2.parameters.keys())
+    if 'data_dir' in create_params:
+        print(f"✅ 'data_dir' IS in create_dataloader parameters")
+    else:
+        print(f"❌ 'data_dir' is NOT in create_dataloader parameters!")
+        print(f"   Available parameters: {create_params}")
+    
+    print("=" * 80)
+except Exception as e:
+    print(f"❌ Import failed: {e}")
+    import traceback
+    traceback.print_exc()
+    print("=" * 80)
+    raise
 
 
 @pytest.fixture
