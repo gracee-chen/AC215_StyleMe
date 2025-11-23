@@ -42,7 +42,7 @@ jobs:
         # Uninstall any existing incompatible versions first
         pip uninstall -y torch torchvision numpy transformers || true
         # Install exact compatible versions FIRST (tested stable - avoids register_pytree_node error)
-        pip install --force-reinstall --no-cache-dir numpy==1.26.4 torch==2.1.2 torchvision==0.16.2 transformers==4.35.2 huggingface-hub>=0.20.0,<0.22.0
+        pip install --force-reinstall --no-cache-dir numpy==1.26.4 torch==2.1.2 torchvision==0.16.2 transformers==4.35.2 "huggingface-hub>=0.20.0,<0.22.0"
         # Install CI dependencies with constraints to prevent upgrades
         pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
         # Install project dependencies with constraints (prevent version upgrades)
@@ -97,7 +97,7 @@ jobs:
         # Uninstall any existing incompatible versions first
         pip uninstall -y torch torchvision numpy transformers || true
         # Install exact compatible versions FIRST (tested stable - avoids register_pytree_node error)
-        pip install --force-reinstall --no-cache-dir numpy==1.26.4 torch==2.1.2 torchvision==0.16.2 transformers==4.35.2 huggingface-hub>=0.20.0,<0.22.0
+        pip install --force-reinstall --no-cache-dir numpy==1.26.4 torch==2.1.2 torchvision==0.16.2 transformers==4.35.2 "huggingface-hub>=0.20.0,<0.22.0"
         # Install CI dependencies with constraints to prevent upgrades
         pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
         # Install project dependencies with constraints (prevent version upgrades)
