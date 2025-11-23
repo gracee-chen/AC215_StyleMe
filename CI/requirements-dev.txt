@@ -22,7 +22,8 @@ responses>=0.23.1
 # Pin specific compatible versions to avoid PyTorch/transformers conflicts
 torch==2.1.0
 torchvision==0.16.0
-transformers==4.35.0
+transformers==4.40.0
+huggingface-hub>=0.20.0,<0.22.0
 Pillow>=9.0.0
 numpy>=1.21.0,<2.0.0
 pandas>=1.5.0
