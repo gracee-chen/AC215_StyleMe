@@ -86,20 +86,25 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install CI dependencies first (includes compatible torch/transformers)
+        # Install compatible PyTorch/transformers FIRST to avoid conflicts
+        pip install "torch==2.1.0" "torchvision==0.16.0" "transformers==4.40.0" "huggingface-hub>=0.20.0,<0.22.0"
+        # Install CI dependencies (will use already installed torch/transformers)
         pip install -r CI/requirements-dev.txt
-        # Install project dependencies, but skip conflicting packages already installed
+        # Install project dependencies (will skip already installed packages)
         pip install -r containers/training/requirements.txt || true
         pip install -r containers/inference/requirements.txt || true
         pip install -r containers/preprocessing/requirements.txt || true
-        # Ensure compatible versions are installed (override any conflicts)
-        pip install "torch==2.1.0" "torchvision==0.16.0" "transformers==4.40.0" "huggingface-hub>=0.20.0,<0.22.0" --upgrade --force-reinstall || true
+        # Verify versions
+        python -c "import torch; import transformers; print(f'PyTorch: {torch.__version__}'); print(f'Transformers: {transformers.__version__}')"
         # Clean pip cache to save space
         pip cache purge || true
     
     - name: Run unit tests
       run: |
-        pytest CI/tests/ -m unit -v --tb=short -c CI/config/pytest.ini
+        cd /home/runner/work/AC215_StyleMe/AC215_StyleMe || cd $GITHUB_WORKSPACE
+        python -c "import sys; print('Python path:', sys.path[:3])"
+        python -c "import os; print('Working dir:', os.getcwd())"
+        pytest CI/tests/ -m unit -v --tb=short -c CI/config/pytest.ini --rootdir=.
     
     - name: Run integration tests
       run: |
