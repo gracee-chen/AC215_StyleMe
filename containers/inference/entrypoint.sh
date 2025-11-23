@@ -29,10 +29,8 @@ if [ "$CATALOG_EXISTS" = false ]; then
     echo ""
     
     python /app/build_catalog_index.py \
-        --gcp-bucket-name $GCP_BUCKET_NAME \
-        --gcp-project-id $GCP_PROJECT_ID \
-        --data-prefix $DATA_PREFIX \
-        --images-prefix $IMAGES_PREFIX \
+        --data-dir /app/data \
+        --image-dir /app/data/images \
         --experiments-dir /app/experiments \
         --output-dir /app/catalog
     

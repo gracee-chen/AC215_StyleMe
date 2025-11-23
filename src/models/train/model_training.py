@@ -19,6 +19,24 @@ import sys
 import warnings
 warnings.filterwarnings('ignore')
 
+# Initialize cuDNN settings for GPU training
+# Disable cuDNN if initialization fails (fallback to standard CUDA operations)
+if torch.cuda.is_available():
+    try:
+        # Try to enable cuDNN
+        torch.backends.cudnn.enabled = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = False
+        # Test cuDNN initialization
+        dummy = torch.zeros(1, 1, 1, 1).cuda()
+        _ = torch.nn.functional.conv2d(dummy, torch.zeros(1, 1, 1, 1).cuda())
+        del dummy
+        torch.cuda.empty_cache()
+    except Exception:
+        # If cuDNN fails, disable it and use standard CUDA operations
+        print("⚠️  cuDNN initialization failed, disabling cuDNN (using standard CUDA operations)")
+        torch.backends.cudnn.enabled = False
+
 # Set environment variable to bypass torch.load security check
 os.environ['TRANSFORMERS_OFFLINE'] = '0'
 os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
@@ -136,18 +154,29 @@ class FashionTrainer:
     FashionCLIP trainer
     """
     
-    def __init__(self, model: FashionCLIPModel, loss_fn: TripletLoss, device: str = None):
+    def __init__(self, model: FashionCLIPModel, loss_fn: TripletLoss, device = None, require_gpu: bool = False):
         # Explicitly check and set device
         if device is None:
             if torch.cuda.is_available():
-                device = "cuda"
+                device_str = "cuda"
                 print(f"🚀 CUDA is available! Using GPU: {torch.cuda.get_device_name(0)}")
                 print(f"📊 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
             else:
-                device = "cpu"
+                if require_gpu:
+                    raise RuntimeError("❌ GPU required but not available! Please ensure CUDA is installed and GPU is accessible.")
+                device_str = "cpu"
                 print("⚠️ CUDA not available, using CPU")
+            self.device = torch.device(device_str)
+        elif isinstance(device, torch.device):
+            # If device is already a torch.device, use it directly
+            self.device = device
+        else:
+            # Convert string to device
+            self.device = torch.device(device)
         
-        self.device = torch.device(device)
+        # Final check: if require_gpu, ensure we're using CUDA
+        if require_gpu and self.device.type != "cuda":
+            raise RuntimeError("❌ GPU required but not using CUDA device!")
         self.model = model.to(self.device)
         self.triplet_loss = loss_fn.to(self.device)
         
@@ -727,11 +756,12 @@ This experiment used {exp_name.lower()} and achieved {best_accuracy*100:.2f}% co
             f.write(readme_content)
         
         # Update experiment configs
-        self.update_experiment_configs(exp_id, exp_type, exp_name, best_accuracy, timestamp)
+        data_version = DATA_CONFIG.get('data_version', None)
+        self.update_experiment_configs(exp_id, exp_type, exp_name, best_accuracy, timestamp, data_version)
         
         print(f"📝 Experiment {exp_id} logs generated in {exp_folder}/")
     
-    def update_experiment_configs(self, exp_id: str, exp_type: str, exp_name: str, best_accuracy: float, timestamp: str):
+    def update_experiment_configs(self, exp_id: str, exp_type: str, exp_name: str, best_accuracy: float, timestamp: str, data_version: str = None):
         """Update experiment_configs.json with new experiment"""
         configs_file = "experiments/experiment_configs.json"
         
@@ -742,28 +772,41 @@ This experiment used {exp_name.lower()} and achieved {best_accuracy*100:.2f}% co
         else:
             configs = {"experiments": {}, "summary": {"total_experiments": 0}}
         
+        # Get data version from config or use default
+        data_ver = data_version or DATA_CONFIG.get('data_version', 'unknown')
+        
         # Add new experiment
         configs["experiments"][exp_id] = {
             "date": timestamp,
             "description": exp_name,
+            "data_version": data_ver,  # Reference to versioned dataset
             "config": {
                 "model": {
-                    "architecture": "CLIP ViT-B/32",
-                    "frozen_layers": 8,
-                    "feature_dimension": 512
+                    "architecture": MODEL_CONFIG['model_name'],
+                    "frozen_layers": MODEL_CONFIG['freeze_layers'],
+                    "feature_dimension": MODEL_CONFIG['feature_dim']
                 },
                 "training": {
                     "epochs": TRAINING_CONFIG['epochs'],
                     "batch_size": TRAINING_CONFIG['batch_size'],
                     "learning_rate": TRAINING_CONFIG['learning_rate'],
-                    "optimizer": "AdamW",
-                    "scheduler": "CosineAnnealingLR",
+                    "optimizer": OPTIMIZER_CONFIG['optimizer'],
+                    "scheduler": OPTIMIZER_CONFIG['scheduler'],
                     "patience": TRAINING_CONFIG['patience'],
                     "target_accuracy": TRAINING_CONFIG['target_accuracy']
+                },
+                "triplet_loss": {
+                    "margin": TRIPLET_CONFIG['margin'],
+                    "distance_metric": TRIPLET_CONFIG['distance_metric']
                 },
                 "evaluation": {
                     "method": exp_type,
                     "description": exp_name
+                },
+                "dataset": {
+                    "gcp_bucket": DATA_CONFIG['gcp_bucket_name'],
+                    "data_prefix": DATA_CONFIG['data_prefix'],
+                    "images_prefix": DATA_CONFIG['images_prefix']
                 }
             },
             "results": {
