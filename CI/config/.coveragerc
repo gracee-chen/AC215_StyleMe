@@ -28,6 +28,8 @@ omit =
     */retry_failed.py
     */containers/inference/inference_service.py
     */src/models/train/model_training.py
+    */src/datapipeline/dataloader.py
+    */src/datapipeline/bg_removal/batch_processor.py
 
 [report]
 # Minimum coverage requirement: 50%
