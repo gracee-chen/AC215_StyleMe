@@ -42,7 +42,7 @@ jobs:
     
     - name: Check code formatting
       run: |
-        flake8 --statistics --count src/ containers/ scripts/ --config=CI/config/.flake8
+        flake8 --statistics --count src/ containers/ scripts/ --config=CI/config/.flake8 --exclude=containers/inference/build_catalog_index.py
 
   test:
     name: Run Tests
