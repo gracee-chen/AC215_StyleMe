@@ -40,17 +40,17 @@ jobs:
         python -m pip install --upgrade pip
         # Uninstall any existing incompatible versions first
         pip uninstall -y torch torchvision numpy transformers || true
-        # Install exact compatible versions FIRST with --force-reinstall (tested stable - avoids register_pytree_node error)
-        pip install --force-reinstall --no-cache-dir "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
-        # Install CI dependencies with constraints file to prevent upgrades
+        # Install exact compatible versions FIRST (tested stable - avoids register_pytree_node error)
+        pip install --force-reinstall --no-cache-dir numpy==1.26.4 torch==2.1.2 torchvision==0.16.2 transformers==4.35.2 huggingface-hub>=0.20.0,<0.22.0
+        # Install CI dependencies with constraints to prevent upgrades
         pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
-        # Install project dependencies with constraints (prevent NumPy/PyTorch/transformers upgrades)
+        # Install project dependencies with constraints (prevent version upgrades)
         pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/preprocessing/requirements.txt -c CI/constraints.txt || true
-        # Verify versions and fail if wrong
-        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__ == '2.1.2', f'PyTorch {torch.__version__} != 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
-        # Clean pip cache to save space
+        # Verify exact versions
+        python -c "import numpy, torch, transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__ == '2.1.2', f'PyTorch {torch.__version__} != 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Clean pip cache
         pip cache purge || true
     
     - name: Run Flake8 linting
@@ -95,17 +95,17 @@ jobs:
         python -m pip install --upgrade pip
         # Uninstall any existing incompatible versions first
         pip uninstall -y torch torchvision numpy transformers || true
-        # Install exact compatible versions FIRST with --force-reinstall (tested stable - avoids register_pytree_node error)
-        pip install --force-reinstall --no-cache-dir "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
-        # Install CI dependencies with constraints file to prevent upgrades
+        # Install exact compatible versions FIRST (tested stable - avoids register_pytree_node error)
+        pip install --force-reinstall --no-cache-dir numpy==1.26.4 torch==2.1.2 torchvision==0.16.2 transformers==4.35.2 huggingface-hub>=0.20.0,<0.22.0
+        # Install CI dependencies with constraints to prevent upgrades
         pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
-        # Install project dependencies with constraints (prevent NumPy/PyTorch/transformers upgrades)
+        # Install project dependencies with constraints (prevent version upgrades)
         pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
         pip install --no-cache-dir -r containers/preprocessing/requirements.txt -c CI/constraints.txt || true
-        # Verify versions and fail if wrong
-        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__ == '2.1.2', f'PyTorch {torch.__version__} != 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
-        # Clean pip cache to save space
+        # Verify exact versions
+        python -c "import numpy, torch, transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__ == '2.1.2', f'PyTorch {torch.__version__} != 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Clean pip cache
         pip cache purge || true
     
     - name: Run unit tests
