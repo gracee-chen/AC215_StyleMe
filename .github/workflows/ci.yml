@@ -15,6 +15,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Clean up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+    
     - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
@@ -34,6 +43,8 @@ jobs:
         pip install -r containers/training/requirements.txt || true
         pip install -r containers/inference/requirements.txt || true
         pip install -r containers/preprocessing/requirements.txt || true
+        # Clean pip cache to save space
+        pip cache purge || true
     
     - name: Run Flake8 linting
       run: |
@@ -52,6 +63,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
+    - name: Clean up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+    
     - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
@@ -71,6 +91,8 @@ jobs:
         pip install -r containers/training/requirements.txt || true
         pip install -r containers/inference/requirements.txt || true
         pip install -r containers/preprocessing/requirements.txt || true
+        # Clean pip cache to save space
+        pip cache purge || true
     
     - name: Run unit tests
       run: |
