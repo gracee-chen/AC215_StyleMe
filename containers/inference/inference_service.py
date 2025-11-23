@@ -15,13 +15,12 @@ from pathlib import Path
 from PIL import Image
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
+from src.models.train.model_training import FashionCLIPModel
 
 # Add src to path (support both container and local paths)
-import os
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(project_root, 'src'))
 sys.path.insert(0, project_root)
-from src.models.train.model_training import FashionCLIPModel
 
 
 class InferenceService:
