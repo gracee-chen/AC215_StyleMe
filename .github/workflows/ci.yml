@@ -10,18 +10,15 @@ jobs:
   build-and-lint:
     name: Build and Lint
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10"]
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.10"
         cache: 'pip'
     
     - name: Install system dependencies
@@ -50,18 +47,15 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.9", "3.10"]
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.10"
         cache: 'pip'
     
     - name: Install system dependencies
@@ -115,7 +109,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: "3.9"
+        python-version: "3.10"
         cache: 'pip'
     
     - name: Install dependencies
