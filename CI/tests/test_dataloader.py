@@ -20,8 +20,10 @@ from src.datapipeline.dataloader import FashionTripletDataset, create_dataloader
 @pytest.fixture
 def sample_data_dir(tmp_path):
     """Create temporary test data directory with sample JSON files"""
-    data_dir = tmp_path / "data" / "json" / "men_data"
-    data_dir.mkdir(parents=True)
+    # Create the directory structure: data/json/men_data/
+    men_data_dir = tmp_path / "data" / "json" / "men_data"
+    men_data_dir.mkdir(parents=True)
+    data_dir = men_data_dir
     
     # Create sample JSON file
     sample_data = [

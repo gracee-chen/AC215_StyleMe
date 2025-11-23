@@ -43,7 +43,8 @@ exclude =
     queries,
     containers/*/__pycache__,
     src/*/__pycache__,
-    src/*/*/__pycache__
+    src/*/*/__pycache__,
+    containers/inference/build_catalog_index.py
 per-file-ignores =
     __init__.py:F401
 max-complexity = 15
