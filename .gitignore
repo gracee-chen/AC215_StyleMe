@@ -61,3 +61,10 @@ data/json/
 # Temporary files
 *.tmp
 *.temp
+
+# Coverage reports (auto-generated)
+CI/coverage_html/
+CI/coverage.xml
+*.coverage
+.coverage
+.coverage.*

@@ -1,0 +1,27 @@
+# Development dependencies for CI/CD pipeline
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-xdist>=3.3.1
+pytest-timeout>=2.1.0
+
+# Linting
+flake8>=6.1.0
+flake8-docstrings>=1.7.0
+flake8-import-order>=0.18.2
+
+# Coverage
+coverage>=7.3.0
+
+# Test utilities
+mock>=5.1.0
+responses>=0.23.1
+
+# Common dependencies (needed for tests)
+torch>=2.0.0
+torchvision>=0.15.0
+Pillow>=9.0.0
+numpy>=1.21.0
+pandas>=1.5.0
+
