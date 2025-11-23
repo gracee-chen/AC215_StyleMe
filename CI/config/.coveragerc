@@ -30,7 +30,7 @@ omit =
     */src/models/train/model_training.py
 
 [report]
-# Minimum coverage requirement: 30% (lowered for CI environment)
+# Minimum coverage requirement: 50%
 precision = 2
 show_missing = True
 skip_covered = False
