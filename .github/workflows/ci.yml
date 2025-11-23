@@ -5,6 +5,7 @@ on:
     branches: [ main, master, develop, milestone* ]
   pull_request:
     branches: [ main, master, develop, milestone* ]
+  workflow_dispatch:  # Allow manual triggering from Actions tab
 
 jobs:
   build-and-lint:
