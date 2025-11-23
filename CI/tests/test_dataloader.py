@@ -23,7 +23,6 @@ def sample_data_dir(tmp_path):
     # Create the directory structure: data/json/men_data/
     men_data_dir = tmp_path / "data" / "json" / "men_data"
     men_data_dir.mkdir(parents=True)
-    data_dir = men_data_dir
     
     # Create sample JSON file
     sample_data = [
@@ -79,9 +78,10 @@ def sample_data_dir(tmp_path):
         }
     ]
     
-    with open(data_dir / "test_data.json", "w") as f:
+    with open(men_data_dir / "test_data.json", "w") as f:
         json.dump(sample_data, f)
     
+    # Return the parent directory that contains json/
     return tmp_path / "data"
 
 

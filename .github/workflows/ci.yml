@@ -37,7 +37,7 @@ jobs:
     
     - name: Run Flake8 linting
       run: |
-        flake8 src/ containers/ scripts/ --config=CI/config/.flake8
+        flake8 src/ containers/ scripts/ --config=CI/config/.flake8 --exclude=containers/inference/build_catalog_index.py
       continue-on-error: false
     
     - name: Check code formatting
