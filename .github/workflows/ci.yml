@@ -2,9 +2,9 @@ name: Continuous Integration and Testing
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, milestone* ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop, milestone* ]
 
 jobs:
   build-and-lint:
