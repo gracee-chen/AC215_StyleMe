@@ -19,13 +19,12 @@ mock>=5.1.0
 responses>=0.23.1
 
 # Common dependencies (needed for tests)
-# Pin specific compatible versions to avoid PyTorch/transformers conflicts
-# Transformers requires PyTorch 2.2+ (per official documentation)
-torch>=2.2.0,<2.3.0
-torchvision>=0.17.0,<0.18.0
-transformers>=4.40.0,<5.0.0
+# Pin exact compatible versions (tested stable in CI - avoids register_pytree_node error)
+torch==2.1.2
+torchvision==0.16.2
+numpy==1.26.4
+transformers==4.35.2
 huggingface-hub>=0.20.0,<0.22.0
 Pillow>=9.0.0
-numpy>=1.21.0,<2.0.0
 pandas>=1.5.0
 
