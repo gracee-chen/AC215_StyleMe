@@ -1,9 +1,10 @@
-torch==2.1.0
-torchvision==0.16.0
-torchaudio==2.1.0
-transformers>=4.21.0,<4.35.0
+# Core ML dependencies - exact versions for compatibility
+numpy==1.26.4
+torch==2.1.2
+torchvision==0.16.2
+torchaudio>=2.0.0
+transformers==4.35.2
 Pillow>=9.0.0
-numpy>=1.21.0
 tqdm>=4.64.0
 matplotlib>=3.5.0
 scikit-learn>=1.1.0
