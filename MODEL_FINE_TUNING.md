@@ -1,186 +1,370 @@
-# Model Fine-Tuning Implementation
+# Model Fine-Tuning Documentation
 
-## Summary
+## Overview
 
-This document describes the fine-tuning implementation for improving model inference quality. The current model achieves 42-43% compatibility, which needs improvement.
+This document describes the fine-tuning implementation for the FashionCLIP model, including training scripts, configuration files, versioned dataset references, experiment logs, key results, and deployment strategy.
 
-## Implementation Components
+## 1. Training Scripts and Configuration Files
 
-### 1. Training Scripts and Config Files
+### Training Scripts
 
-**Files Created:**
-- `src/models/train/run_fine_tuning.py` - Fine-tuning script with data versioning support
-- `src/models/train/fine_tune_config.py` - Optimized hyperparameters for fine-tuning
-- `src/models/train/model_training.py` - Updated to record data versions in experiments
+#### `src/models/train/run_fine_tuning.py`
+Main fine-tuning script with the following features:
+- **Data versioning support**: Links experiments to versioned datasets via DVC tags
+- **GPU requirement**: Enforces GPU usage for fine-tuning (exits if GPU unavailable)
+- **Experiment tracking**: Automatically creates experiment records with full configuration
+- **Checkpoint support**: Can resume from previous checkpoints
+- **Comprehensive logging**: Records all hyperparameters, metrics, and results
 
-**Key Features:**
-- References versioned datasets via DVC tags
-- Records data version in experiment logs
-- Supports resuming from checkpoints
-- Tracks all hyperparameters and results
-
-### 2. Dataset References (Versioned)
-
-All training experiments reference versioned datasets:
-- Data version specified via `--data-version` argument
-- Recorded in `experiment_record.json`
-- Links to DVC tags (e.g., `catalog-v_men_women_20251123`)
-- GCS source state tracked in manifest files
-
-**Example:**
-```python
-DATA_CONFIG = {
-    'data_version': 'v_men_women_20251123',
-    'gcs_snapshot_tag': 'catalog-v_men_women_20251123',
-}
-```
-
-### 3. Experiment Logs
-
-Each fine-tuning run creates:
-- `experiments/fine_tune_YYYYMMDD_HHMMSS/experiment_record.json`
-  - Full configuration (model, training, data)
-  - Data version reference
-  - Training metrics (loss, accuracy)
-  - Evaluation results
-  - Model checkpoint paths
-
-- `experiments/experiment_configs.json` - Centralized experiment registry
-
-**Experiment Record Structure:**
-```json
-{
-  "experiment_id": "fine_tune_20251123_120000",
-  "timestamp": "2025-11-23T12:00:00",
-  "data_version": "catalog-v_men_women_20251123",
-  "config": {
-    "model": {...},
-    "training": {...},
-    "data": {...}
-  },
-  "results": {
-    "best_val_acc": 0.65,
-    "final_train_loss": 0.001,
-    "epochs_trained": 45
-  }
-}
-```
-
-## Fine-Tuning Strategy
-
-### Hyperparameter Improvements
-
-| Parameter | Current | Fine-Tuning | Reason |
-|-----------|---------|-------------|--------|
-| Learning Rate | 1e-5 | 2e-5 | Faster learning |
-| Batch Size | 16-32 | 64 | Better gradients |
-| Frozen Layers | 8 | 4 | More fine-tuning |
-| Margin | 0.7 | 0.5 | Tighter clustering |
-| Epochs | 20-30 | 50 | More training |
-
-### Expected Results
-
-- **Triplet Accuracy**: 41% → 60-70%
-- **Compatibility Score**: 43% → 55-65%
-- **Inference Quality**: Improved recommendations
-
-## Usage
-
-**⚠️ GPU Required**: Fine-tuning requires GPU. The script will exit if GPU is not available.
-
-### Check GPU
-
-```bash
-# Verify CUDA is available
-python -c "import torch; print('CUDA:', torch.cuda.is_available())"
-nvidia-smi
-```
-
-### Basic Fine-Tuning
-
+**Usage:**
 ```bash
 cd src/models/train
 python run_fine_tuning.py --data-version catalog-v_men_women_20251123
 ```
 
-The script will:
-- ✅ Automatically detect and use GPU
-- ❌ Exit with error if GPU unavailable (GPU required for training)
+**Key Features:**
+- Automatic experiment ID generation (`fine_tune_YYYYMMDD_HHMMSS`)
+- Data version tracking in experiment records
+- GPU detection and cuDNN initialization
+- Early stopping with patience
+- Model checkpoint saving (best and final)
 
-### With Custom Config
+#### `src/models/train/model_training.py`
+Core training implementation:
+- `FashionCLIPModel`: CLIP-based model for fashion compatibility
+- `TripletLoss`: Triplet loss for learning compatible/incompatible pairs
+- `FashionTrainer`: Training loop with validation and early stopping
+- Experiment logging and visualization
 
-```bash
-python run_fine_tuning.py \
-    --config fine_tune_config.py \
-    --data-version catalog-v_men_women_20251123
+### Configuration Files
+
+#### `src/models/train/fine_tune_config.py`
+Optimized hyperparameters for fine-tuning:
+
+```python
+TRAINING_CONFIG = {
+    'batch_size': 64,        # Increased for better gradients
+    'epochs': 50,            # More epochs for convergence
+    'learning_rate': 2e-5,   # Optimized for fine-tuning
+    'patience': 15,          # Early stopping patience
+    'target_accuracy': 0.70 # Realistic target
+}
+
+MODEL_CONFIG = {
+    'model_name': 'openai/clip-vit-base-patch32',
+    'freeze_layers': 4,      # Fewer frozen layers for more fine-tuning
+    'feature_dim': 512
+}
+
+TRIPLET_CONFIG = {
+    'margin': 0.5,          # Reduced margin for tighter clustering
+    'distance_metric': 'euclidean'
+}
 ```
 
-### Resume from Checkpoint
+#### `src/models/train/config.py`
+Default training configuration (used as fallback).
 
-```bash
-python run_fine_tuning.py \
-    --resume experiments/fine_tune_XXX/checkpoints/best_model.pth \
-    --data-version catalog-v_men_women_20251123
+## 2. Dataset References (Versioned)
+
+All fine-tuning experiments use **versioned datasets** tracked via DVC and linked to GCS snapshots.
+
+### Data Versioning Strategy
+
+1. **Catalog Versions**: Each catalog build is tagged with DVC
+   - Example: `catalog-v_men_women_20251123`
+   - Example: `catalog-v_men_only_20251123`
+
+2. **GCS Snapshots**: GCS source state is recorded in `manifest.json`
+   - Tracks which GCS files were used
+   - Records gender filter (men/women/all)
+   - Maintains history of data states
+
+3. **Experiment Linking**: Each experiment record includes:
+   - `data_version`: DVC tag reference
+   - `gcs_snapshot_tag`: GCS snapshot identifier
+   - Full data configuration
+
+### Example Experiment Record
+
+```json
+{
+  "experiment_id": "fine_tune_20251123_165320",
+  "timestamp": "2025-11-23T16:53:20",
+  "data_version": "catalog-v_men_women_20251123",
+  "config": {
+    "data": {
+      "gcp_bucket": "styleme-data-bucket",
+      "data_prefix": "json",
+      "images_prefix": "images"
+    }
+  }
+}
 ```
 
-## Key Results Summary
+### Reproducibility
 
-### Current Baseline
-- Compatibility: 42-43%
+To reproduce an experiment:
+1. Checkout the data version: `dvc checkout catalog-v_men_women_20251123`
+2. Use the same config from `experiment_record.json`
+3. Run training with the recorded hyperparameters
+
+## 3. Experiment Logs
+
+### Experiment Structure
+
+Each fine-tuning run creates:
+```
+experiments/fine_tune_YYYYMMDD_HHMMSS/
+├── experiment_record.json    # Complete experiment metadata
+├── checkpoints/
+│   ├── best_model.pth       # Best model checkpoint
+│   └── final_model.pth      # Final model checkpoint
+└── training_history.json     # Per-epoch metrics (if enabled)
+```
+
+### Experiment Record Format
+
+```json
+{
+  "experiment_id": "fine_tune_20251123_165320",
+  "timestamp": "2025-11-23T16:53:20",
+  "data_version": "catalog-v_men_women_20251123",
+  "config": {
+    "model": {
+      "architecture": "openai/clip-vit-base-patch32",
+      "frozen_layers": 4,
+      "feature_dimension": 512
+    },
+    "training": {
+      "epochs": 50,
+      "batch_size": 64,
+      "learning_rate": 2e-5,
+      "optimizer": "AdamW",
+      "scheduler": "CosineAnnealingLR",
+      "patience": 15,
+      "target_accuracy": 0.70
+    },
+    "triplet_loss": {
+      "margin": 0.5,
+      "distance_metric": "euclidean"
+    },
+    "data": {
+      "gcp_bucket": "styleme-data-bucket",
+      "data_prefix": "json",
+      "images_prefix": "images"
+    }
+  },
+  "results": {
+    "best_val_acc": 0.65,
+    "final_train_loss": 0.001,
+    "final_val_loss": 0.0008,
+    "final_train_acc": 0.68,
+    "final_val_acc": 0.65,
+    "epochs_trained": 45
+  }
+}
+```
+
+### Centralized Registry
+
+All experiments are tracked in:
+- `experiments/experiment_configs.json`: Centralized experiment registry
+- `experiments/EXPERIMENT_SUMMARY.md`: Human-readable summary
+
+## 4. Key Results Summary
+
+### Baseline Performance
+
+**Before Fine-Tuning:**
+- Compatibility Score: 42.26% - 43.37% (EXP_002, exp_004)
 - Triplet Accuracy: ~41%
-- Status: Poor inference quality
+- Inference Quality: Poor - recommendations not satisfactory
 
-### Fine-Tuning Goals
-- Compatibility: 55-65%
-- Triplet Accuracy: 60-70%
-- Status: Production-ready
+### Fine-Tuning Experiments
 
-## Deployment Strategy
+| Experiment | Data Version | Batch Size | Learning Rate | Frozen Layers | Best Val Acc | Status |
+|------------|--------------|------------|---------------|---------------|-------------|--------|
+| EXP_001 | Baseline | 16 | 1e-5 | 8 | 98.49%* | Simple eval (unrealistic) |
+| EXP_002 | Baseline | 16 | 1e-5 | 8 | 42.26% | Strict eval (realistic) |
+| EXP_003 | Baseline | 32 | 1e-5 | 8 | 34.44% | Early stopping |
+| exp_004 | Baseline | 16 | 1e-5 | 8 | 43.37% | Completed |
 
-After fine-tuning:
+*EXP_001 used simple cosine similarity (not suitable for production)
 
-1. **Evaluate on Test Set**
+### Fine-Tuning Improvements
+
+**Optimized Configuration:**
+- **Batch Size**: 16 → 64 (better gradient estimates)
+- **Learning Rate**: 1e-5 → 2e-5 (faster convergence)
+- **Frozen Layers**: 8 → 4 (more fine-tuning capacity)
+- **Margin**: 0.7 → 0.5 (tighter feature clustering)
+- **Epochs**: 20-30 → 50 (more training)
+
+**Expected Improvements:**
+- Better feature separation for compatible items
+- Improved inference quality
+- Higher triplet accuracy (target: >70%)
+
+### Model Design Choices
+
+1. **Architecture**: CLIP ViT-B/32
+   - Pre-trained on large-scale image-text pairs
+   - Good transfer learning base for fashion
+
+2. **Fine-Tuning Strategy**: Partial freezing
+   - Freeze first 4 layers (preserve general features)
+   - Fine-tune remaining layers (learn fashion-specific features)
+
+3. **Loss Function**: Triplet Loss
+   - Learn relative distances: anchor-positive < anchor-negative
+   - Margin: 0.5 (tighter clustering for better recommendations)
+
+4. **Training Process**:
+   - Early stopping with patience
+   - Learning rate scheduling (CosineAnnealingLR)
+   - Validation-based model selection
+
+## 5. Deployment Strategy Impact
+
+### Current Deployment
+
+**Inference Service**: `containers/inference/inference_service.py`
+- Loads best model from `experiments/` directory
+- Uses FAISS for efficient similarity search
+- Supports wardrobe and catalog search
+
+### Fine-Tuned Model Integration
+
+**After Fine-Tuning:**
+
+1. **Model Selection**:
+   - Compare fine-tuned models with baseline
+   - Select best performing model based on validation accuracy
+   - Update inference service to use new model
+
+2. **Performance Monitoring**:
+   - Track inference quality metrics
+   - Monitor recommendation relevance
+   - A/B test fine-tuned vs baseline model
+
+3. **Deployment Steps**:
    ```bash
+   # 1. Identify best model
    python src/models/eval/evaluation.py \
        --model experiments/fine_tune_XXX/checkpoints/best_model.pth
+   
+   # 2. Update inference service
+   # Update model path in inference_service.py or use symlink
+   
+   # 3. Rebuild catalog index (if needed)
+   python containers/inference/build_catalog_index.py \
+       --experiments-dir experiments/fine_tune_XXX
    ```
 
-2. **Compare with Baseline**
-   - Review experiment records
-   - Compare metrics in `experiment_configs.json`
+4. **Versioning**:
+   - Version model checkpoints with DVC
+   - Link model versions to data versions
+   - Maintain model registry
 
-3. **Update Inference Service**
-   - If improved, update model path in `containers/inference/inference_service.py`
-   - Deploy new model checkpoint
+### Deployment Considerations
 
-4. **Document Performance**
-   - Update deployment docs
-   - Record performance improvements
+**Advantages of Fine-Tuned Model:**
+- Better fashion compatibility understanding
+- Improved recommendation quality
+- Higher user satisfaction
 
-## Reproducibility
+**Challenges:**
+- Model size: ~150MB per checkpoint
+- Inference latency: Similar to baseline (same architecture)
+- Catalog index rebuild: Required if feature space changes significantly
 
-All experiments are reproducible through:
-- **Data Versioning**: DVC tags reference specific data states
-- **Config Files**: All hyperparameters recorded
-- **Experiment Logs**: Complete training history saved
-- **Model Checkpoints**: Best and final models saved
+**Rollback Strategy:**
+- Keep baseline model available
+- Can quickly revert if fine-tuned model underperforms
+- Model versioning enables easy switching
 
-## Files Structure
+## 6. Evaluation Metrics
 
-```
-src/models/train/
-├── run_fine_tuning.py          # Fine-tuning script
-├── fine_tune_config.py          # Fine-tuning config
-├── model_training.py            # Core training (updated)
-├── FINE_TUNING.md              # Quick guide
-├── FINE_TUNING_GUIDE.md        # Detailed strategy
-├── README_FINE_TUNING.md       # Documentation
-└── experiments/
-    ├── fine_tune_YYYYMMDD_HHMMSS/
-    │   ├── experiment_record.json
-    │   └── checkpoints/
-    │       ├── best_model.pth
-    │       └── final_model.pth
-    └── experiment_configs.json
-```
+### Training Metrics
+- **Triplet Accuracy**: Percentage of triplets correctly ordered
+- **Validation Loss**: Triplet loss on validation set
+- **Training Loss**: Triplet loss on training set
 
+### Inference Metrics
+- **Compatibility Score**: Fashion compatibility evaluation
+- **Recommendation Relevance**: User feedback on recommendations
+- **Inference Latency**: Time to generate recommendations
+
+### Target Metrics
+- **Triplet Accuracy**: >70% (current: ~41%)
+- **Compatibility Score**: >50% (current: 42-43%)
+- **Inference Latency**: <500ms per query
+
+## 7. Reproducibility
+
+### Requirements
+- Python 3.10+
+- PyTorch 2.1.2+ with CUDA support
+- GPU required (CUDA-capable)
+- Access to GCS bucket: `styleme-data-bucket`
+
+### Reproducing Experiments
+
+1. **Checkout Data Version**:
+   ```bash
+   cd data_versioning
+   python dvc_manager.py checkout catalog-v_men_women_20251123
+   ```
+
+2. **Run Fine-Tuning**:
+   ```bash
+   cd src/models/train
+   python run_fine_tuning.py \
+       --data-version catalog-v_men_women_20251123 \
+       --config fine_tune_config.py
+   ```
+
+3. **Verify Results**:
+   ```bash
+   cat experiments/fine_tune_XXX/experiment_record.json
+   ```
+
+## 8. Next Steps
+
+1. **Complete Fine-Tuning**: Run full training with optimized hyperparameters
+2. **Evaluate Results**: Compare fine-tuned model with baseline
+3. **Deploy Best Model**: Update inference service with best performing model
+4. **Monitor Performance**: Track inference quality in production
+5. **Iterate**: Continue fine-tuning based on production feedback
+
+## Files Summary
+
+### Training Scripts
+- ✅ `src/models/train/run_fine_tuning.py` - Main fine-tuning script
+- ✅ `src/models/train/model_training.py` - Core training implementation
+- ✅ `src/models/train/fine_tune_config.py` - Fine-tuning configuration
+
+### Configuration Files
+- ✅ `src/models/train/config.py` - Default configuration
+- ✅ `src/models/train/fine_tune_config.py` - Optimized fine-tuning config
+
+### Experiment Logs
+- ✅ `experiments/experiment_configs.json` - Centralized registry
+- ✅ `experiments/EXPERIMENT_SUMMARY.md` - Human-readable summary
+- ✅ `experiments/fine_tune_*/experiment_record.json` - Individual experiment records
+
+### Documentation
+- ✅ `MODEL_FINE_TUNING.md` - This document (complete guide)
+- ✅ `src/models/train/FINE_TUNING.md` - Quick start guide
+- ✅ `src/models/train/README_FINE_TUNING.md` - Fine-tuning overview
+
+## Conclusion
+
+The fine-tuning implementation provides:
+- ✅ Complete training scripts with data versioning
+- ✅ Versioned dataset references via DVC
+- ✅ Comprehensive experiment logging
+- ✅ Clear results summary and deployment strategy
+
+All components are in place for reproducible model fine-tuning and deployment.
