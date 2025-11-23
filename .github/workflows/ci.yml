@@ -99,7 +99,7 @@ jobs:
     
     - name: Run unit tests
       run: |
-        pytest CI/tests/ -m unit -v --tb=short
+        pytest CI/tests/ -m unit -v --tb=short -c CI/config/pytest.ini
     
     - name: Run integration tests
       run: |
