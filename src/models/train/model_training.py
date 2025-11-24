@@ -194,6 +194,32 @@ class FashionTrainer:
         if torch.cuda.is_available():
             self._print_gpu_info()
     
+    def _clear_memory(self, clear_cache: bool = True, clear_gpu: bool = True):
+        """
+        Clear unused memory to prevent OOM
+        
+        Args:
+            clear_cache: Clear Python garbage collection
+            clear_gpu: Clear PyTorch CUDA cache
+        """
+        import gc
+        
+        if clear_cache:
+            # Force Python garbage collection
+            collected = gc.collect()
+            if collected > 0:
+                print(f"   🧹 Cleared {collected} Python objects")
+        
+        if clear_gpu and torch.cuda.is_available():
+            # Clear PyTorch CUDA cache
+            allocated_before = torch.cuda.memory_allocated() / 1024**3
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            allocated_after = torch.cuda.memory_allocated() / 1024**3
+            if allocated_before > allocated_after:
+                freed = allocated_before - allocated_after
+                print(f"   🧹 Freed {freed:.2f}GB GPU memory")
+    
     def _print_gpu_info(self):
         """Print GPU information"""
         if torch.cuda.is_available():
@@ -251,17 +277,28 @@ class FashionTrainer:
             # Combined score for training monitoring
             combined_score = (accuracy + recommendation_score) / 2
             
-            total_loss += loss.item()
+            loss_value = loss.item()
+            total_loss += loss_value
             total_accuracy += combined_score
             num_batches += 1
             
-            # Update progress bar
+            # Update progress bar before clearing
             progress_bar.set_postfix({
-                'Loss': f'{loss.item():.4f}',
+                'Loss': f'{loss_value:.4f}',
                 'Fashion': f'{accuracy:.4f}',
                 'Recommendation': f'{recommendation_score:.4f}',
                 'Combined': f'{combined_score:.4f}'
             })
+            
+            # Clear intermediate tensors to save memory
+            del anchor_features, positive_features, negative_features, loss
+            
+            # Periodic memory cleanup (every 10 batches to avoid overhead)
+            if batch_idx % 10 == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        
+        # Final cleanup after epoch
+        self._clear_memory(clear_cache=True, clear_gpu=True)
         
         avg_loss = total_loss / num_batches
         avg_accuracy = total_accuracy / num_batches
@@ -301,13 +338,21 @@ class FashionTrainer:
                 # Combined score for validation monitoring
                 combined_score = (accuracy + recommendation_score) / 2
                 
-                total_loss += loss.item()
+                loss_value = loss.item()
+                total_loss += loss_value
                 total_accuracy += combined_score
                 num_batches += 1
                 
-                # Update progress bar
+                # Clear intermediate tensors to save memory
+                del anchor_features, positive_features, negative_features, loss
+                
+                # Periodic memory cleanup
+                if batch_idx % 10 == 0 and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # Update progress bar before clearing
                 progress_bar.set_postfix({
-                    'Loss': f'{loss.item():.4f}',
+                    'Loss': f'{loss_value:.4f}',
                     'Fashion': f'{accuracy:.4f}',
                     'Recommendation': f'{recommendation_score:.4f}',
                     'Combined': f'{combined_score:.4f}'
@@ -487,11 +532,24 @@ class FashionTrainer:
             print(f"\n🔄 Epoch {epoch+1}/{total_epochs}")
             print("-" * 50)
             
+            # Clear image cache at start of each epoch (if dataset has cache)
+            if hasattr(train_loader.dataset, 'dataset') and hasattr(train_loader.dataset.dataset, '_image_cache'):
+                cache_size = len(train_loader.dataset.dataset._image_cache)
+                if cache_size > 0:
+                    # Clear 50% of cache to free memory
+                    keys_to_clear = list(train_loader.dataset.dataset._image_cache.keys())[:cache_size // 2]
+                    for key in keys_to_clear:
+                        del train_loader.dataset.dataset._image_cache[key]
+                    print(f"   🧹 Cleared {len(keys_to_clear)} images from cache")
+            
             # Training
             train_loss, train_acc = self.train_epoch(train_loader, optimizer)
             
             # Validation
             val_loss, val_acc = self.validate(val_loader)
+            
+            # Clear memory after validation
+            self._clear_memory(clear_cache=True, clear_gpu=True)
             
             # Update learning rate
             scheduler.step()

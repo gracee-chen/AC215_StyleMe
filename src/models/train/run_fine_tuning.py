@@ -12,6 +12,14 @@ from pathlib import Path
 # Add to path
 sys.path.append(os.path.dirname(__file__))
 
+# Try to import psutil for resource monitoring (optional)
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+    print("⚠️  psutil not installed. Resource monitoring disabled. Install with: pip install psutil")
+
 from model_training import FashionCLIPModel, TripletLoss, FashionTrainer
 from config import DATA_CONFIG, TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, OPTIMIZER_CONFIG, SAVE_CONFIG
 import torch
@@ -97,6 +105,30 @@ def main():
     print(f"Config: {json.dumps(experiment_record['config'], indent=2)}")
     print("="*60)
     
+    # Check system resources before training
+    print("\n🔍 Checking System Resources...")
+    if HAS_PSUTIL:
+        import shutil
+        
+        # Check memory
+        memory = psutil.virtual_memory()
+        print(f"   Memory: {memory.used / 1024**3:.1f}GB / {memory.total / 1024**3:.1f}GB ({memory.percent}% used)")
+        if memory.percent > 80:
+            print("   ⚠️  WARNING: Memory usage is high! Consider reducing batch_size or num_workers.")
+        
+        # Check disk space
+        disk = shutil.disk_usage('/')
+        print(f"   Disk: {disk.used / 1024**3:.1f}GB / {disk.total / 1024**3:.1f}GB ({disk.used / disk.total * 100:.1f}% used)")
+        
+        # Check CPU load
+        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu_count = psutil.cpu_count()
+        print(f"   CPU: {cpu_percent}% used ({cpu_count} cores)")
+        if cpu_percent > 80:
+            print("   ⚠️  WARNING: CPU usage is high! num_workers is set to 0 to prevent overload.")
+    else:
+        print("   (Resource monitoring unavailable - install psutil for detailed info)")
+    
     # Initialize model - prefer GPU
     if args.device:
         device = torch.device(args.device)
@@ -141,18 +173,36 @@ def main():
         model.load_state_dict(checkpoint['model_state_dict'])
         print(f"Resumed from checkpoint: {args.resume}")
     
-    # Create dataloaders
+    # Create dataloaders with VM-safe settings
     from src.datapipeline.dataloader import create_dataloader
+    
+    batch_size = TRAINING_CONFIG.get('batch_size', 16)
+    num_workers = TRAINING_CONFIG.get('num_workers', 0)  # 0 = single-threaded, safer for VM
+    pin_memory = TRAINING_CONFIG.get('pin_memory', False)  # Disable to save memory
+    prefetch_factor = TRAINING_CONFIG.get('prefetch_factor', 2)
+    
+    print(f"\n📦 DataLoader Configuration (VM-safe):")
+    print(f"   Batch Size: {batch_size} (reduced to prevent OOM)")
+    print(f"   Num Workers: {num_workers} (0 = single-threaded, prevents CPU overload)")
+    print(f"   Pin Memory: {pin_memory} (disabled to save memory)")
+    print(f"   Prefetch Factor: {prefetch_factor}")
     
     train_loader, val_loader, test_loader = create_dataloader(
         gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
         gcp_project_id=DATA_CONFIG['gcp_project_id'],
         data_prefix=DATA_CONFIG['data_prefix'],
         images_prefix=DATA_CONFIG['images_prefix'],
-        batch_size=TRAINING_CONFIG['batch_size'],
-        num_workers=TRAINING_CONFIG['num_workers'],
-        max_samples_per_file=DATA_CONFIG.get('max_samples_per_file')
+        batch_size=batch_size,
+        num_workers=num_workers,
+        max_samples_per_file=DATA_CONFIG.get('max_samples_per_file'),
+        pin_memory=pin_memory,
+        prefetch_factor=prefetch_factor
     )
+    
+    # Check if gradient accumulation is configured
+    grad_accum = TRAINING_CONFIG.get('gradient_accumulation_steps', 1)
+    if grad_accum > 1:
+        print(f"   Gradient Accumulation: {grad_accum} steps (effective batch size: {batch_size * grad_accum})")
     
     # Create experiments directory before training
     experiments_dir = Path(__file__).parent / "experiments" / experiment_id
@@ -170,6 +220,14 @@ def main():
         require_gpu=True  # Force GPU usage for fine-tuning
     )
     
+    # Clear initial memory
+    print("\n🧹 Clearing initial memory...")
+    import gc
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    
     # Train
     print("\nStarting training...")
     trainer.train(
@@ -179,6 +237,14 @@ def main():
         learning_rate=TRAINING_CONFIG['learning_rate'],
         save_dir=str(checkpoints_dir)
     )
+    
+    # Final memory cleanup
+    print("\n🧹 Final memory cleanup...")
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        print(f"   Final GPU Memory: {torch.cuda.memory_allocated()/1024**3:.2f}GB")
     
     # Get history from trainer
     history = {

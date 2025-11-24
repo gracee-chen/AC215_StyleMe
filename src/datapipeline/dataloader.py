@@ -60,8 +60,9 @@ class FashionTripletDataset(Dataset):
         # Build compatibility graph
         self.compatibility_graph = self._build_compatibility_graph()
         
-        # Image cache to avoid re-downloading from GCS
+        # Image cache to avoid re-downloading from GCS (limited size to prevent OOM)
         self._image_cache = {}
+        self._max_cache_size = 500  # Limit cache to 500 images to save memory
         
         print(f"\n🎉 Dataset initialization complete!")
         print(f"📦 Total items: {len(self.items):,}")
@@ -352,6 +353,12 @@ class FashionTripletDataset(Dataset):
                     # Convert to PIL Image
                     image = Image.open(io.BytesIO(image_data)).convert('RGB')
                     # Cache the image
+                    # Limit cache size - remove oldest entries if cache is full
+                    if len(self._image_cache) >= self._max_cache_size:
+                        # Remove oldest 20% of cache entries
+                        keys_to_remove = list(self._image_cache.keys())[:self._max_cache_size // 5]
+                        for key in keys_to_remove:
+                            del self._image_cache[key]
                     self._image_cache[item_id] = image
                     return image
             except Exception as e:
@@ -439,7 +446,9 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
                      shuffle: bool = True, 
                      max_samples_per_file: int = None,
                      train_split: float = 0.7,
-                     val_split: float = 0.05) -> Tuple[DataLoader, DataLoader, DataLoader]:
+                     val_split: float = 0.05,
+                     pin_memory: bool = True,
+                     prefetch_factor: int = 2) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Create DataLoader for training, validation and test using GCS data
     
@@ -477,18 +486,21 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
         dataset, [train_size, val_size, test_size]
     )
     
-    # Create train dataloader with conditional prefetch_factor
+    # VM-safe: disable pin_memory if num_workers is 0 (saves memory)
+    effective_pin_memory = pin_memory and num_workers > 0
+    
+    # Create train dataloader with VM-safe settings
     train_loader_kwargs = {
         'dataset': train_dataset,
         'batch_size': batch_size,
         'shuffle': shuffle,
-        'num_workers': min(num_workers, 2),  # Limit workers to avoid shared memory issues
-        'pin_memory': True,
+        'num_workers': num_workers,  # Use configured value (0 for VM safety)
+        'pin_memory': effective_pin_memory,  # Disable if num_workers=0
         'drop_last': True,
         'persistent_workers': False
     }
     if num_workers > 0:
-        train_loader_kwargs['prefetch_factor'] = 1
+        train_loader_kwargs['prefetch_factor'] = min(prefetch_factor, 2)  # Limit prefetch
     train_loader = DataLoader(**train_loader_kwargs)
     
     # Create validation dataloader
@@ -496,13 +508,13 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
         'dataset': val_dataset,
         'batch_size': batch_size,
         'shuffle': False,
-        'num_workers': min(num_workers, 2),
-        'pin_memory': True,
+        'num_workers': num_workers,
+        'pin_memory': effective_pin_memory,
         'drop_last': True,
         'persistent_workers': False
     }
     if num_workers > 0:
-        val_loader_kwargs['prefetch_factor'] = 1
+        val_loader_kwargs['prefetch_factor'] = min(prefetch_factor, 2)
     val_loader = DataLoader(**val_loader_kwargs)
     
     # Create test dataloader
@@ -511,12 +523,12 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
         'batch_size': batch_size,
         'shuffle': False,
         'num_workers': num_workers,
-        'pin_memory': True,
+        'pin_memory': effective_pin_memory,
         'drop_last': True,
-        'persistent_workers': True if num_workers > 0 else False
+        'persistent_workers': False
     }
     if num_workers > 0:
-        test_loader_kwargs['prefetch_factor'] = 2
+        test_loader_kwargs['prefetch_factor'] = min(prefetch_factor, 2)
     test_loader = DataLoader(**test_loader_kwargs)
     
     return train_loader, val_loader, test_loader

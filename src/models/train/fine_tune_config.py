@@ -17,14 +17,17 @@ DATA_CONFIG = {
     'gcs_snapshot_tag': 'catalog-v_men_women_20251123',  # DVC tag
 }
 
-# Training configuration - Optimized for fine-tuning
+# Training configuration - Optimized for fine-tuning (VM-safe settings)
 TRAINING_CONFIG = {
-    'batch_size': 64,  # Increased for better gradient estimates
+    'batch_size': 16,  # Reduced to prevent OOM (was 64)
     'epochs': 50,  # More epochs for better convergence
     'learning_rate': 2e-5,  # Slightly higher for fine-tuning
-    'num_workers': 4,
+    'num_workers': 0,  # Set to 0 to prevent CPU/memory overload (was 4)
     'patience': 15,  # More patience
     'target_accuracy': 0.70,  # Realistic target
+    'gradient_accumulation_steps': 4,  # Accumulate gradients to simulate larger batch
+    'pin_memory': False,  # Disable to save memory
+    'prefetch_factor': 2,  # Reduce prefetch to save memory
 }
 
 # Model configuration
