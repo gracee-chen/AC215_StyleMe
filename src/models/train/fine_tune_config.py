@@ -15,28 +15,19 @@ DATA_CONFIG = {
     # Data version reference
     'data_version': 'v_men_women_20251123',  # Reference to versioned catalog
     'gcs_snapshot_tag': 'catalog-v_men_women_20251123',  # DVC tag
-    # Local cache for images (set to None to use GCS directly, or path to cache directory)
-    'local_cache_dir': 'data/local_image_cache',  # Set to None to disable local cache
 }
 
-# Training configuration - Optimized for I/O safety (prevent SSH disconnection)
+# Training configuration - Optimized for fine-tuning (VM-safe settings)
 TRAINING_CONFIG = {
-    'batch_size': 24,  # Balanced: faster than 16, safer than 32
-    'epochs': 12,  # Reduced to complete in ~1 hour (was 50)
+    'batch_size': 16,  # Reduced to prevent OOM (was 64)
+    'epochs': 50,  # More epochs for better convergence
     'learning_rate': 2e-5,  # Slightly higher for fine-tuning
-    'num_workers': 0,  # Keep 0 for VM safety (prevents CPU overload and I/O contention)
-    'patience': 8,  # Reduced patience for faster training
+    'num_workers': 0,  # Set to 0 to prevent CPU/memory overload (was 4)
+    'patience': 15,  # More patience
     'target_accuracy': 0.70,  # Realistic target
-    'gradient_accumulation_steps': 2,  # Reduced since batch_size increased
-    'pin_memory': False,  # Disable to save memory and reduce I/O
-    'prefetch_factor': 1,  # MINIMUM prefetch to reduce I/O pressure (was 2)
-    'preload_images': True,  # Preload ALL images to memory before training
-    'max_preload_images': None,  # Load ALL images (None = no limit) to avoid disk I/O during training
-    'max_cache_size': 20000,  # Very large cache to hold all images in memory (was 8000)
-    'io_throttle': True,  # Enable I/O throttling to prevent disk saturation
-    'io_delay_ms': 0.1,  # Small delay between I/O operations during preload
-    'monitor_resources': True,  # Enable resource monitoring
-    'auto_adjust_batch_size': True,  # Auto-reduce batch_size if OOM
+    'gradient_accumulation_steps': 4,  # Accumulate gradients to simulate larger batch
+    'pin_memory': False,  # Disable to save memory
+    'prefetch_factor': 2,  # Reduce prefetch to save memory
 }
 
 # Model configuration

@@ -32,8 +32,7 @@ class FashionTripletDataset(Dataset):
     
     def __init__(self, gcp_bucket_name: str = None, gcp_project_id: str = None, 
                  data_prefix: str = "data/json", images_prefix: str = "data/images",
-                 transform=None, max_samples_per_file: int = None,
-                 local_cache_dir: str = None):
+                 transform=None, max_samples_per_file: int = None):
         """
         Args:
             gcp_bucket_name: GCS bucket name
@@ -42,7 +41,6 @@ class FashionTripletDataset(Dataset):
             images_prefix: prefix for image files in GCS
             transform: image transformations
             max_samples_per_file: maximum samples per file (None = use all data)
-            local_cache_dir: Local directory to cache images (if None, uses memory cache only)
         """
         self.gcp_bucket_name = gcp_bucket_name or "styleme-data-bucket"
         self.gcp_project_id = gcp_project_id or "styleme-475201"
@@ -51,19 +49,9 @@ class FashionTripletDataset(Dataset):
         self.transform = transform or self._get_default_transform()
         self.max_samples_per_file = max_samples_per_file
         
-        # Local cache directory for images
-        self.local_cache_dir = local_cache_dir
-        if self.local_cache_dir:
-            self.local_cache_dir = Path(self.local_cache_dir)
-            self.local_cache_dir.mkdir(parents=True, exist_ok=True)
-            print(f"📁 Using local image cache: {self.local_cache_dir}")
-        
-        # Initialize GCS client (only if needed)
-        self.gcs_client = None
-        self.bucket = None
-        if not self.local_cache_dir or not self._is_cache_complete():
-            self.gcs_client = storage.Client(project=self.gcp_project_id)
-            self.bucket = self.gcs_client.bucket(self.gcp_bucket_name)
+        # Initialize GCS client
+        self.gcs_client = storage.Client(project=self.gcp_project_id)
+        self.bucket = self.gcs_client.bucket(self.gcp_bucket_name)
         
         # Load all data
         self.items = self._load_all_data()
@@ -72,9 +60,9 @@ class FashionTripletDataset(Dataset):
         # Build compatibility graph
         self.compatibility_graph = self._build_compatibility_graph()
         
-        # Image cache to avoid re-downloading from GCS (large cache for speed)
+        # Image cache to avoid re-downloading from GCS (limited size to prevent OOM)
         self._image_cache = {}
-        self._max_cache_size = 8000  # Large but safe cache size (configurable)
+        self._max_cache_size = 500  # Limit cache to 500 images to save memory
         
         print(f"\n🎉 Dataset initialization complete!")
         print(f"📦 Total items: {len(self.items):,}")
@@ -343,43 +331,13 @@ class FashionTripletDataset(Dataset):
         
         return False
     
-    def _is_cache_complete(self) -> bool:
-        """Check if local cache has all required images"""
-        if not self.local_cache_dir:
-            return False
-        # Simple check: if cache dir exists and has files, assume it might be complete
-        # Full check would require scanning all item_ids, which is expensive
-        return self.local_cache_dir.exists() and len(list(self.local_cache_dir.glob("*.jpg"))) > 100
-    
     def _get_image_from_gcs(self, item_id: str) -> Optional[Image.Image]:
-        """Get product image from local cache or GCS with fallback"""
-        # Check memory cache first
+        """Get product image from GCS with caching"""
+        # Check cache first
         if item_id in self._image_cache:
             return self._image_cache[item_id]
         
-        # Try local cache if available
-        if self.local_cache_dir:
-            local_paths = [
-                self.local_cache_dir / f"{item_id}_index1.jpg",
-                self.local_cache_dir / f"{item_id}_index2.jpg",
-                self.local_cache_dir / f"{item_id}.jpg"
-            ]
-            for local_path in local_paths:
-                if local_path.exists():
-                    try:
-                        image = Image.open(local_path).convert('RGB')
-                        # Add to memory cache for faster access
-                        if len(self._image_cache) < self._max_cache_size:
-                            self._image_cache[item_id] = image
-                        return image
-                    except Exception as e:
-                        continue
-        
-        # Fallback to GCS download (if GCS client is available)
-        if not self.bucket:
-            return None
-        
-        # Try different image naming formats in GCS
+        # Try different image naming formats
         possible_paths = [
             f"{self.images_prefix}/{item_id}_index1.jpg",
             f"{self.images_prefix}/{item_id}_index2.jpg",
@@ -394,23 +352,7 @@ class FashionTripletDataset(Dataset):
                     image_data = blob.download_as_bytes()
                     # Convert to PIL Image
                     image = Image.open(io.BytesIO(image_data)).convert('RGB')
-                    
-                    # Save to local cache if available
-                    if self.local_cache_dir:
-                        # Determine which filename to use
-                        if "_index1" in image_path:
-                            local_path = self.local_cache_dir / f"{item_id}_index1.jpg"
-                        elif "_index2" in image_path:
-                            local_path = self.local_cache_dir / f"{item_id}_index2.jpg"
-                        else:
-                            local_path = self.local_cache_dir / f"{item_id}.jpg"
-                        
-                        try:
-                            image.save(local_path, 'JPEG', quality=95)
-                        except Exception as e:
-                            pass  # Ignore save errors, continue with in-memory cache
-                    
-                    # Cache the image in memory
+                    # Cache the image
                     # Limit cache size - remove oldest entries if cache is full
                     if len(self._image_cache) >= self._max_cache_size:
                         # Remove oldest 20% of cache entries
@@ -506,8 +448,7 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
                      train_split: float = 0.7,
                      val_split: float = 0.05,
                      pin_memory: bool = True,
-                     prefetch_factor: int = 2,
-                     dataset: FashionTripletDataset = None) -> Tuple[DataLoader, DataLoader, DataLoader]:
+                     prefetch_factor: int = 2) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """
     Create DataLoader for training, validation and test using GCS data
     
@@ -526,15 +467,14 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
     Returns:
         Tuple of (train_loader, val_loader, test_loader)
     """
-    # Create dataset using GCS (or use provided one)
-    if dataset is None:
-        dataset = FashionTripletDataset(
-            gcp_bucket_name=gcp_bucket_name,
-            gcp_project_id=gcp_project_id,
-            data_prefix=data_prefix,
-            images_prefix=images_prefix,
-            max_samples_per_file=max_samples_per_file
-        )
+    # Create dataset using GCS
+    dataset = FashionTripletDataset(
+        gcp_bucket_name=gcp_bucket_name,
+        gcp_project_id=gcp_project_id,
+        data_prefix=data_prefix,
+        images_prefix=images_prefix,
+        max_samples_per_file=max_samples_per_file
+    )
     
     # Split dataset into train, validation and test
     total_size = len(dataset)
@@ -545,95 +485,6 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
     train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
         dataset, [train_size, val_size, test_size]
     )
-    
-    # Preload images to cache if requested (for faster training)
-    # This downloads all images once before training starts
-    preload_images = getattr(dataset, '_preload_images', False)
-    max_preload = getattr(dataset, '_max_preload_images', 5000)  # Limit preload count (None = all)
-    io_throttle = getattr(dataset, '_io_throttle', False)
-    io_delay_ms = getattr(dataset, '_io_delay_ms', 0.1)
-    
-    if preload_images:
-        import time
-        print("\n🔄 Preloading images to cache (this may take a few minutes)...")
-        if max_preload is None:
-            print("   ⚠️  Loading ALL images to memory to avoid disk I/O during training")
-        else:
-        print(f"   This will download up to {max_preload} images once to avoid GCS delays")
-        print("   Monitoring memory usage to prevent overflow...")
-        if io_throttle:
-            print(f"   🛡️  I/O throttling enabled ({io_delay_ms*1000:.1f}ms delay) to prevent disk saturation")
-        
-        # Check available memory before preloading
-        try:
-            import psutil
-            memory = psutil.virtual_memory()
-            available_gb = memory.available / 1024**3
-            print(f"   📊 Available memory: {available_gb:.1f}GB")
-            if available_gb < 2.0 and max_preload is None:
-                print("   ⚠️  WARNING: Low memory! Limiting preload to 5000 images.")
-                max_preload = 5000
-        except ImportError:
-            pass
-        
-        # Get ALL unique item IDs from dataset (not just train)
-        all_item_ids = set(dataset.item_ids)
-        
-        # Also get IDs from compatibility graph (positive items)
-        for anchor_id, compatible_items in dataset.compatibility_graph.items():
-                all_item_ids.add(anchor_id)
-            for compat_item in compatible_items:
-                if isinstance(compat_item, dict) and 'id' in compat_item:
-                    all_item_ids.add(compat_item['id'])
-                elif isinstance(compat_item, str):
-                    all_item_ids.add(compat_item)
-        
-        # Limit to max_preload if specified
-        if max_preload is not None:
-        all_item_ids = list(all_item_ids)[:max_preload]
-            print(f"   📋 Loading {len(all_item_ids)} unique images (limited by max_preload_images)")
-        else:
-            all_item_ids = list(all_item_ids)
-            print(f"   📋 Loading ALL {len(all_item_ids)} unique images to memory")
-        
-        # Preload images with memory monitoring and I/O throttling
-        preloaded = 0
-        skipped = 0
-        for item_id in tqdm(all_item_ids, desc="Preloading images"):
-            # I/O throttling to prevent disk saturation
-            if io_throttle and preloaded > 0:
-                time.sleep(io_delay_ms)
-            
-            # Check memory periodically
-            if preloaded % 500 == 0 and preloaded > 0:
-                try:
-                    import psutil
-                    memory = psutil.virtual_memory()
-                    if memory.percent > 85:  # Stop if memory > 85%
-                        print(f"\n   ⚠️  Memory usage high ({memory.percent:.1f}%), stopping preload early")
-                        break
-                except:
-                    pass
-            
-            if item_id not in dataset._image_cache:
-                image = dataset._get_image_from_gcs(item_id)
-                if image is not None:
-                    # Check cache size before adding
-                    if dataset._max_cache_size and len(dataset._image_cache) >= dataset._max_cache_size:
-                        # Remove oldest 10% if cache is full
-                        keys_to_remove = list(dataset._image_cache.keys())[:len(dataset._image_cache)//10]
-                        for key in keys_to_remove:
-                            del dataset._image_cache[key]
-                    dataset._image_cache[item_id] = image
-                    preloaded += 1
-                else:
-                    skipped += 1
-        
-        print(f"   ✅ Preloaded {preloaded} images to cache")
-        if skipped > 0:
-            print(f"   ⚠️  Skipped {skipped} images (not found or failed)")
-        print(f"   📦 Cache size: {len(dataset._image_cache)} images")
-        print(f"   💾 All images now in memory - training will use zero disk I/O!")
     
     # VM-safe: disable pin_memory if num_workers is 0 (saves memory)
     effective_pin_memory = pin_memory and num_workers > 0

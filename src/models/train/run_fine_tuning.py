@@ -107,89 +107,27 @@ def main():
     
     # Check system resources before training
     print("\n🔍 Checking System Resources...")
-    resource_warnings = []
-    
     if HAS_PSUTIL:
         import shutil
         
         # Check memory
         memory = psutil.virtual_memory()
-        memory_used_gb = memory.used / 1024**3
-        memory_total_gb = memory.total / 1024**3
-        memory_available_gb = memory.available / 1024**3
-        print(f"   Memory: {memory_used_gb:.1f}GB / {memory_total_gb:.1f}GB ({memory.percent}% used)")
-        print(f"   Available: {memory_available_gb:.1f}GB")
-        
-        if memory.percent > 85:
-            resource_warnings.append(f"⚠️  CRITICAL: Memory usage is {memory.percent:.1f}%! System may crash.")
-            print(f"   {resource_warnings[-1]}")
-            print("   💡 Recommendation: Reduce batch_size or max_preload_images")
-        elif memory.percent > 70:
-            resource_warnings.append(f"⚠️  WARNING: Memory usage is {memory.percent:.1f}% (high)")
-            print(f"   {resource_warnings[-1]}")
+        print(f"   Memory: {memory.used / 1024**3:.1f}GB / {memory.total / 1024**3:.1f}GB ({memory.percent}% used)")
+        if memory.percent > 80:
+            print("   ⚠️  WARNING: Memory usage is high! Consider reducing batch_size or num_workers.")
         
         # Check disk space
         disk = shutil.disk_usage('/')
-        disk_used_gb = disk.used / 1024**3
-        disk_total_gb = disk.total / 1024**3
-        disk_percent = disk.used / disk.total * 100
-        print(f"   Disk: {disk_used_gb:.1f}GB / {disk_total_gb:.1f}GB ({disk_percent:.1f}% used)")
-        if disk_percent > 90:
-            resource_warnings.append(f"⚠️  WARNING: Disk usage is {disk_percent:.1f}% (very high)")
-            print(f"   {resource_warnings[-1]}")
+        print(f"   Disk: {disk.used / 1024**3:.1f}GB / {disk.total / 1024**3:.1f}GB ({disk.used / disk.total * 100:.1f}% used)")
         
         # Check CPU load
         cpu_percent = psutil.cpu_percent(interval=1)
         cpu_count = psutil.cpu_count()
         print(f"   CPU: {cpu_percent}% used ({cpu_count} cores)")
-        if cpu_percent > 85:
-            resource_warnings.append(f"⚠️  WARNING: CPU usage is {cpu_percent:.1f}% (very high)")
-            print(f"   {resource_warnings[-1]}")
-            print("   ✅ num_workers=0 should prevent further CPU overload")
-        
-        # Check GPU memory if available
-        if torch.cuda.is_available():
-            gpu_memory_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            gpu_memory_allocated = torch.cuda.memory_allocated() / 1024**3
-            gpu_memory_reserved = torch.cuda.memory_reserved() / 1024**3
-            gpu_memory_percent = (gpu_memory_reserved / gpu_memory_total) * 100
-            print(f"   GPU Memory: {gpu_memory_reserved:.1f}GB / {gpu_memory_total:.1f}GB ({gpu_memory_percent:.1f}% reserved)")
-            if gpu_memory_percent > 90:
-                resource_warnings.append(f"⚠️  CRITICAL: GPU memory is {gpu_memory_percent:.1f}%! May cause OOM.")
-                print(f"   {resource_warnings[-1]}")
-                print("   💡 Recommendation: Reduce batch_size")
-            elif gpu_memory_percent > 70:
-                resource_warnings.append(f"⚠️  WARNING: GPU memory is {gpu_memory_percent:.1f}% (high)")
-                print(f"   {resource_warnings[-1]}")
+        if cpu_percent > 80:
+            print("   ⚠️  WARNING: CPU usage is high! num_workers is set to 0 to prevent overload.")
     else:
         print("   (Resource monitoring unavailable - install psutil for detailed info)")
-        print("   💡 Install: pip install psutil")
-    
-    # Auto-adjust batch_size if resources are critical
-    auto_adjust = TRAINING_CONFIG.get('auto_adjust_batch_size', True)
-    if resource_warnings and auto_adjust and HAS_PSUTIL:
-        memory = psutil.virtual_memory()
-        if memory.percent > 85:
-            original_batch_size = batch_size
-            batch_size = max(16, batch_size // 2)  # Reduce by half, minimum 16
-            if batch_size != original_batch_size:
-                print(f"\n   🔧 Auto-adjusting batch_size: {original_batch_size} → {batch_size} (memory safety)")
-    
-    if resource_warnings:
-        print("\n" + "="*60)
-        print("⚠️  RESOURCE WARNINGS DETECTED")
-        print("="*60)
-        print("Before starting training, consider:")
-        print("  1. Close other heavy processes")
-        print("  2. Reduce batch_size in fine_tune_config.py")
-        print("  3. Reduce max_preload_images in fine_tune_config.py")
-        print("  4. Monitor resources in another terminal:")
-        print("     cd src/models/train && ./monitor_resources.sh")
-        print("="*60)
-        response = input("\nContinue with training? (y/n): ").strip().lower()
-        if response != 'y':
-            print("Training cancelled by user.")
-            sys.exit(0)
     
     # Initialize model - prefer GPU
     if args.device:
@@ -235,56 +173,20 @@ def main():
         model.load_state_dict(checkpoint['model_state_dict'])
         print(f"Resumed from checkpoint: {args.resume}")
     
-    # Create dataloaders with optimized settings for speed
-    from src.datapipeline.dataloader import create_dataloader, FashionTripletDataset
+    # Create dataloaders with VM-safe settings
+    from src.datapipeline.dataloader import create_dataloader
     
-    batch_size = TRAINING_CONFIG.get('batch_size', 24)
+    batch_size = TRAINING_CONFIG.get('batch_size', 16)
     num_workers = TRAINING_CONFIG.get('num_workers', 0)  # 0 = single-threaded, safer for VM
     pin_memory = TRAINING_CONFIG.get('pin_memory', False)  # Disable to save memory
     prefetch_factor = TRAINING_CONFIG.get('prefetch_factor', 2)
-    preload_images = TRAINING_CONFIG.get('preload_images', True)  # Preload images to cache
     
-    print(f"\n📦 DataLoader Configuration (I/O Optimized to Prevent SSH Disconnection):")
-    print(f"   Batch Size: {batch_size}")
-    print(f"   Num Workers: {num_workers} (0 = single-threaded, prevents I/O contention)")
-    print(f"   Pin Memory: {pin_memory} (disabled to save memory and reduce I/O)")
-    print(f"   Prefetch Factor: {prefetch_factor} (reduced to minimize I/O pressure)")
-    print(f"   Preload Images: {preload_images} (load ALL images to memory before training)")
-    if TRAINING_CONFIG.get('io_throttle', False):
-        print(f"   I/O Throttling: Enabled ({TRAINING_CONFIG.get('io_delay_ms', 0.1)*1000:.1f}ms delay)")
-    print(f"   Max Cache Size: {TRAINING_CONFIG.get('max_cache_size', 20000)} (large enough for all images)")
+    print(f"\n📦 DataLoader Configuration (VM-safe):")
+    print(f"   Batch Size: {batch_size} (reduced to prevent OOM)")
+    print(f"   Num Workers: {num_workers} (0 = single-threaded, prevents CPU overload)")
+    print(f"   Pin Memory: {pin_memory} (disabled to save memory)")
+    print(f"   Prefetch Factor: {prefetch_factor}")
     
-    # Create dataset first (needed for preloading)
-    local_cache_dir = DATA_CONFIG.get('local_cache_dir')
-    if local_cache_dir:
-        local_cache_dir = Path(local_cache_dir)
-        if local_cache_dir.exists() and len(list(local_cache_dir.glob("*.jpg"))) > 0:
-            print(f"✅ Found local image cache: {len(list(local_cache_dir.glob('*.jpg')))} images")
-        else:
-            print(f"⚠️  Local cache directory exists but is empty: {local_cache_dir}")
-            print(f"   Run: python scripts/download_gcs_images.py --cache-dir {local_cache_dir}")
-            response = input("   Continue with GCS download? (y/n): ").strip().lower()
-            if response != 'y':
-                print("Training cancelled.")
-                sys.exit(0)
-    
-    dataset = FashionTripletDataset(
-        gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
-        gcp_project_id=DATA_CONFIG['gcp_project_id'],
-        data_prefix=DATA_CONFIG['data_prefix'],
-        images_prefix=DATA_CONFIG['images_prefix'],
-        max_samples_per_file=DATA_CONFIG.get('max_samples_per_file'),
-        local_cache_dir=local_cache_dir
-    )
-    dataset._preload_images = preload_images
-    dataset._max_preload_images = TRAINING_CONFIG.get('max_preload_images', 5000)
-    # Update dataset's cache size limit (increase to hold all images in memory)
-    dataset._max_cache_size = TRAINING_CONFIG.get('max_cache_size', 20000)
-    # I/O throttling to prevent disk saturation and SSH disconnection
-    dataset._io_throttle = TRAINING_CONFIG.get('io_throttle', False)
-    dataset._io_delay_ms = TRAINING_CONFIG.get('io_delay_ms', 0.1)
-    
-    # Create dataloaders (pass dataset to enable preloading)
     train_loader, val_loader, test_loader = create_dataloader(
         gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
         gcp_project_id=DATA_CONFIG['gcp_project_id'],
@@ -294,8 +196,7 @@ def main():
         num_workers=num_workers,
         max_samples_per_file=DATA_CONFIG.get('max_samples_per_file'),
         pin_memory=pin_memory,
-        prefetch_factor=prefetch_factor,
-        dataset=dataset  # Pass pre-created dataset for preloading
+        prefetch_factor=prefetch_factor
     )
     
     # Check if gradient accumulation is configured
