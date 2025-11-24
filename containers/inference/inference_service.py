@@ -107,8 +107,8 @@ class InferenceService:
         """Load catalog FAISS index and metadata"""
         print("📚 Loading catalog...")
         
-        # Find latest catalog version
-        catalog_versions = sorted(self.catalog_dir.glob("v_*"))
+        # Find latest catalog version (only directories, not .dvc files)
+        catalog_versions = [d for d in sorted(self.catalog_dir.glob("v_*")) if d.is_dir()]
         if not catalog_versions:
             raise FileNotFoundError(f"No catalog found in {self.catalog_dir}")
         
