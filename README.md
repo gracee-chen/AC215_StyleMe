@@ -249,7 +249,7 @@ StyleMe implements **DVC (Data Version Control)** for managing datasets, model c
 
 ![image](https://github.com/user-attachments/assets/2ab5a9b8-f1cc-4dc7-afdf-7a02ab75c1d8)
 
-_Figure: DVC overview_
+_Figure: Data versioning workflow with DVC_
 
 
 **Documentation**: See [Data Versioning Guide](docs/data_versioning.md) for complete methodology, usage instructions, and reproducibility workflow.
