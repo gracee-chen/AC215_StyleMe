@@ -167,49 +167,9 @@ make logs
 
 ### Section 1: App Design, Setup, and Code Organization
 
-#### Application Architecture
+StyleMe follows a **containerized microservices architecture** with four specialized services (ingestion, preprocessing, training, and inference) that operate independently while maintaining seamless communication through Docker networking. The system processes fashion images through a pipeline that includes data collection, cleaning, model training, and real-time recommendation generation. The user interface is a mobile-first React-based SPA that allows users to upload wardrobe items, view their collections, and receive personalized fashion recommendations. The architecture emphasizes modularity, scalability, and reproducibility through versioned datasets and model checkpoints, with comprehensive test coverage across all components.
 
-StyleMe follows a **containerized microservices architecture** with clear separation of concerns:
-
-**User Interface Design:**
-- **Input**: Users upload query images via file system or API
-- **Processing**: Background removal, embedding generation, similarity search
-- **Output**: JSON responses with product recommendations (images, metadata, URLs)
-
-**System Components:**
-
-1. **Ingestion Service**
-   - Purpose: Data collection and scraping
-   - Input: External data sources
-   - Output: Raw JSON metadata and images
-   - Technology: Python, BeautifulSoup, Selenium
-
-2. **Preprocessing Service**
-   - Purpose: Data cleaning and image processing
-   - Features: Background removal, image normalization
-   - Output: Cleaned, processed images ready for training
-   - Technology: OpenCV, PIL, rembg
-
-3. **Training Service**
-   - Purpose: Model fine-tuning and experiment tracking
-   - Features: GPU-accelerated training, checkpoint management
-   - Output: Trained model checkpoints
-   - Technology: PyTorch, Transformers, CUDA
-
-4. **Inference Service**
-   - Purpose: Real-time recommendation generation
-   - Features: FAISS indexing, wardrobe/catalog search
-   - Output: JSON recommendations with product metadata
-   - Technology: FAISS, NumPy, PyTorch
-
-#### Design Principles
-
-- **Modularity**: Each service is independently deployable
-- **Scalability**: Services can be scaled individually
-- **Reproducibility**: Versioned datasets and model checkpoints
-- **Testability**: Comprehensive test coverage (unit, integration, e2e)
-
-**Documentation**: See [Containerization Guide](CONTAINERIZATION.md) for detailed Docker setup and architecture.
+**Documentation**: See [Application Design Document](docs/Application%20design%20doc.md) for detailed solution architecture, technical architecture, system components, and design patterns.
 
 ---
 
