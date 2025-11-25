@@ -225,21 +225,24 @@ User Query Image
 
 StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and executes four sequential jobs to ensure code quality and reliability. The **Build and Lint** job performs automated build verification and code quality checks using Flake8, setting up Python 3.10 environments, installing system and Python dependencies from `requirements.txt` and `CI/requirements-dev.txt`, and running linting on `src/`, `containers/`, and `scripts/` directories with a maximum line length of 120 characters. The **Run Tests** job executes all test suites in parallel using pytest with markers for different test types, including unit tests for data loading, background removal, web scraping, model training, and inference utilities; integration tests for pipeline component interactions; and end-to-end tests that verify the complete pipeline from data ingestion to inference. Tests are run using `pytest-xdist` for parallel execution, excluding slow tests that require external resources like GCS or GPU. The **Report Coverage** job generates and displays code coverage reports with a minimum requirement of 50%, producing reports in both HTML format (accessible via `CI/coverage_html/index.html`) and XML format (`CI/coverage.xml`) for integration with CI tools. The current coverage stands at 60.53%, exceeding the minimum requirement, and coverage results are uploaded as GitHub Actions artifacts and displayed in the CI summary. The **CI Summary** job aggregates all check results and provides a final status overview, ensuring all checks pass before code can be merged.
 
-![image](https://github.com/user-attachments/assets/84a4466c-37b0-4a95-8d0d-5e5be45805af)
-
-_Figure: CI Pipeline workflow overview showing all four jobs completed successfully_
-
-![image](https://github.com/user-attachments/assets/84666ccf-022d-49fe-bc1f-7044ab7393c8)
-
-_Figure: Build and Lint job execution steps and timing_
-
-<img width="1435" height="767" alt="image" src="https://github.com/user-attachments/assets/11fe2951-52ed-4838-b946-5af56b15f3b5" />
-
-_Figure: Detailed code coverage report with file-level statistics_
-
-![image](https://github.com/user-attachments/assets/93215b8e-fb93-4c31-91c2-9a2ebcb1fc29)
-
-_Figure: Coverage Report Summary and CI Pipeline Summary cards_
+<div style="display: flex; overflow-x: auto; gap: 10px; padding: 10px 0;">
+  <div style="flex: 0 0 auto; min-width: 400px;">
+    <img src="https://github.com/user-attachments/assets/84a4466c-37b0-4a95-8d0d-5e5be45805af" alt="CI Pipeline workflow overview" style="width: 100%; height: auto;" />
+    <p style="text-align: center; font-size: 0.9em; margin-top: 5px;"><em>CI Pipeline workflow overview</em></p>
+  </div>
+  <div style="flex: 0 0 auto; min-width: 400px;">
+    <img src="https://github.com/user-attachments/assets/84666ccf-022d-49fe-bc1f-7044ab7393c8" alt="Build and Lint job execution" style="width: 100%; height: auto;" />
+    <p style="text-align: center; font-size: 0.9em; margin-top: 5px;"><em>Build and Lint job execution</em></p>
+  </div>
+  <div style="flex: 0 0 auto; min-width: 400px;">
+    <img src="https://github.com/user-attachments/assets/11fe2951-52ed-4838-b946-5af56b15f3b5" alt="Code coverage report" style="width: 100%; height: auto;" />
+    <p style="text-align: center; font-size: 0.9em; margin-top: 5px;"><em>Code coverage report</em></p>
+  </div>
+  <div style="flex: 0 0 auto; min-width: 400px;">
+    <img src="https://github.com/user-attachments/assets/93215b8e-fb93-4c31-91c2-9a2ebcb1fc29" alt="Coverage and CI summary" style="width: 100%; height: auto;" />
+    <p style="text-align: center; font-size: 0.9em; margin-top: 5px;"><em>Coverage and CI summary</em></p>
+  </div>
+</div>
 
 ---
 
