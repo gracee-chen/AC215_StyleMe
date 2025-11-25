@@ -209,6 +209,8 @@ StyleMe follows a **containerized microservices architecture** with clear separa
 - **Reproducibility**: Versioned datasets and model checkpoints
 - **Testability**: Comprehensive test coverage (unit, integration, e2e)
 
+**Documentation**: See [Containerization Guide](CONTAINERIZATION.md) for detailed Docker setup and architecture.
+
 ---
 
 ### Section 2: APIs & Frontend
@@ -294,6 +296,10 @@ User Query Image
     ↓
 [JSON Response in results/{user_id}/]
 ```
+
+**Documentation**: 
+- [API Integration Guide](API_INTEGRATION.md) - Complete API and frontend integration documentation
+- [Inference Guide](containers/inference/INFERENCE_README.md) - Detailed inference system documentation
 
 ---
 
@@ -721,21 +727,4 @@ cat src/models/train/experiments/EXPERIMENT_SUMMARY.md
 - Stable training (no overfitting)
 - Successful test set evaluation
 
-**Documentation**: See `src/models/train/MODEL_FINE_TUNING.md` for complete fine-tuning guide.
-
----
-
-## Additional Resources
-
-### Documentation
-- [CI/CD Guide](CI/README.md) - Continuous integration setup
-- [Data Versioning Guide](data_versioning/README.md) - DVC workflow
-- [Model Fine-Tuning Guide](src/models/train/MODEL_FINE_TUNING.md) - Training documentation
-- [Inference Guide](containers/inference/INFERENCE_README.md) - Inference system documentation
-- [Containerization Guide](CONTAINERIZATION.md) - Docker setup
-- [API Integration Guide](API_INTEGRATION.md) - API and frontend integration
-
-### Project Structure
-- [Project Structure](#-project-structure) - Detailed directory layout
-- [Makefile](Makefile) - Available commands
-- [Docker Compose](docker-compose.yml) - Container configuration
+**Documentation**: See [Model Fine-Tuning Guide](src/models/train/MODEL_FINE_TUNING.md) for complete fine-tuning guide.
