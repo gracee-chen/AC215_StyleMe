@@ -216,7 +216,7 @@ User Query Image
 ```
 
 **Documentation**: 
-- [API Integration Guide](API_INTEGRATION.md) - Complete API and frontend integration documentation
+- [API Integration Guide](docs/api_integration.md) - Complete API and frontend integration documentation
 - [Inference Guide](containers/inference/INFERENCE_README.md) - Detailed inference system documentation
 
 ---

@@ -20,12 +20,37 @@ apply category-diversity filtering; optional filters (e.g., gender) can be
 applied as needed.
 
 ## Frontend Experience
+
 A mobile-first SPA built with React, TypeScript, Vite, Tailwind CSS, and Radix
 UI provides onboarding, a home dashboard with **Add Item**, a wardrobe-by-category
 view, item details with *Complete the Look*, and a recommendations screen.  
 The frontend communicates with preprocessing and inference endpoints over HTTPS
 to upload images, trigger indexing, and fetch recommendations, and implements
 clear loading/empty/error states and accessible UI patterns.
+
+### Screenshots
+
+The following screenshots demonstrate the key screens and user experience of the StyleMe application:
+
+#### Onboarding Screen
+
+<img src="images/onboarding_screen.png" alt="Onboarding Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+
+#### Home Screen
+
+<img src="images/home_screen.png" alt="Home Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+
+#### Wardrobe Screen
+
+<img src="images/wardrobe_screen.png" alt="Wardrobe Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+
+#### Item Details Screen
+
+<img src="images/item_details_screen.png" alt="Item Details Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+
+#### Recommendation Screen
+
+<img src="images/recommendation_screen.png" alt="Recommendation Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
 
 ## Storage & Reproducibility
 Raw sources remain in GCS, while artifacts (catalog/user FAISS indexes, Parquet
@@ -59,25 +84,38 @@ checkpoint and indexes, and applies the wardrobe-first, catalog-fallback
 strategy plus category diversity (and optional filters) during ranking.
 
 ## APIs & Interfaces
+
+### Inference Service
+
 The inference layer exposes a Python API (`InferenceService`) with:
 
-- `embed_image()`
-- `search_wardrobe()`
-- `search_catalog()`
-- `inference()` – returns JSON recommendations
+- `embed_image(image_path)` – generates 512-D normalized embeddings from images
+- `search_wardrobe(user_id, query_embedding, k)` – searches user's personal wardrobe FAISS index
+- `search_catalog(query_embedding, k, gender)` – searches global catalog FAISS index
+- `inference(user_id, query_image_path, ...)` – orchestrates wardrobe-first, catalog-fallback search and returns JSON recommendations
 
-For web integration, a thin HTTP adapter (e.g., FastAPI) mirrors these methods
-as REST endpoints.
+For web integration, a **Flask-based REST API** (`api_server.py`) wraps the `InferenceService` and provides the following HTTP endpoints:
 
-The preprocessing service provides an HTTP endpoint for image
-cleaning/resizing with optional background removal, then triggers embedding and
-upsert into the user’s FAISS index.
+- `GET /health` – health check endpoint
+- `POST /api/upload` – upload images to user's wardrobe (supports base64 and multipart/form-data)
+- `POST /api/recommend` – get style recommendations for a query image
+- `GET /api/wardrobe/<user_id>` – retrieve user's wardrobe items
+- `GET /api/wardrobe/<user_id>/image/<filename>` – serve wardrobe images
+- `POST /api/wardrobe/<user_id>/rebuild` – rebuild user's wardrobe FAISS index
 
-The ingestion service loads/refreshes catalog data in GCS and signals
-preprocessing.
+The API server runs on port 5000 (configurable via `PORT` environment variable) and is enabled with the `RUN_API_SERVER` environment variable. CORS is enabled for frontend communication.
 
-The training service exposes simple job-submission and status endpoints for
-long-running fine-tunes.
+### Preprocessing Service
+
+The preprocessing service runs as a **batch processing pipeline** (via `entrypoint.sh`) that performs background removal and image preprocessing. It processes data from the shared data directory and does not expose HTTP endpoints. Background removal is integrated into the inference pipeline when processing uploaded wardrobe images.
+
+### Ingestion Service
+
+The ingestion service runs as a **batch processing script** (via `entrypoint.sh`) that loads catalog data from Google Cloud Storage (GCS) into the shared data directory. It copies JSON metadata and images to the local filesystem for processing by downstream services. The service does not expose HTTP endpoints and is orchestrated via Docker Compose.
+
+### Training Service
+
+The training service runs as a **batch processing pipeline** (via `entrypoint.sh`) that executes model fine-tuning jobs. It processes training data from the shared data directory and saves model checkpoints to the experiments directory. The service does not expose HTTP endpoints for job submission or status; training is triggered via Docker Compose orchestration or direct script execution.
 
 ## Infrastructure & Configuration
 Docker Compose orchestrates services with shared volumes; the training service
