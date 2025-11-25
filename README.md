@@ -123,6 +123,21 @@ make logs                                      # Check logs
 
 ## Part II: Application Components
 
+### Documentation Index
+
+All detailed documentation for each component is available in the following guides:
+
+| Section | Topic | Documentation |
+|---------|-------|---------------|
+| Section 1 | App Design, Setup, and Code Organization | [Application Design Document](docs/Application%20design%20doc.md) |
+| Section 2 | APIs & Frontend | [API Integration Guide](docs/api_integration.md) |
+| Section 4 | Data Versioning and Reproducibility | [Data Versioning Guide](docs/data_versioning.md) |
+| Section 5 | Model Fine-Tuning | [Model Training Guide](docs/model_training.md) |
+
+**Note**: Each section below provides a brief overview. For complete details, methodology, usage instructions, and technical specifications, please refer to the corresponding documentation linked above.
+
+---
+
 ### Section 1: App Design, Setup, and Code Organization
 
 StyleMe follows a **containerized microservices architecture** with four specialized services (ingestion, preprocessing, training, and inference) that operate independently while maintaining seamless communication through Docker networking. The system processes fashion images through a pipeline that includes data collection, cleaning, model training, and real-time recommendation generation using FAISS-based similarity search. The user interface is a mobile-first React-based SPA built with TypeScript, Vite, and Tailwind CSS that allows users to upload wardrobe items, view their collections organized by category, and receive personalized fashion recommendations. The architecture emphasizes modularity, scalability, and reproducibility through versioned datasets and model checkpoints managed with DVC, with automated testing and code quality checks via CI/CD pipelines.
