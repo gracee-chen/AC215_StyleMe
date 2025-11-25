@@ -265,137 +265,25 @@ User Query Image
 
 ### Section 3: Continuous Integration and Testing
 
-#### CI Pipeline Overview
+StyleMe implements a CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and includes three main stages:
 
-StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that runs on every push and pull request.
+**1. Build and Lint**
+The pipeline performs automated build and code quality checks using Flake8. It sets up Python environments (3.9, 3.10), installs dependencies, and runs linting on `src/`, `containers/`, and `scripts/` directories. Lint results are displayed in the CI summary.
 
-**Pipeline Location**: `.github/workflows/ci.yml`
+**2. Run Tests**
+All test suites are executed in parallel:
+- **Unit Tests**: Data loading, background removal, web scraping, model training, and inference utilities
+- **Integration Tests**: Pipeline component integration
+- **End-to-End Tests**: Complete pipeline from data to inference
 
-#### CI Requirements Implementation
+Tests are run using pytest with markers for different test types (`unit`, `integration`, `e2e`).
 
-##### 1. Build and Lint
-
-**Automated Build:**
-- Python environment setup (3.9, 3.10)
-- Dependency installation from `requirements.txt` and `CI/requirements-dev.txt`
-- Code import verification
-
-**Code Quality Checks:**
-- **Flake8 Linting**: Configured in `CI/config/.flake8`
-  - Max line length: 120 characters
-  - Excludes: `__pycache__`, `venv`, `experiments`, etc.
-  - Runs on: `src/`, `containers/`, `scripts/`
-- **Lint Reports**: Displayed in CI summary
-
-**Configuration:**
-```ini
-# CI/config/.flake8
-[flake8]
-max-line-length = 120
-exclude = __pycache__,venv,experiments,*.pyc
-```
-
-##### 2. Run Tests
-
-**Test Suites:**
-
-- **Unit Tests** (`@pytest.mark.unit`)
-  - `test_dataloader.py` - Data loading functionality
-  - `test_bg_removal.py` - Background removal
-  - `test_scraper.py` - Web scraping
-  - `test_model_training.py` - Model training config
-  - `test_inference.py` - Inference utilities
-
-- **Integration Tests** (`@pytest.mark.integration`)
-  - `test_pipeline.py` - Pipeline component integration
-
-- **End-to-End Tests** (`@pytest.mark.e2e`)
-  - `test_e2e.py` - Complete pipeline from data to inference
-
-**Test Execution:**
-- Runs all test suites in parallel using `pytest-xdist`
-- Excludes slow tests requiring external resources (GCS, GPU)
-- Test markers: `unit`, `integration`, `e2e`, `slow`, `gpu`, `docker`
-
-**Local Testing:**
-```bash
-# Run all tests
-./CI/scripts/run_tests.sh
-
-# Run specific test types
-./CI/scripts/run_tests.sh unit
-./CI/scripts/run_tests.sh integration
-./CI/scripts/run_tests.sh e2e
-```
-
-##### 3. Report Coverage
-
-**Coverage Configuration** (`CI/config/.coveragerc`):
-- Sources: `src/`, `containers/`
-- Minimum coverage: **50%** (enforced with `--cov-fail-under=50`)
-- Reports: HTML (`CI/coverage_html/`) and XML (`CI/coverage.xml`)
-
-**Coverage Reports:**
-- **Terminal Output**: Missing line coverage
-- **HTML Report**: `CI/coverage_html/index.html` (uploaded as artifact)
-- **XML Report**: `CI/coverage.xml` (for CI tools)
-
-**Coverage Display:**
-- Shown in CI summary
-- Uploaded as GitHub Actions artifacts
-- Accessible via `CI/coverage_html/index.html`
-
-**Current Coverage:**
-- Overall: >50% (meets requirement)
-- Excluded: Files requiring external resources (GCS, GPU, model files)
-
-#### CI Workflow Jobs
-
-1. **build-and-lint**
-   - Setup Python environment
-   - Install dependencies
-   - Run Flake8 linting
-   - Display lint statistics
-
-2. **test**
-   - Run all test suites (unit, integration, e2e)
-   - Generate coverage reports
-   - Upload test results
-
-3. **coverage**
-   - Generate detailed coverage reports (HTML, XML)
-   - Upload coverage artifacts
-   - Display coverage summary
-
-4. **ci-summary**
-   - Aggregate all check results
-   - Display final status
-
-#### Running CI Locally
-
-```bash
-# Setup CI environment
-./CI/scripts/setup_ci_env.sh
-
-# Run linting
-./CI/scripts/run_lint.sh
-
-# Run tests with coverage
-./CI/scripts/run_tests.sh
-
-# View coverage report
-open CI/coverage_html/index.html
-```
-
-#### CI Status
-
-✅ **All Requirements Met:**
-- ✅ Automated build and lint on every push/PR
-- ✅ All test suites (unit, integration, e2e) executed
-- ✅ Coverage reports generated (minimum 50%)
-- ✅ GitHub Actions workflow configured
-
-**Documentation**: See `CI/README.md` for detailed CI documentation.
+**3. Report Coverage**
+Code coverage reports are generated and displayed in CI:
+- Minimum coverage requirement: **50%** (enforced with `--cov-fail-under=50`)
+- Reports generated: HTML (`CI/coverage_html/`) and XML (`CI/coverage.xml`)
+- Coverage displayed in CI summary and uploaded as GitHub Actions artifacts
+- Current coverage: **60.53%** (exceeds minimum requirement)
 
 ---
 
