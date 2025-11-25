@@ -227,19 +227,21 @@ StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that 
 
 <table>
 <tr>
-<td width="25%" style="padding: 5px;">
+<td width="50%" style="padding: 5px;">
   <img src="https://github.com/user-attachments/assets/84a4466c-37b0-4a95-8d0d-5e5be45805af" alt="CI Pipeline workflow overview" style="width: 100%;" />
   <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>CI Pipeline workflow overview</em></p>
 </td>
-<td width="25%" style="padding: 5px;">
+<td width="50%" style="padding: 5px;">
   <img src="https://github.com/user-attachments/assets/84666ccf-022d-49fe-bc1f-7044ab7393c8" alt="Build and Lint job execution" style="width: 100%;" />
   <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Build and Lint job execution</em></p>
 </td>
-<td width="25%" style="padding: 5px;">
+</tr>
+<tr>
+<td width="50%" style="padding: 5px;">
   <img src="https://github.com/user-attachments/assets/11fe2951-52ed-4838-b946-5af56b15f3b5" alt="Code coverage report" style="width: 100%;" />
   <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Code coverage report</em></p>
 </td>
-<td width="25%" style="padding: 5px;">
+<td width="50%" style="padding: 5px;">
   <img src="https://github.com/user-attachments/assets/93215b8e-fb93-4c31-91c2-9a2ebcb1fc29" alt="Coverage and CI summary" style="width: 100%;" />
   <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Coverage and CI summary</em></p>
 </td>
