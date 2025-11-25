@@ -68,76 +68,55 @@ This milestone focused on **production-ready deployment with comprehensive CI/CD
 
 ### Quick Start
 
-#### 1. Clone Repository
+**1. Clone Repository**
 ```bash
-git clone <repository-url>
-cd styleme9.0
+git clone <repository-url> && cd styleme9.0
 ```
 
-#### 2. Initial Setup
+**2. Initial Setup**
 ```bash
-# Create necessary directories
-make setup
-
-# Or manually:
-mkdir -p data logs catalog wardrobes queries results
+make setup  # Or manually: mkdir -p data logs catalog wardrobes queries results
 ```
 
-#### 3. Run Complete Pipeline
+**3. Run Complete Pipeline**
 ```bash
-# Build and run all services
-make run
-
-# Or using docker compose directly
-docker compose --profile pipeline up --build
+make run  # Or: docker compose --profile pipeline up --build
 ```
 
-#### 4. Run Individual Services
+**4. Run Individual Services**
 ```bash
 make run-ingestion      # Data collection only
-make run-preprocessing # Data processing only
-make run-training      # Model training only
-make run-inference     # Inference only
+make run-preprocessing  # Data processing only
+make run-training       # Model training only
+make run-inference      # Inference only
 ```
 
 ### Fine-Tuning Model
 
 ```bash
-# Navigate to training directory
 cd src/models/train
-
-# Run fine-tuning with data version
-python run_fine_tuning.py \
-    --config fine_tune_config.py \
-    --data-version catalog-v_men_women_20251123
+python run_fine_tuning.py --config fine_tune_config.py --data-version catalog-v_men_women_20251123
 ```
-
 **Note**: GPU is required for fine-tuning. The script will exit if GPU is not available.
 
 ### Running Inference
 
 ```bash
-# Run inference for specific user query
+# Using Makefile
 make infer USER=grace QUERY=grace_query_01 THRESHOLD=0.3 GENDER=women
 
-# Or manually:
+# Or manually
 docker compose run inference python /app/inference_service.py \
-    --user-id user_001 \
-    --query /app/queries/user_001/req_001/query.jpg \
+    --user-id user_001 --query /app/queries/user_001/req_001/query.jpg \
     --output /app/results/user_001/req_001.json
 ```
 
 ### View Results
 
 ```bash
-# Check inference results
-cat results/user_001/req_001.json
-
-# View training experiments
-ls src/models/train/experiments/
-
-# Check logs
-make logs
+cat results/user_001/req_001.json              # Check inference results
+ls src/models/train/experiments/               # View training experiments
+make logs                                      # Check logs
 ```
 
 ---
