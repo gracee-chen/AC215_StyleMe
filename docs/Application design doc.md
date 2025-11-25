@@ -78,3 +78,16 @@ preprocessing.
 
 The training service exposes simple job-submission and status endpoints for
 long-running fine-tunes.
+
+## Infrastructure & Configuration
+Docker Compose orchestrates services with shared volumes; the training service
+uses GPU resources (NVIDIA CUDA) with ~2GB shared memory, and inference
+auto-detects CPU/GPU. Configuration relies on environment variables (e.g.,
+GCS bucket, project ID, data prefixes) to avoid hard-coded credentials and
+support flexible, secure deployments.
+
+## Design Patterns
+Microservice isolation defines clear service boundaries; dependency injection
+is implemented via environment variables; factory patterns are used for
+dataset/model construction; and a strategy pattern powers the two-tier search
+(flow from wardrobe to catalog) with a thresholded fallback.
