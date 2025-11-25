@@ -289,6 +289,8 @@ _Figure: Coverage Report Summary and CI Pipeline Summary cards_
 
 StyleMe implements **DVC (Data Version Control)** for managing datasets, model checkpoints, and large artifacts to ensure reproducibility and track data lineage throughout the project lifecycle. The system versions three types of artifacts: catalog indices (FAISS indices, embeddings, and metadata generated from GCS source data via `build_catalog_index.py`), user wardrobes (per-user FAISS indices and embeddings), and model checkpoints (trained model weights automatically linked to the data versions used during training). Source data in Google Cloud Storage (`gs://styleme-data-bucket/`) is tracked via metadata snapshots in `manifest.json`, which record which GCS files were used, track gender filters (men/women/all), and maintain history of data states. The versioning system operates at three levels: Git commits for every data change, Git tags for named milestones (e.g., `catalog-v_men_women_20251123`), and GCS snapshots for source data state. Each experiment record includes the data version reference, GCS snapshot tag, full configuration (hyperparameters, model settings), and training results, enabling complete reproducibility by linking model versions to training configs to catalog versions to GCS source state.
 
+
+
 **Documentation**: See [Data Versioning Guide](docs/data_versioning.md) for complete methodology, usage instructions, and reproducibility workflow.
 
 ---
