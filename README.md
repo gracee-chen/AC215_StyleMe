@@ -267,19 +267,19 @@ User Query Image
 
 StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and executes four sequential jobs to ensure code quality and reliability. The **Build and Lint** job performs automated build verification and code quality checks using Flake8, setting up Python 3.10 environments, installing system and Python dependencies from `requirements.txt` and `CI/requirements-dev.txt`, and running linting on `src/`, `containers/`, and `scripts/` directories with a maximum line length of 120 characters. The **Run Tests** job executes all test suites in parallel using pytest with markers for different test types, including unit tests for data loading, background removal, web scraping, model training, and inference utilities; integration tests for pipeline component interactions; and end-to-end tests that verify the complete pipeline from data ingestion to inference. Tests are run using `pytest-xdist` for parallel execution, excluding slow tests that require external resources like GCS or GPU. The **Report Coverage** job generates and displays code coverage reports with a minimum requirement of 50%, producing reports in both HTML format (accessible via `CI/coverage_html/index.html`) and XML format (`CI/coverage.xml`) for integration with CI tools. The current coverage stands at 60.53%, exceeding the minimum requirement, and coverage results are uploaded as GitHub Actions artifacts and displayed in the CI summary. The **CI Summary** job aggregates all check results and provides a final status overview, ensuring all checks pass before code can be merged.
 
-![CI Pipeline Overview](path/to/ci_pipeline_overview.png)
+![image](https://github.com/user-attachments/assets/84a4466c-37b0-4a95-8d0d-5e5be45805af)
 
 _Figure: CI Pipeline workflow overview showing all four jobs completed successfully_
 
-![Build and Lint Job Details](path/to/build_and_lint_details.png)
+![image](https://github.com/user-attachments/assets/84666ccf-022d-49fe-bc1f-7044ab7393c8)
 
 _Figure: Build and Lint job execution steps and timing_
 
-![Coverage Report Details](path/to/coverage_report_details.png)
+<img width="1435" height="767" alt="image" src="https://github.com/user-attachments/assets/11fe2951-52ed-4838-b946-5af56b15f3b5" />
 
 _Figure: Detailed code coverage report with file-level statistics_
 
-![Coverage and CI Summary Cards](path/to/coverage_ci_summary_cards.png)
+![image](https://github.com/user-attachments/assets/93215b8e-fb93-4c31-91c2-9a2ebcb1fc29)
 
 _Figure: Coverage Report Summary and CI Pipeline Summary cards_
 
@@ -289,7 +289,10 @@ _Figure: Coverage Report Summary and CI Pipeline Summary cards_
 
 StyleMe implements **DVC (Data Version Control)** for managing datasets, model checkpoints, and large artifacts to ensure reproducibility and track data lineage throughout the project lifecycle. The system versions three types of artifacts: catalog indices (FAISS indices, embeddings, and metadata generated from GCS source data via `build_catalog_index.py`), user wardrobes (per-user FAISS indices and embeddings), and model checkpoints (trained model weights automatically linked to the data versions used during training). Source data in Google Cloud Storage (`gs://styleme-data-bucket/`) is tracked via metadata snapshots in `manifest.json`, which record which GCS files were used, track gender filters (men/women/all), and maintain history of data states. The versioning system operates at three levels: Git commits for every data change, Git tags for named milestones (e.g., `catalog-v_men_women_20251123`), and GCS snapshots for source data state. Each experiment record includes the data version reference, GCS snapshot tag, full configuration (hyperparameters, model settings), and training results, enabling complete reproducibility by linking model versions to training configs to catalog versions to GCS source state.
 
-![Data Versioning](path/to/data_versioning.png)
+![image](https://github.com/user-attachments/assets/2ab5a9b8-f1cc-4dc7-afdf-7a02ab75c1d8)
+
+_Figure: DVC overview_
+
 
 **Documentation**: See [Data Versioning Guide](docs/data_versioning.md) for complete methodology, usage instructions, and reproducibility workflow.
 
