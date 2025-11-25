@@ -732,8 +732,8 @@ cat src/models/train/experiments/EXPERIMENT_SUMMARY.md
 - [Data Versioning Guide](data_versioning/README.md) - DVC workflow
 - [Model Fine-Tuning Guide](src/models/train/MODEL_FINE_TUNING.md) - Training documentation
 - [Inference Guide](containers/inference/INFERENCE_README.md) - Inference system documentation
-- [Containerization Guide](docs/CONTAINERIZATION.md) - Docker setup
-- [API Integration Guide](docs/API_INTEGRATION.md) - API and frontend integration
+- [Containerization Guide](CONTAINERIZATION.md) - Docker setup
+- [API Integration Guide](API_INTEGRATION.md) - API and frontend integration
 
 ### Project Structure
 - [Project Structure](#-project-structure) - Detailed directory layout
