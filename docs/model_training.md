@@ -92,20 +92,7 @@ The fine-tuning configuration aims to improve upon baseline performance through:
 
 ### Deployment Considerations
 
-**Advantages:**
-- Better fashion compatibility understanding
-- Improved recommendation quality
-- Higher user satisfaction
-
-**Challenges:**
-- Model size: ~150MB per checkpoint
-- Catalog index rebuild required if feature space changes
-- Need rollback strategy if performance degrades
-
-**Rollback Strategy:**
-- Keep baseline model available
-- Model versioning enables easy switching between versions
-- Can quickly revert if fine-tuned model underperforms
+Fine-tuned models provide better fashion compatibility understanding and improved recommendation quality, leading to higher user satisfaction. However, deployment presents challenges: each checkpoint is ~150MB, and significant feature space changes require catalog index rebuilds. A rollback strategy is essential, keeping the baseline model available and leveraging DVC versioning for easy switching between model versions if the fine-tuned model underperforms in production.
 
 ### Performance Targets
 
