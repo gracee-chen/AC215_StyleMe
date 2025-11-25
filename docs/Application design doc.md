@@ -22,7 +22,7 @@ applied as needed.
 ## Frontend Experience
 
 A mobile-first SPA built with React, TypeScript, Vite, Tailwind CSS, and Radix
-UI provides onboarding, a home dashboard with **Add Item**, a wardrobe-by-category
+UI provides onboarding, a home dashboard with Add Item, a wardrobe-by-category
 view, item details with *Complete the Look*, and a recommendations screen.  
 The frontend communicates with preprocessing and inference endpoints over HTTPS
 to upload images, trigger indexing, and fetch recommendations, and implements
@@ -32,25 +32,37 @@ clear loading/empty/error states and accessible UI patterns.
 
 The following screenshots demonstrate the key screens and user experience of the StyleMe application:
 
-#### Onboarding Screen
+<table>
+<tr>
+<td style="text-align: center; padding: 10px; width: 20%;">
+  <img src="images/onboarding_screen.png" alt="Onboarding Screen" style="width: 200px; height: auto; max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block; margin: 0 auto;" />
+  <p style="margin-top: 8px; font-size: 0.85em; color: #666;"><strong>Onboarding</strong></p>
+</td>
+<td style="text-align: center; padding: 10px; width: 20%;">
+  <img src="images/home_screen.png" alt="Home Screen" style="width: 200px; height: auto; max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block; margin: 0 auto;" />
+  <p style="margin-top: 8px; font-size: 0.85em; color: #666;"><strong>Home</strong></p>
+</td>
+<td style="text-align: center; padding: 10px; width: 20%;">
+  <img src="images/wardrobe_screen.png" alt="Wardrobe Screen" style="width: 200px; height: auto; max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block; margin: 0 auto;" />
+  <p style="margin-top: 8px; font-size: 0.85em; color: #666;"><strong>Wardrobe</strong></p>
+</td>
+<td style="text-align: center; padding: 10px; width: 20%;">
+  <img src="images/item_details_screen.png" alt="Item Details Screen" style="width: 200px; height: auto; max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block; margin: 0 auto;" />
+  <p style="margin-top: 8px; font-size: 0.85em; color: #666;"><strong>Item Details</strong></p>
+</td>
+<td style="text-align: center; padding: 10px; width: 20%;">
+  <img src="images/recommendation_screen.png" alt="Recommendation Screen" style="width: 200px; height: auto; max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: block; margin: 0 auto;" />
+  <p style="margin-top: 8px; font-size: 0.85em; color: #666;"><strong>Recommendations</strong></p>
+</td>
+</tr>
+</table>
 
-<img src="images/onboarding_screen.png" alt="Onboarding Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-
-#### Home Screen
-
-<img src="images/home_screen.png" alt="Home Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-
-#### Wardrobe Screen
-
-<img src="images/wardrobe_screen.png" alt="Wardrobe Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-
-#### Item Details Screen
-
-<img src="images/item_details_screen.png" alt="Item Details Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
-
-#### Recommendation Screen
-
-<img src="images/recommendation_screen.png" alt="Recommendation Screen" width="400" style="display: block; margin: 20px auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />
+**Screen Descriptions:**
+- **Onboarding**: Welcome screen introducing users to the StyleMe app
+- **Home**: Main dashboard showing recent clothing items with "Add Item" functionality
+- **Wardrobe**: Complete wardrobe view organized by category (tops, bottoms, shoes, etc.)
+- **Item Details**: Detailed view of a clothing item with options to "Complete the Look" or delete
+- **Recommendations**: AI-powered outfit suggestions based on selected items, showing compatibility scores
 
 ## Storage & Reproducibility
 Raw sources remain in GCS, while artifacts (catalog/user FAISS indexes, Parquet
