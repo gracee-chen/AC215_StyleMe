@@ -13,20 +13,35 @@ StyleMe is an AI-powered personal wardrobe stylist that helps users create cohes
 
 ```
 StyleMe/
-├── containers/          # Docker services (ingestion, preprocessing, training, inference)
-├── src/                 # Core source code
-│   ├── datapipeline/    # Data processing and loading
-│   └── models/          # Model training and evaluation
-├── CI/                  # CI/CD pipeline and tests
-├── data_versioning/     # DVC configuration and management
-├── scripts/             # Utility scripts
-├── catalog/             # Versioned FAISS catalog indices
-├── wardrobes/           # User wardrobe data
-├── queries/             # User input queries
-├── results/             # Inference output results
-├── docs/                # Documentation
-├── docker-compose.yml   # Container orchestration
-├── Makefile            # Build and run commands
+├── containers/                   # Docker container definitions
+│   ├── ingestion/               # Data collection service
+│   ├── preprocessing/           # Data cleaning service
+│   ├── training/                # Model training service
+│   └── inference/               # Inference service
+├── src/                          
+│   ├── datapipeline/             # Data processing module
+│   │   ├── dataloader.py         # Dataset and DataLoader
+│   │   └── bg_removal/           # Background removal
+│   └── models/                   # Model training and inference
+│       ├── train/                # Training module
+│       │   ├── run_fine_tuning.py # Fine-tuning script
+│       │   ├── fine_tune_config.py # Fine-tuning configuration
+│       │   └── experiments/      # Experiment results
+│       └── eval/                 # Evaluation rubrics
+├── CI/                          # CI/CD configuration
+│   ├── tests/                    # Test suites (unit, integration, e2e)
+│   └── scripts/                 # CI helper scripts
+├── data_versioning/             # DVC configuration
+│   ├── dvc_manager.py           # DVC management script
+│   └── gcs_snapshot_tracker.py  # GCS snapshot tracking
+├── scripts/                     # Utility scripts
+├── catalog/                     # FAISS catalog indices (versioned)
+├── wardrobes/                   # User uploaded wardrobes
+├── queries/                     # User input queries
+├── results/                     # Inference output results
+├── docs/                        # Documentation
+├── docker-compose.yml           # Container orchestration
+├── Makefile                     # Build and run commands
 └── README.md
 ```
 
