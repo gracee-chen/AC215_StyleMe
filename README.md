@@ -58,9 +58,11 @@ StyleMe/
 │   ├── dvc_manager.py           # DVC management script
 │   ├── gcs_snapshot_tracker.py  # GCS snapshot tracking
 │   └── README.md                # Data versioning guide
-├── install_nvidia_driver.sh     # GPU driver installation
-├── cuda_installer.py            # CUDA setup automation
-├── install_gpu_driver.py        # GPU driver management
+├── scripts/                     # Utility scripts
+│   ├── install_nvidia_driver.sh # GPU driver installation
+│   ├── cuda_installer.py        # CUDA setup automation
+│   ├── install_gpu_driver.py    # GPU driver management
+│   └── ...                      # Other utility scripts
 ├── docker-compose.yml           # Container orchestration
 ├── Makefile                     # Build and run commands
 └── README.md
