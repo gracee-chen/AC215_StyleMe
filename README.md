@@ -265,10 +265,18 @@ User Query Image
 
 ### Section 3: Continuous Integration and Testing
 
-StyleMe implements a CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and includes three main stages:
+StyleMe implements a CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and executes four jobs in sequence: Build and Lint, Run Tests, Report Coverage, and CI Summary.
+
+![CI Pipeline Overview](path/to/ci_pipeline_overview.png)
+
+_Figure: CI Pipeline Summary showing workflow triggered via push, with all four jobs (Build and Lint: 3m 44s, Run Tests: 3m 47s, Report Coverage: 2m 24s, CI Summary: 3s) completed successfully. Total duration: 6m 24s_
 
 **1. Build and Lint**
-The pipeline performs automated build and code quality checks using Flake8. It sets up Python environments (3.9, 3.10), installs dependencies, and runs linting on `src/`, `containers/`, and `scripts/` directories. Lint results are displayed in the CI summary.
+The pipeline performs automated build and code quality checks using Flake8. It sets up Python 3.10 environment, installs system and Python dependencies, and runs Flake8 linting on `src/`, `containers/`, and `scripts/` directories. The job includes steps for code checkout, disk cleanup, dependency installation, and code formatting checks.
+
+![Build and Lint Job Details](path/to/build_and_lint_details.png)
+
+_Figure: Build and Lint job execution showing detailed steps: Set up job (1s), Checkout code (1s), Clean up disk space (1m 21s), Set up Python 3.10 (8s), Install system dependencies (12s), Install Python dependencies (1m 55s), Run Flake8 linting (2s), Check code formatting (1s). Total duration: 3m 44s_
 
 **2. Run Tests**
 All test suites are executed in parallel:
@@ -276,14 +284,23 @@ All test suites are executed in parallel:
 - **Integration Tests**: Pipeline component integration
 - **End-to-End Tests**: Complete pipeline from data to inference
 
-Tests are run using pytest with markers for different test types (`unit`, `integration`, `e2e`).
+Tests are run using pytest with markers for different test types (`unit`, `integration`, `e2e`). The test job runs in parallel with Build and Lint, taking approximately 3m 47s.
 
 **3. Report Coverage**
-Code coverage reports are generated and displayed in CI:
+Code coverage reports are generated and displayed in CI. The coverage job generates detailed reports showing file-level statistics and overall coverage percentage.
+
+![Coverage Report Details](path/to/coverage_report_details.png)
+
+_Figure: Report Coverage job showing detailed coverage output with file-level statistics (e.g., background_removal.py: 47.62%, extract_images.py: 68.94%), total coverage of 60.53%, and summary indicating "Required test coverage of 50% reached. Total coverage: 60.53%". Reports generated: XML (CI/coverage.xml) and HTML (CI/coverage_html/)_
+
 - Minimum coverage requirement: **50%** (enforced with `--cov-fail-under=50`)
 - Reports generated: HTML (`CI/coverage_html/`) and XML (`CI/coverage.xml`)
 - Coverage displayed in CI summary and uploaded as GitHub Actions artifacts
 - Current coverage: **60.53%** (exceeds minimum requirement)
+
+![Coverage and CI Summary Cards](path/to/coverage_ci_summary_cards.png)
+
+_Figure: Coverage Report Summary card showing coverage reports generated (XML: CI/coverage.xml, HTML: CI/coverage_html/) with minimum coverage requirement of 50%. CI Pipeline Summary card showing all checks passed: Build and Lint: success, Tests: success, Coverage: success, with note "All checks must pass for merge"_
 
 ---
 
