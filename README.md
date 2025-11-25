@@ -7,7 +7,7 @@ Chufei Peng, Grace Chen, Siyao Zhu, Angel Chen
 StyleMe
 
 ## Project Description
-In this project, we aim to develop an AI-powered personal wardrobe stylist that helps users create cohesive outfits from their existing wardrobes. The system leverages curated product data and compatibility information ("complete the look") to learn relationships between clothing items. It integrates a data-cleaning and caption-generation pipeline with a FashionCLIP-based compatibility model to recommend matching items. The goal is to provide an intelligent outfit suggestion tool that understands real-world style relationships and personalizes recommendations based on visual and textual cues.
+StyleMe is an AI-powered personal wardrobe stylist that helps users create cohesive outfits from their existing wardrobes. The system uses a fine-tuned FashionCLIP model to learn fashion compatibility relationships from curated product data and "complete the look" information. By integrating data processing pipelines with deep learning-based recommendation algorithms, StyleMe provides intelligent outfit suggestions that understand real-world style relationships and personalize recommendations based on visual and textual features.
 
 ## 📁 Project Structure
 
@@ -74,13 +74,7 @@ Our system follows a containerized microservices architecture with four speciali
 
 ## Milestone 4 Overview
 
-This milestone focused on **production-ready deployment with comprehensive CI/CD, data versioning, and model fine-tuning**. We implemented:
-
-- ✅ **CI/CD Pipeline**: Automated testing, linting, and coverage reporting (GitHub Actions)
-- ✅ **Data Versioning**: DVC-based version control for datasets and models
-- ✅ **Model Fine-Tuning**: Optimized training pipeline with experiment tracking
-- ✅ **I/O Optimization**: Prevented SSH disconnection during training
-- ✅ **Documentation**: Comprehensive guides for all components
+This milestone focused on **production-ready deployment with comprehensive CI/CD, data versioning, and model fine-tuning**. We implemented a complete CI/CD pipeline using GitHub Actions for automated testing, linting, and coverage reporting. We established a robust data versioning system using DVC to manage datasets and model checkpoints, ensuring reproducibility throughout the project lifecycle. Additionally, we developed an optimized model fine-tuning pipeline with comprehensive experiment tracking, enabling systematic model improvement and deployment.
 
 ---
 
