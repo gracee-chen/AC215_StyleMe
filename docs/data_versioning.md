@@ -4,6 +4,10 @@
 
 StyleMe uses **DVC (Data Version Control)** to version locally generated data artifacts, ensuring reproducibility and tracking data lineage throughout the project lifecycle.
 
+![Data Versioning Workflow](https://github.com/user-attachments/assets/2ab5a9b8-f1cc-4dc7-afdf-7a02ab75c1d8)
+
+_Figure: Data versioning workflow with DVC_
+
 ## Methodology
 
 ### Justification (Why DVC?)
