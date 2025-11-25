@@ -721,7 +721,7 @@ cat src/models/train/experiments/EXPERIMENT_SUMMARY.md
 - Stable training (no overfitting)
 - Successful test set evaluation
 
-**Documentation**: See `MODEL_FINE_TUNING.md` for complete fine-tuning guide.
+**Documentation**: See `src/models/train/MODEL_FINE_TUNING.md` for complete fine-tuning guide.
 
 ---
 
@@ -730,9 +730,10 @@ cat src/models/train/experiments/EXPERIMENT_SUMMARY.md
 ### Documentation
 - [CI/CD Guide](CI/README.md) - Continuous integration setup
 - [Data Versioning Guide](data_versioning/README.md) - DVC workflow
-- [Model Fine-Tuning Guide](MODEL_FINE_TUNING.md) - Training documentation
-- [Inference Guide](INFERENCE_README.md) - Inference system documentation
-- [Containerization Guide](CONTAINERIZATION.md) - Docker setup
+- [Model Fine-Tuning Guide](src/models/train/MODEL_FINE_TUNING.md) - Training documentation
+- [Inference Guide](containers/inference/INFERENCE_README.md) - Inference system documentation
+- [Containerization Guide](docs/CONTAINERIZATION.md) - Docker setup
+- [API Integration Guide](docs/API_INTEGRATION.md) - API and frontend integration
 
 ### Project Structure
 - [Project Structure](#-project-structure) - Detailed directory layout
