@@ -6,18 +6,11 @@ StyleMe uses **DVC (Data Version Control)** to version locally generated data ar
 
 ## Methodology
 
-### Why DVC?
+### Justification (Why DVC?)
 
-**Justification:**
-- **Git-friendly**: Works alongside Git without bloating repositories (stores metadata in Git, data in remote storage)
-- **Large file support**: Handles datasets and model checkpoints efficiently
-- **Efficient**: Content-addressable storage with automatic deduplication
-- **Reproducibility**: Links code versions to data versions, ensuring full traceability
-- **GCS Integration**: Tracks source data state in Google Cloud Storage via metadata snapshots
-- **Flexibility**: Supports local and remote storage backends (GCS, S3, local)
+DVC is used in StyleMe because it integrates seamlessly with Git without bloating the repository, storing only lightweight metadata in Git while keeping actual data in remote storage. It is designed to handle large files, making it ideal for datasets, embeddings, and model checkpoints. Its content-addressable storage and automatic deduplication make it efficient and scalable as the project grows. Most importantly, DVC provides strong reproducibility by linking each code version to a corresponding data version, enabling full data lineage and traceability across experiments. It also works smoothly with Google Cloud Storage, allowing StyleMe to track the state of source data through manifest snapshots. Overall, DVC offers flexible support for both local and cloud-based storage backends, giving the project a reliable and maintainable data-versioning workflow.
 
-**Alternative Considered**: Git LFS
-- **Rejected**: Less flexible for ML workflows, requires additional setup, and doesn't provide the same level of data lineage tracking as DVC
+An alternative considered was Git LFS, but it was ultimately rejected because it lacks the ML-workflow-centric features DVC provides. Git LFS also requires additional setup and does not offer comparable data lineage tracking, making it less suitable for the needs of the StyleMe pipeline.
 
 ### Data Architecture
 
