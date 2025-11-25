@@ -265,15 +265,31 @@ User Query Image
 
 ### Section 3: Continuous Integration and Testing
 
-StyleMe implements a CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and executes four jobs: Build and Lint (automated build and Flake8 code quality checks), Run Tests (unit, integration, and end-to-end test suites), Report Coverage (generates and displays code coverage reports with minimum 50% requirement), and CI Summary (aggregates all check results). All test suites are executed in parallel using pytest, and coverage reports are generated in both HTML and XML formats, uploaded as GitHub Actions artifacts, and displayed in the CI summary.
+StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request. The pipeline is configured in `.github/workflows/ci.yml` and executes four sequential jobs to ensure code quality and reliability.
+
+The **Build and Lint** job performs automated build verification and code quality checks using Flake8. It sets up Python 3.10 environments, installs system and Python dependencies from `requirements.txt` and `CI/requirements-dev.txt`, and runs linting on `src/`, `containers/`, and `scripts/` directories with a maximum line length of 120 characters. Lint results are displayed in the CI summary for immediate feedback.
+
+The **Run Tests** job executes all test suites in parallel using pytest with markers for different test types. This includes unit tests for data loading, background removal, web scraping, model training, and inference utilities; integration tests for pipeline component interactions; and end-to-end tests that verify the complete pipeline from data ingestion to inference. Tests are run using `pytest-xdist` for parallel execution, excluding slow tests that require external resources like GCS or GPU.
+
+The **Report Coverage** job generates and displays code coverage reports with a minimum requirement of 50%. Coverage reports are generated in both HTML format (accessible via `CI/coverage_html/index.html`) and XML format (`CI/coverage.xml`) for integration with CI tools. The current coverage stands at 60.53%, exceeding the minimum requirement. Coverage results are uploaded as GitHub Actions artifacts and displayed in the CI summary.
+
+The **CI Summary** job aggregates all check results and provides a final status overview, ensuring all checks pass before code can be merged.
 
 ![CI Pipeline Overview](path/to/ci_pipeline_overview.png)
 
+_Figure: CI Pipeline workflow overview showing all four jobs completed successfully_
+
 ![Build and Lint Job Details](path/to/build_and_lint_details.png)
+
+_Figure: Build and Lint job execution steps and timing_
 
 ![Coverage Report Details](path/to/coverage_report_details.png)
 
+_Figure: Detailed code coverage report with file-level statistics_
+
 ![Coverage and CI Summary Cards](path/to/coverage_ci_summary_cards.png)
+
+_Figure: Coverage Report Summary and CI Pipeline Summary cards_
 
 ---
 
