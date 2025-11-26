@@ -1,24 +1,40 @@
-# Application Architecture
+# Solution Architecture
 
-## Overall Architecture
-
-StyleMe 9.0 is a containerized microservices system with four specialized services (ingestion, preprocessing, training, and inference) connected via Docker networking. The system processes fashion images through a pipeline that includes data collection, cleaning, model training, and real-time recommendation generation using FAISS-based similarity search.
+## System Overview
+StyleMe 9.0 is a containerized microservices system with four services  
+(ingestion, preprocessing, training, and inference) connected via a Docker
+network and runnable independently or as a full pipeline with Docker Compose.
 
 <img src="https://github.com/user-attachments/assets/f5d10522-d1d4-4e97-a48a-c5fdbc533687" alt="Application architecture overview" style="width: 100%; max-width: 800px;" />
 
-**Application Architecture Overview**: This diagram illustrates the high-level solution architecture, showing how the four microservices interact within the containerized environment. Each service handles a specific stage of the fashion recommendation pipeline, emphasizing modularity and scalability.
+**Application Architecture Overview**: This diagram illustrates the high-level solution architecture of StyleMe, showing how the four microservices (ingestion, preprocessing, training, and inference) interact within the containerized environment. The architecture demonstrates the separation of concerns, with each service handling a specific stage of the fashion recommendation pipeline. The design emphasizes modularity and scalability, allowing services to be developed, deployed, and scaled independently while maintaining seamless communication through Docker networking.
 
-### Data Flow
-Source data (~13k product images + JSON) resides in Google Cloud Storage (GCS) and is transformed into triplet datasets for model training. After training, the system generates 512-D normalized embeddings for catalog and user wardrobe items and persists them in FAISS indexes for fast similarity search.
+## Data Flow
+Source data (~13k product images + JSON) resides in Google Cloud Storage (GCS)  
+and is transformed into triplet datasets for model training. After training,  
+the system generates 512-D normalized embeddings for catalog and user wardrobe
+items and persists them in FAISS indexes for fast similarity search.
 
-### Recommendation Flow
-For a query item, the inference service embeds the image and first searches the user's wardrobe FAISS index. If no result exceeds a 0.7 similarity threshold (or no candidates exist), it falls back to the global catalog FAISS index. Responses include product metadata (title, brand, price, URL) and apply category-diversity filtering; optional filters (e.g., gender) can be applied as needed.
+## Recommendation Flow
+For a query item, the inference service embeds the image and first searches
+the user's wardrobe FAISS index. If no result exceeds a 0.7 similarity
+threshold (or no candidates exist), it falls back to the global catalog
+FAISS index. Responses include product metadata (title, brand, price, URL) and
+apply category-diversity filtering; optional filters (e.g., gender) can be
+applied as needed.
 
-## User Interface
+## Frontend Experience
 
-A mobile-first SPA built with React, TypeScript, Vite, Tailwind CSS, and Radix UI provides a comprehensive fashion styling experience. The frontend communicates with preprocessing and inference endpoints over HTTPS to upload images, trigger indexing, and fetch recommendations, implementing clear loading/empty/error states and accessible UI patterns.
+A mobile-first SPA built with React, TypeScript, Vite, Tailwind CSS, and Radix
+UI provides onboarding, a home dashboard with Add Item, a wardrobe-by-category
+view, item details with *Complete the Look*, and a recommendations screen.  
+The frontend communicates with preprocessing and inference endpoints over HTTPS
+to upload images, trigger indexing, and fetch recommendations, and implements
+clear loading/empty/error states and accessible UI patterns.
 
-### Key Screens
+### Screenshots
+
+The following screenshots demonstrate the key screens and user experience of the StyleMe application:
 
 <table>
 <tr>
@@ -102,10 +118,47 @@ strategy plus category diversity (and optional filters) during ranking.
 
 ## APIs & Interfaces
 
-The inference service exposes a Python API (`InferenceService`) for embedding generation, wardrobe/catalog search, and recommendation orchestration. A Flask-based REST API (`api_server.py`) wraps the service and provides HTTP endpoints for image upload, recommendations, and wardrobe management. The preprocessing, ingestion, and training services run as batch processing pipelines without HTTP endpoints, orchestrated via Docker Compose.
+### Inference Service
+
+The inference layer exposes a Python API (`InferenceService`) with:
+
+- `embed_image(image_path)` – generates 512-D normalized embeddings from images
+- `search_wardrobe(user_id, query_embedding, k)` – searches user's personal wardrobe FAISS index
+- `search_catalog(query_embedding, k, gender)` – searches global catalog FAISS index
+- `inference(user_id, query_image_path, ...)` – orchestrates wardrobe-first, catalog-fallback search and returns JSON recommendations
+
+For web integration, a **Flask-based REST API** (`api_server.py`) wraps the `InferenceService` and provides the following HTTP endpoints:
+
+- `GET /health` – health check endpoint
+- `POST /api/upload` – upload images to user's wardrobe (supports base64 and multipart/form-data)
+- `POST /api/recommend` – get style recommendations for a query image
+- `GET /api/wardrobe/<user_id>` – retrieve user's wardrobe items
+- `GET /api/wardrobe/<user_id>/image/<filename>` – serve wardrobe images
+- `POST /api/wardrobe/<user_id>/rebuild` – rebuild user's wardrobe FAISS index
+
+The API server runs on port 5000 (configurable via `PORT` environment variable) and is enabled with the `RUN_API_SERVER` environment variable. CORS is enabled for frontend communication.
+
+### Preprocessing Service
+
+The preprocessing service runs as a **batch processing pipeline** (via `entrypoint.sh`) that performs background removal and image preprocessing. It processes data from the shared data directory and does not expose HTTP endpoints. Background removal is integrated into the inference pipeline when processing uploaded wardrobe images.
+
+### Ingestion Service
+
+The ingestion service runs as a **batch processing script** (via `entrypoint.sh`) that loads catalog data from Google Cloud Storage (GCS) into the shared data directory. It copies JSON metadata and images to the local filesystem for processing by downstream services. The service does not expose HTTP endpoints and is orchestrated via Docker Compose.
+
+### Training Service
+
+The training service runs as a **batch processing pipeline** (via `entrypoint.sh`) that executes model fine-tuning jobs. It processes training data from the shared data directory and saves model checkpoints to the experiments directory. The service does not expose HTTP endpoints for job submission or status; training is triggered via Docker Compose orchestration or direct script execution.
 
 ## Infrastructure & Configuration
-Docker Compose orchestrates services with shared volumes. The training service uses GPU resources (NVIDIA CUDA), while inference auto-detects CPU/GPU. Configuration relies on environment variables to avoid hard-coded credentials and support flexible deployments.
+Docker Compose orchestrates services with shared volumes; the training service
+uses GPU resources (NVIDIA CUDA) with ~2GB shared memory, and inference
+auto-detects CPU/GPU. Configuration relies on environment variables (e.g.,
+GCS bucket, project ID, data prefixes) to avoid hard-coded credentials and
+support flexible, secure deployments.
 
 ## Design Patterns
-The architecture employs microservice isolation, dependency injection via environment variables, factory patterns for dataset/model construction, and a strategy pattern for the two-tier search (wardrobe-first, catalog-fallback) with thresholded fallback.
+Microservice isolation defines clear service boundaries; dependency injection
+is implemented via environment variables; factory patterns are used for
+dataset/model construction; and a strategy pattern powers the two-tier search
+(flow from wardrobe to catalog) with a thresholded fallback.
