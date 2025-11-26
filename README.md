@@ -143,9 +143,18 @@ All detailed documentation for each component is available in the following guid
 
 StyleMe follows a **containerized microservices architecture** with four specialized services (ingestion, preprocessing, training, and inference) that operate independently while maintaining seamless communication through Docker networking. The system processes fashion images through a pipeline that includes data collection, cleaning, model training, and real-time recommendation generation using FAISS-based similarity search. The user interface is a mobile-first React-based SPA built with TypeScript, Vite, and Tailwind CSS that allows users to upload wardrobe items, view their collections organized by category, and receive personalized fashion recommendations. The architecture emphasizes modularity, scalability, and reproducibility through versioned datasets and model checkpoints managed with DVC, with automated testing and code quality checks via CI/CD pipelines.
 
-<img width="661" height="641" alt="image" src="https://github.com/user-attachments/assets/f5d10522-d1d4-4e97-a48a-c5fdbc533687" />
-
-<img width="735" height="503" alt="image" src="https://github.com/user-attachments/assets/f672f392-b33d-4949-9875-d395a8447beb" />
+<table>
+<tr>
+<td width="50%" style="padding: 5px;">
+  <img src="https://github.com/user-attachments/assets/f5d10522-d1d4-4e97-a48a-c5fdbc533687" alt="Application architecture overview" style="width: 100%;" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Application architecture overview</em></p>
+</td>
+<td width="50%" style="padding: 5px;">
+  <img src="https://github.com/user-attachments/assets/f672f392-b33d-4949-9875-d395a8447beb" alt="System components and data flow" style="width: 100%;" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>System components and data flow</em></p>
+</td>
+</tr>
+</table>
 
 
 **Documentation**: See [Application Design Document](docs/Application%20design%20doc.md) for detailed solution architecture, technical architecture, system components, and design patterns.
