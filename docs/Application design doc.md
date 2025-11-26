@@ -70,16 +70,106 @@ The following screenshots demonstrate the key screens and user experience of the
 
 ## Code Organization
 
-The codebase is organized into clear modules with separation of concerns:
+The codebase is organized into clear modules with separation of concerns, following consistent style guides and comprehensive documentation.
 
-- **`containers/`**: Docker container definitions for four microservices (ingestion, preprocessing, training, inference)
-- **`src/datapipeline/`**: Data processing modules including dataset loaders, background removal, and web scraping utilities
-- **`src/models/`**: Model training (`train/`) and evaluation (`eval/`) modules
-- **`CI/`**: CI/CD configuration, test suites (unit, integration, e2e), and helper scripts
-- **`data_versioning/`**: DVC management scripts and GCS snapshot tracking
-- **`frontend/`**: React SPA with components organized by screen (onboarding, home, wardrobe, recommendations)
-- **`docs/`**: Comprehensive documentation for architecture, APIs, data versioning, and model training
-- **`catalog/`**, **`wardrobes/`**, **`queries/`**, **`results/`**: Data directories for versioned artifacts, user data, and inference outputs
+### Repository Structure & Domain Separation
+
+The project follows a clear domain-driven structure:
+
+- **`containers/`** - **API Services**: Docker container definitions for four microservices
+  - `ingestion/` - Data collection service
+  - `preprocessing/` - Data cleaning and background removal service
+  - `training/` - Model fine-tuning service
+  - `inference/` - Inference service with REST API (`api_server.py`) and core service (`inference_service.py`)
+
+- **`src/models/`** - **Model Logic**: Model training and evaluation modules
+  - `train/` - Training scripts, configuration, and experiment tracking
+  - `eval/` - Evaluation rubrics and model assessment
+
+- **`src/datapipeline/`** - **Data Processing**: Data processing modules
+  - `dataloader.py` - Dataset and DataLoader for triplet training
+  - `bg_removal/` - Background removal utilities
+  - `scraper/` - Web scraping and image extraction
+
+- **`frontend/`** - **UI Components**: React SPA organized by screen and functionality
+  - `src/components/` - UI components organized by screen (onboarding, home, wardrobe, recommendations)
+  - `src/services/` - API client service (`api.ts`) for backend communication
+  - `src/styles/` - Global styles and theme configuration
+
+- **`CI/`** - **Tests**: Comprehensive test suites
+  - `tests/` - Unit, integration, and end-to-end tests
+  - `scripts/` - CI helper scripts for testing and linting
+  - `config/` - Configuration files for pytest, flake8, and coverage
+
+- **`data_versioning/`** - **Data Management**: DVC management scripts and GCS snapshot tracking
+
+- **`docs/`** - **Documentation**: Comprehensive documentation for architecture, APIs, data versioning, and model training
+
+- **Data Directories**: `catalog/`, `wardrobes/`, `queries/`, `results/` - Versioned artifacts, user data, and inference outputs
+
+### Code Style Guidelines
+
+#### Python (PEP 8)
+- **Configuration**: `CI/config/.flake8` enforces PEP 8 compliance
+  - Max line length: 120 characters
+  - Complexity limit: 15
+  - Automated linting via GitHub Actions CI pipeline
+  - Runs on every push and pull request
+- **Enforcement**: All Python code in `src/`, `containers/`, and `scripts/` is automatically linted using Flake8
+
+#### JavaScript/TypeScript
+- **TypeScript**: Frontend uses TypeScript for type safety
+- **Code Organization**: Components follow React best practices with clear separation of concerns
+- **Style**: Consistent formatting and structure across all frontend components
+
+### Documentation & Comments
+
+#### Python Docstrings
+All Python modules and classes include comprehensive docstrings:
+
+```python
+"""
+Inference Service
+Handles query image → search wardrobe → fallback to catalog → return recommendations
+"""
+
+class InferenceService:
+    def embed_image(self, image_path: str) -> np.ndarray:
+        """
+        Generate 512-D normalized embedding for an image.
+        
+        Args:
+            image_path: Path to the image file
+            
+        Returns:
+            Normalized embedding vector (512-D)
+        """
+```
+
+#### TypeScript/JavaScript Comments
+Frontend code includes JSDoc-style comments and inline documentation:
+
+```typescript
+/**
+ * API Client for StyleMe Backend
+ * Handles all API calls to the inference service
+ */
+
+/**
+ * Upload an image to user's wardrobe
+ */
+export async function uploadImage(
+  userId: string,
+  image: File | string
+): Promise<UploadResponse> {
+```
+
+#### Module Documentation
+- Each major module includes a module-level docstring explaining its purpose
+- Functions and classes have docstrings describing parameters, return values, and behavior
+- Complex logic includes inline comments explaining the implementation
+
+### Architecture Principles
 
 Each service is containerized with its own `Dockerfile` and `entrypoint.sh`, while shared volumes enable data exchange between services. The architecture follows microservice isolation principles with dependency injection via environment variables.
 
