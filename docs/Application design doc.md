@@ -5,18 +5,9 @@ StyleMe 9.0 is a containerized microservices system with four services
 (ingestion, preprocessing, training, and inference) connected via a Docker
 network and runnable independently or as a full pipeline with Docker Compose.
 
-<table>
-<tr>
-<td width="50%" style="padding: 5px;">
-  <img src="https://github.com/user-attachments/assets/f5d10522-d1d4-4e97-a48a-c5fdbc533687" alt="Application architecture overview" style="width: 100%;" />
-  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Application architecture overview</em></p>
-</td>
-<td width="50%" style="padding: 5px;">
-  <img src="https://github.com/user-attachments/assets/f672f392-b33d-4949-9875-d395a8447beb" alt="System components and data flow" style="width: 100%;" />
-  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>System components and data flow</em></p>
-</td>
-</tr>
-</table>
+<img src="https://github.com/user-attachments/assets/f5d10522-d1d4-4e97-a48a-c5fdbc533687" alt="Application architecture overview" style="width: 100%; max-width: 800px;" />
+
+**Application Architecture Overview**: This diagram illustrates the high-level solution architecture of StyleMe, showing how the four microservices (ingestion, preprocessing, training, and inference) interact within the containerized environment. The architecture demonstrates the separation of concerns, with each service handling a specific stage of the fashion recommendation pipeline. The design emphasizes modularity and scalability, allowing services to be developed, deployed, and scaled independently while maintaining seamless communication through Docker networking.
 
 ## Data Flow
 Source data (~13k product images + JSON) resides in Google Cloud Storage (GCS)  
@@ -85,6 +76,10 @@ tracked with `manifest.json` snapshots to ensure reproducibility.
 
 
 # Technical Architecture
+
+<img src="https://github.com/user-attachments/assets/f672f392-b33d-4949-9875-d395a8447beb" alt="System components and data flow" style="width: 100%; max-width: 800px;" />
+
+**System Components and Data Flow**: This diagram details the technical architecture and data flow patterns within StyleMe, showing how data moves through the system from source (GCS) to final recommendations. It highlights the key technical components including the FashionCLIP model, FAISS indexing system, and the various service endpoints. The diagram illustrates the two-tier search strategy (wardrobe-first, catalog-fallback) and how embeddings are generated, stored, and queried to provide personalized fashion recommendations.
 
 ## Core Tech Stack
 - Python 3.10+
