@@ -1,0 +1,49 @@
+[
+  {
+    "source": {
+      "id": "item_001",
+      "image_path": "cloth_001.jpg",
+      "title": "Test Shirt",
+      "description": "A test shirt for unit testing"
+    },
+    "complete_the_look": [
+      {
+        "id": "item_002",
+        "description": "Compatible pants"
+      },
+      {
+        "id": "item_003",
+        "description": "Compatible shoes"
+      }
+    ]
+  },
+  {
+    "source": {
+      "id": "item_002",
+      "image_path": "cloth_002.jpg",
+      "title": "Test Pants",
+      "description": "A test pants for unit testing"
+    },
+    "complete_the_look": [
+      {
+        "id": "item_001",
+        "description": "Compatible shirt"
+      }
+    ]
+  },
+  {
+    "source": {
+      "id": "item_003",
+      "image_path": "cloth_003.jpg",
+      "title": "Test Shoes",
+      "description": "A test shoes for unit testing"
+    },
+    "complete_the_look": [
+      {
+        "id": "item_001",
+        "description": "Compatible shirt"
+      }
+    ]
+  }
+]
+

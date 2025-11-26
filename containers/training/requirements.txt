@@ -1,7 +1,7 @@
-torch==2.1.0
-torchvision==0.16.0
-torchaudio==2.1.0
-transformers>=4.21.0,<4.35.0
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+transformers>=4.21.0
 Pillow>=9.0.0
 numpy>=1.21.0
 tqdm>=4.64.0

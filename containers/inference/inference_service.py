@@ -15,14 +15,17 @@ from pathlib import Path
 from PIL import Image
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
-
-# Add src to path
-sys.path.append('/app/src')
 from src.models.train.model_training import FashionCLIPModel
+
+# Add src to path (support both container and local paths)
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(project_root, 'src'))
+sys.path.insert(0, project_root)
 
 
 class InferenceService:
-    def __init__(self, catalog_dir, experiments_dir, wardrobes_dir, device=None):
+    def __init__(self, catalog_dir, experiments_dir, wardrobes_dir, device=None,
+                 bg_removal_enabled=True, bg_removal_model="briaai/RMBG-1.4"):
         self.catalog_dir = Path(catalog_dir)
         self.experiments_dir = Path(experiments_dir)
         self.wardrobes_dir = Path(wardrobes_dir)
@@ -34,6 +37,27 @@ class InferenceService:
         
         print(f"🔧 Initializing Inference Service")
         print(f"   Device: {self.device}")
+        
+        # Initialize background remover
+        if bg_removal_enabled:
+            print("🎨 Initializing background remover...")
+            try:
+                from src.datapipeline.bg_removal.background_removal import BackgroundRemover
+                self.bg_remover = BackgroundRemover(
+                    model_name=bg_removal_model,
+                    device=str(self.device) if str(self.device) != 'cpu' else None
+                )
+                self.bg_removal_enabled = True
+                print("   ✅ Background remover ready")
+            except Exception as e:
+                print(f"   ⚠️  Failed to initialize background remover: {e}")
+                print("   ⚠️  Continuing without background removal")
+                self.bg_remover = None
+                self.bg_removal_enabled = False
+        else:
+            self.bg_remover = None
+            self.bg_removal_enabled = False
+            print("   ⚠️  Background removal disabled")
         
         # Load model
         self.model = self._load_model()
@@ -83,8 +107,8 @@ class InferenceService:
         """Load catalog FAISS index and metadata"""
         print("📚 Loading catalog...")
         
-        # Find latest catalog version
-        catalog_versions = sorted(self.catalog_dir.glob("v_*"))
+        # Find latest catalog version (only directories, not .dvc files)
+        catalog_versions = [d for d in sorted(self.catalog_dir.glob("v_*")) if d.is_dir()]
         if not catalog_versions:
             raise FileNotFoundError(f"No catalog found in {self.catalog_dir}")
         
@@ -114,8 +138,32 @@ class InferenceService:
             raise FileNotFoundError(f"Image not found: {image_path}")
         
         with torch.no_grad():
-            # Load and transform
+            # Step 1: Load image
             image = Image.open(image_path).convert('RGB')
+            
+            # Step 2: Remove background (if enabled)
+            if self.bg_removal_enabled and self.bg_remover:
+                try:
+                    # Remove background (returns PIL Image with transparent bg)
+                    image = self.bg_remover.remove_background(image)
+                    
+                    # Convert RGBA to RGB with white background
+                    if image.mode == 'RGBA':
+                        background = Image.new('RGB', image.size, (255, 255, 255))
+                        if len(image.split()) == 4:  # Has alpha channel
+                            background.paste(image, mask=image.split()[3])
+                        else:
+                            background.paste(image)
+                        image = background
+                    elif image.mode != 'RGB':
+                        image = image.convert('RGB')
+                        
+                except Exception as e:
+                    print(f"⚠️  Background removal failed: {e}, using original image")
+                    # Fallback: reload original image
+                    image = Image.open(image_path).convert('RGB')
+            
+            # Step 3: Transform and embed
             image_tensor = self.transform(image).unsqueeze(0).to(self.device)
             
             # Generate embedding
@@ -377,6 +425,10 @@ def main():
     parser.add_argument('--wardrobe-k', type=int, default=5, help='Number of wardrobe items')
     parser.add_argument('--catalog-k', type=int, default=3, help='Number of catalog items')
     parser.add_argument('--gender', type=str, choices=['men', 'women'], help='Filter catalog by gender (men/women)')
+    parser.add_argument('--disable-bg-removal', action='store_true', 
+                       help='Disable background removal')
+    parser.add_argument('--bg-removal-model', type=str, default='briaai/RMBG-1.4',
+                       help='Background removal model name (default: briaai/RMBG-1.4)')
     
     args = parser.parse_args()
     
@@ -384,7 +436,9 @@ def main():
     service = InferenceService(
         catalog_dir=args.catalog_dir,
         experiments_dir=args.experiments_dir,
-        wardrobes_dir=args.wardrobes_dir
+        wardrobes_dir=args.wardrobes_dir,
+        bg_removal_enabled=not args.disable_bg_removal,
+        bg_removal_model=args.bg_removal_model
     )
     
     # Run inference

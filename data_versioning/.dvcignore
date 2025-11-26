@@ -1,0 +1,50 @@
+# DVC ignore file
+# Files and patterns to exclude from DVC tracking
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test outputs (unless needed for versioning)
+test_output/
+*.test.*
+
+# Large files that shouldn't be versioned
+# (Add specific patterns as needed)
+
+# Git files (already tracked by Git)
+.git/
+.gitignore
+
+# Docker
+*.dockerignore
+
+# Documentation builds
+docs/_build/
+

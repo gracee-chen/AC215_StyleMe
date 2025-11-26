@@ -19,6 +19,24 @@ import sys
 import warnings
 warnings.filterwarnings('ignore')
 
+# Initialize cuDNN settings for GPU training
+# Disable cuDNN if initialization fails (fallback to standard CUDA operations)
+if torch.cuda.is_available():
+    try:
+        # Try to enable cuDNN
+        torch.backends.cudnn.enabled = True
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = False
+        # Test cuDNN initialization
+        dummy = torch.zeros(1, 1, 1, 1).cuda()
+        _ = torch.nn.functional.conv2d(dummy, torch.zeros(1, 1, 1, 1).cuda())
+        del dummy
+        torch.cuda.empty_cache()
+    except Exception:
+        # If cuDNN fails, disable it and use standard CUDA operations
+        print("⚠️  cuDNN initialization failed, disabling cuDNN (using standard CUDA operations)")
+        torch.backends.cudnn.enabled = False
+
 # Set environment variable to bypass torch.load security check
 os.environ['TRANSFORMERS_OFFLINE'] = '0'
 os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
@@ -136,18 +154,29 @@ class FashionTrainer:
     FashionCLIP trainer
     """
     
-    def __init__(self, model: FashionCLIPModel, loss_fn: TripletLoss, device: str = None):
+    def __init__(self, model: FashionCLIPModel, loss_fn: TripletLoss, device=None, require_gpu: bool = False):
         # Explicitly check and set device
         if device is None:
             if torch.cuda.is_available():
-                device = "cuda"
+                device_str = "cuda"
                 print(f"🚀 CUDA is available! Using GPU: {torch.cuda.get_device_name(0)}")
                 print(f"📊 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
             else:
-                device = "cpu"
+                if require_gpu:
+                    raise RuntimeError("❌ GPU required but not available! Please ensure CUDA is installed and GPU is accessible.")
+                device_str = "cpu"
                 print("⚠️ CUDA not available, using CPU")
+            self.device = torch.device(device_str)
+        elif isinstance(device, torch.device):
+            # If device is already a torch.device, use it directly
+            self.device = device
+        else:
+            # Convert string to device
+            self.device = torch.device(device)
         
-        self.device = torch.device(device)
+        # Final check: if require_gpu, ensure we're using CUDA
+        if require_gpu and self.device.type != "cuda":
+            raise RuntimeError("❌ GPU required but not using CUDA device!")
         self.model = model.to(self.device)
         self.triplet_loss = loss_fn.to(self.device)
         
@@ -164,6 +193,32 @@ class FashionTrainer:
         # Print GPU memory info if available
         if torch.cuda.is_available():
             self._print_gpu_info()
+    
+    def _clear_memory(self, clear_cache: bool = True, clear_gpu: bool = True):
+        """
+        Clear unused memory to prevent OOM
+        
+        Args:
+            clear_cache: Clear Python garbage collection
+            clear_gpu: Clear PyTorch CUDA cache
+        """
+        import gc
+        
+        if clear_cache:
+            # Force Python garbage collection
+            collected = gc.collect()
+            if collected > 0:
+                print(f"   🧹 Cleared {collected} Python objects")
+        
+        if clear_gpu and torch.cuda.is_available():
+            # Clear PyTorch CUDA cache
+            allocated_before = torch.cuda.memory_allocated() / 1024**3
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            allocated_after = torch.cuda.memory_allocated() / 1024**3
+            if allocated_before > allocated_after:
+                freed = allocated_before - allocated_after
+                print(f"   🧹 Freed {freed:.2f}GB GPU memory")
     
     def _print_gpu_info(self):
         """Print GPU information"""
@@ -222,17 +277,28 @@ class FashionTrainer:
             # Combined score for training monitoring
             combined_score = (accuracy + recommendation_score) / 2
             
-            total_loss += loss.item()
+            loss_value = loss.item()
+            total_loss += loss_value
             total_accuracy += combined_score
             num_batches += 1
             
-            # Update progress bar
+            # Update progress bar before clearing
             progress_bar.set_postfix({
-                'Loss': f'{loss.item():.4f}',
+                'Loss': f'{loss_value:.4f}',
                 'Fashion': f'{accuracy:.4f}',
                 'Recommendation': f'{recommendation_score:.4f}',
                 'Combined': f'{combined_score:.4f}'
             })
+            
+            # Clear intermediate tensors to save memory
+            del anchor_features, positive_features, negative_features, loss
+            
+            # Periodic memory cleanup (every 10 batches to avoid overhead)
+            if batch_idx % 10 == 0 and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        
+        # Final cleanup after epoch
+        self._clear_memory(clear_cache=True, clear_gpu=True)
         
         avg_loss = total_loss / num_batches
         avg_accuracy = total_accuracy / num_batches
@@ -272,13 +338,21 @@ class FashionTrainer:
                 # Combined score for validation monitoring
                 combined_score = (accuracy + recommendation_score) / 2
                 
-                total_loss += loss.item()
+                loss_value = loss.item()
+                total_loss += loss_value
                 total_accuracy += combined_score
                 num_batches += 1
                 
-                # Update progress bar
+                # Clear intermediate tensors to save memory
+                del anchor_features, positive_features, negative_features, loss
+                
+                # Periodic memory cleanup
+                if batch_idx % 10 == 0 and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # Update progress bar before clearing
                 progress_bar.set_postfix({
-                    'Loss': f'{loss.item():.4f}',
+                    'Loss': f'{loss_value:.4f}',
                     'Fashion': f'{accuracy:.4f}',
                     'Recommendation': f'{recommendation_score:.4f}',
                     'Combined': f'{combined_score:.4f}'
@@ -458,11 +532,24 @@ class FashionTrainer:
             print(f"\n🔄 Epoch {epoch+1}/{total_epochs}")
             print("-" * 50)
             
+            # Clear image cache at start of each epoch (if dataset has cache)
+            if hasattr(train_loader.dataset, 'dataset') and hasattr(train_loader.dataset.dataset, '_image_cache'):
+                cache_size = len(train_loader.dataset.dataset._image_cache)
+                if cache_size > 0:
+                    # Clear 50% of cache to free memory
+                    keys_to_clear = list(train_loader.dataset.dataset._image_cache.keys())[:cache_size // 2]
+                    for key in keys_to_clear:
+                        del train_loader.dataset.dataset._image_cache[key]
+                    print(f"   🧹 Cleared {len(keys_to_clear)} images from cache")
+            
             # Training
             train_loss, train_acc = self.train_epoch(train_loader, optimizer)
             
             # Validation
             val_loss, val_acc = self.validate(val_loader)
+            
+            # Clear memory after validation
+            self._clear_memory(clear_cache=True, clear_gpu=True)
             
             # Update learning rate
             scheduler.step()
@@ -727,11 +814,12 @@ This experiment used {exp_name.lower()} and achieved {best_accuracy*100:.2f}% co
             f.write(readme_content)
         
         # Update experiment configs
-        self.update_experiment_configs(exp_id, exp_type, exp_name, best_accuracy, timestamp)
+        data_version = DATA_CONFIG.get('data_version', None)
+        self.update_experiment_configs(exp_id, exp_type, exp_name, best_accuracy, timestamp, data_version)
         
         print(f"📝 Experiment {exp_id} logs generated in {exp_folder}/")
     
-    def update_experiment_configs(self, exp_id: str, exp_type: str, exp_name: str, best_accuracy: float, timestamp: str):
+    def update_experiment_configs(self, exp_id: str, exp_type: str, exp_name: str, best_accuracy: float, timestamp: str, data_version: str = None):
         """Update experiment_configs.json with new experiment"""
         configs_file = "experiments/experiment_configs.json"
         
@@ -742,28 +830,41 @@ This experiment used {exp_name.lower()} and achieved {best_accuracy*100:.2f}% co
         else:
             configs = {"experiments": {}, "summary": {"total_experiments": 0}}
         
+        # Get data version from config or use default
+        data_ver = data_version or DATA_CONFIG.get('data_version', 'unknown')
+        
         # Add new experiment
         configs["experiments"][exp_id] = {
             "date": timestamp,
             "description": exp_name,
+            "data_version": data_ver,  # Reference to versioned dataset
             "config": {
                 "model": {
-                    "architecture": "CLIP ViT-B/32",
-                    "frozen_layers": 8,
-                    "feature_dimension": 512
+                    "architecture": MODEL_CONFIG['model_name'],
+                    "frozen_layers": MODEL_CONFIG['freeze_layers'],
+                    "feature_dimension": MODEL_CONFIG['feature_dim']
                 },
                 "training": {
                     "epochs": TRAINING_CONFIG['epochs'],
                     "batch_size": TRAINING_CONFIG['batch_size'],
                     "learning_rate": TRAINING_CONFIG['learning_rate'],
-                    "optimizer": "AdamW",
-                    "scheduler": "CosineAnnealingLR",
+                    "optimizer": OPTIMIZER_CONFIG['optimizer'],
+                    "scheduler": OPTIMIZER_CONFIG['scheduler'],
                     "patience": TRAINING_CONFIG['patience'],
                     "target_accuracy": TRAINING_CONFIG['target_accuracy']
+                },
+                "triplet_loss": {
+                    "margin": TRIPLET_CONFIG['margin'],
+                    "distance_metric": TRIPLET_CONFIG['distance_metric']
                 },
                 "evaluation": {
                     "method": exp_type,
                     "description": exp_name
+                },
+                "dataset": {
+                    "gcp_bucket": DATA_CONFIG['gcp_bucket_name'],
+                    "data_prefix": DATA_CONFIG['data_prefix'],
+                    "images_prefix": DATA_CONFIG['images_prefix']
                 }
             },
             "results": {
