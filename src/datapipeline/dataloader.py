@@ -559,8 +559,8 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
         if max_preload is None:
             print("   ⚠️  Loading ALL images to memory to avoid disk I/O during training")
         else:
-        print(f"   This will download up to {max_preload} images once to avoid GCS delays")
-        print("   Monitoring memory usage to prevent overflow...")
+            print(f"   This will download up to {max_preload} images once to avoid GCS delays")
+            print("   Monitoring memory usage to prevent overflow...")
         if io_throttle:
             print(f"   🛡️  I/O throttling enabled ({io_delay_ms*1000:.1f}ms delay) to prevent disk saturation")
         
@@ -581,7 +581,7 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
         
         # Also get IDs from compatibility graph (positive items)
         for anchor_id, compatible_items in dataset.compatibility_graph.items():
-                all_item_ids.add(anchor_id)
+            all_item_ids.add(anchor_id)
             for compat_item in compatible_items:
                 if isinstance(compat_item, dict) and 'id' in compat_item:
                     all_item_ids.add(compat_item['id'])
@@ -590,7 +590,7 @@ def create_dataloader(gcp_bucket_name: str = "styleme-data-bucket",
         
         # Limit to max_preload if specified
         if max_preload is not None:
-        all_item_ids = list(all_item_ids)[:max_preload]
+            all_item_ids = list(all_item_ids)[:max_preload]
             print(f"   📋 Loading {len(all_item_ids)} unique images (limited by max_preload_images)")
         else:
             all_item_ids = list(all_item_ids)
