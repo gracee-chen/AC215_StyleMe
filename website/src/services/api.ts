@@ -1,0 +1,335 @@
+/**
+ * API Client for StyleMe Backend
+ * Handles all API calls to the inference service
+ */
+
+// Note: Docker maps container port 5000 to host port 5001
+// If running API server directly (not in Docker), use port 5000
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+export interface ClothingItem {
+  id: string;
+  image: string;
+  category: string;
+  color: string;
+  dateAdded: Date | number;
+  title?: string;
+  brand?: string;
+  price?: string;
+  url?: string;
+  similarity?: number;
+  rank?: number;
+}
+
+export interface RecommendationResponse {
+  success: boolean;
+  user_id: string;
+  used_wardrobe: boolean;
+  items: ClothingItem[];
+  num_results: number;
+  threshold: number;
+}
+
+export interface WardrobeResponse {
+  success: boolean;
+  user_id: string;
+  items: ClothingItem[];
+  num_items: number;
+}
+
+export interface UploadResponse {
+  success: boolean;
+  user_id: string;
+  image_path: string;
+  message: string;
+}
+
+/**
+ * Convert file to base64 string
+ */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed to convert file to base64'));
+      }
+    };
+    reader.onerror = (error) => reject(error);
+  });
+}
+
+/**
+ * Health check endpoint
+ */
+export async function healthCheck(): Promise<{ status: string; service: string }> {
+  const response = await fetch(`${API_BASE_URL}/health`);
+  if (!response.ok) {
+    throw new Error('Health check failed');
+  }
+  return response.json();
+}
+
+/**
+ * Upload an image to user's wardrobe
+ */
+export async function uploadImage(
+  userId: string,
+  image: File | string
+): Promise<UploadResponse> {
+  const formData = new FormData();
+  formData.append('user_id', userId);
+  
+  try {
+    if (typeof image === 'string') {
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          image: image,
+        }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = 'Failed to upload image';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch {
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      return response.json();
+    } else {
+      formData.append('file', image);
+      
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        let errorMessage = 'Failed to upload image';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch {
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      return response.json();
+    }
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Cannot connect to server. Please make sure the API server is running on ' + API_BASE_URL);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Get recommendations for a query image
+ */
+export async function getRecommendations(
+  userId: string,
+  image: File | string,
+  options?: {
+    threshold?: number;
+    wardrobe_k?: number;
+    catalog_k?: number;
+    gender?: 'men' | 'women';
+  }
+): Promise<RecommendationResponse> {
+  const formData = new FormData();
+  formData.append('user_id', userId);
+  
+  if (typeof image === 'string') {
+    // Base64 string
+    const response = await fetch(`${API_BASE_URL}/api/recommend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        image: image,
+        threshold: options?.threshold || 0.7,
+        wardrobe_k: options?.wardrobe_k || 5,
+        catalog_k: options?.catalog_k || 3,
+        gender: options?.gender,
+      }),
+    });
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to get recommendations';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+        // Handle specific error messages
+        if (errorMessage.includes('No trained model') || errorMessage.includes('train')) {
+          errorMessage = 'No trained model found. Please train a model first.';
+        }
+        // Include hint if available
+        if (error.hint) {
+          errorMessage += ` ${error.hint}`;
+        }
+      } catch (e) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    
+    // Check if response indicates an error even with 200 status
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    return data;
+  } else {
+    // File object
+    formData.append('file', image);
+    if (options?.threshold) formData.append('threshold', options.threshold.toString());
+    if (options?.wardrobe_k) formData.append('wardrobe_k', options.wardrobe_k.toString());
+    if (options?.catalog_k) formData.append('catalog_k', options.catalog_k.toString());
+    if (options?.gender) formData.append('gender', options.gender);
+    
+    const response = await fetch(`${API_BASE_URL}/api/recommend`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to get recommendations';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+        // Handle specific error messages
+        if (errorMessage.includes('No trained model') || errorMessage.includes('train')) {
+          errorMessage = 'No trained model found. Please train a model first.';
+        }
+        // Include hint if available
+        if (error.hint) {
+          errorMessage += ` ${error.hint}`;
+        }
+      } catch (e) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const data = await response.json();
+    
+    // Check if response indicates an error even with 200 status
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    return data;
+  }
+}
+
+/**
+ * Get user's wardrobe items
+ */
+export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/wardrobe/${userId}`);
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to get wardrobe');
+  }
+  
+  const data = await response.json();
+  
+  // Merge metadata from localStorage
+  const itemsWithMetadata = data.items.map((item: ClothingItem) => {
+    // Extract filename from image path
+    const imagePath = item.image;
+    const filename = imagePath.split('/').pop() || '';
+    
+    // Get metadata from localStorage
+    try {
+      const metadataKey = `wardrobe_metadata_${userId}_${filename}`;
+      const metadataStr = localStorage.getItem(metadataKey);
+      if (metadataStr) {
+        const metadata = JSON.parse(metadataStr);
+        return {
+          ...item,
+          category: metadata.category || item.category || 'tops',
+          color: metadata.color || item.color || 'White',
+          style: metadata.style || 'Casual',
+          material: metadata.material || '',
+          pattern: metadata.pattern || '',
+        };
+      }
+    } catch (e) {
+      console.warn('Failed to load metadata for item:', e);
+    }
+    
+    // If no metadata found, ensure all three tags exist with fallback values
+    return {
+      ...item,
+      category: item.category === 'Unknown' || item.category === 'OTHER' || !item.category 
+        ? 'tops' 
+        : item.category,
+      color: item.color === 'Unknown' || !item.color 
+        ? 'White' 
+        : item.color,
+      style: (item as any).style || 'Casual',
+    };
+  });
+  
+  return {
+    ...data,
+    items: itemsWithMetadata,
+  };
+}
+
+/**
+ * Rebuild wardrobe index for a user
+ */
+export async function rebuildWardrobeIndex(userId: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/wardrobe/${userId}/rebuild`, {
+    method: 'POST',
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to rebuild wardrobe index');
+  }
+  
+  return response.json();
+}
+
+/**
+ * Get wardrobe image URL
+ */
+export function getWardrobeImageUrl(userId: string, filename: string): string {
+  return `${API_BASE_URL}/api/wardrobe/${userId}/image/${filename}`;
+}
+
+/**
+ * Convert relative image path to full URL
+ */
+export function getImageUrl(imagePath: string): string {
+  if (imagePath.startsWith('http')) {
+    return imagePath;
+  }
+  if (imagePath.startsWith('/api/')) {
+    return `${API_BASE_URL}${imagePath}`;
+  }
+  return imagePath;
+}
+
