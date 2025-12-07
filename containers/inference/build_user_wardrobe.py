@@ -234,8 +234,8 @@ def main():
     parser = argparse.ArgumentParser(description='Build user wardrobe index')
     parser.add_argument('--user-id', required=True, help='User ID')
     parser.add_argument('--wardrobe-dir', required=True, help='User wardrobe directory with images/ subfolder')
-    parser.add_argument('--experiments-dir', default='/app/experiments', help='Experiments directory')
-    parser.add_argument('--wardrobes-base-dir', default='/app/wardrobes', help='Base wardrobes directory')
+    parser.add_argument('--experiments-dir', default=os.getenv('EXPERIMENTS_DIR', '/gcs/styleme-production/experiments'), help='Experiments directory')
+    parser.add_argument('--wardrobes-base-dir', default=os.getenv('WARDROBES_DIR', '/gcs/styleme-production/wardrobes'), help='Base wardrobes directory')
     
     args = parser.parse_args()
     

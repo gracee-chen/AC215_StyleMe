@@ -46,7 +46,7 @@ from src.datapipeline.dataloader import create_dataloader
 from typing import Tuple, List, Dict
 import warnings
 warnings.filterwarnings('ignore')
-from config import TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, SAVE_CONFIG, DATA_CONFIG
+from config import TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, SAVE_CONFIG, DATA_CONFIG, OPTIMIZER_CONFIG
 
 
 class FashionCLIPModel(nn.Module):
@@ -58,28 +58,55 @@ class FashionCLIPModel(nn.Module):
         super(FashionCLIPModel, self).__init__()
         
         # Load pre-trained CLIP model with multiple fallback options
+        # Try local cache first, then download if needed
         try:
-            # Try with safetensors first
+            # Try local cache first (fastest, no network)
+            print(f"   Attempting to load CLIP from local cache...")
             self.clip_model = CLIPModel.from_pretrained(
-                model_name, 
-                use_safetensors=True,
+                model_name,
+                local_files_only=True,
                 trust_remote_code=True,
                 torch_dtype=torch.float32
             )
-        except Exception as e:
-            print(f"⚠️ Safetensors loading failed: {e}")
+            print(f"   ✅ Loaded CLIP from local cache")
+        except Exception as e1:
+            print(f"   ⚠️  Local cache not available: {e1}")
             try:
-                # Fallback to regular loading with local_files_only
+                # Try with safetensors (may be cached)
+                print(f"   Attempting to download CLIP from Hugging Face...")
                 self.clip_model = CLIPModel.from_pretrained(
-                    model_name,
-                    local_files_only=False,
-                    trust_remote_code=True
+                    model_name, 
+                    use_safetensors=True,
+                    trust_remote_code=True,
+                    torch_dtype=torch.float32,
+                    resume_download=True  # Resume if download was interrupted
                 )
+                print(f"   ✅ Downloaded CLIP model")
             except Exception as e2:
-                print(f"❌ All loading methods failed: {e2}")
-                raise e2
+                print(f"   ⚠️  Safetensors download failed: {e2}")
+                try:
+                    # Final fallback - regular loading
+                    self.clip_model = CLIPModel.from_pretrained(
+                        model_name,
+                        local_files_only=False,
+                        trust_remote_code=True,
+                        resume_download=True
+                    )
+                    print(f"   ✅ Loaded CLIP model (fallback)")
+                except Exception as e3:
+                    print(f"   ❌ All CLIP loading methods failed")
+                    print(f"      Last error: {e3}")
+                    raise RuntimeError(f"Failed to load CLIP model. This is required for inference. Error: {e3}")
         
-        self.processor = CLIPProcessor.from_pretrained(model_name)
+        # Load processor (usually cached)
+        try:
+            self.processor = CLIPProcessor.from_pretrained(model_name, local_files_only=True)
+        except:
+            try:
+                self.processor = CLIPProcessor.from_pretrained(model_name)
+            except Exception as e:
+                print(f"   ⚠️  Failed to load processor: {e}")
+                raise
         
         # Freeze first 8 layers
         self._freeze_layers(freeze_layers)
@@ -713,35 +740,96 @@ class FashionTrainer:
         import json
         import shutil
         
-        # Create experiments directory
-        experiments_dir = "experiments"
+        # Determine experiments directory - use SAVE_CONFIG or default
+        # If save_dir is in GCS path, use that; otherwise use local experiments/
+        if save_dir.startswith('/gcs/') or 'styleme-production' in save_dir:
+            # Extract base experiments directory from save_dir
+            # e.g., /gcs/styleme-production/experiments/temp_training_output -> /gcs/styleme-production/experiments
+            experiments_dir = os.path.dirname(save_dir.rstrip('/'))
+        else:
+            experiments_dir = "experiments"
+        
         os.makedirs(experiments_dir, exist_ok=True)
         
-        # Generate experiment ID - improved logic to avoid duplicates
+        # Generate experiment ID - check both local and GCS for existing experiments
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        existing_experiments = [d for d in os.listdir(experiments_dir) if d.startswith('exp_') and os.path.isdir(os.path.join(experiments_dir, d))]
-        
-        # Extract existing experiment numbers and find the next available number
         existing_numbers = []
-        for exp_dir in existing_experiments:
+        
+        # Check local filesystem
+        if os.path.exists(experiments_dir):
             try:
-                # Extract number from exp_XXX_* format
-                parts = exp_dir.split('_')
-                if len(parts) >= 2 and parts[0] == 'exp':
-                    num = int(parts[1])
-                    existing_numbers.append(num)
-            except (ValueError, IndexError):
-                continue
+                existing_experiments = [d for d in os.listdir(experiments_dir) if d.startswith('exp_') and os.path.isdir(os.path.join(experiments_dir, d))]
+                for exp_dir in existing_experiments:
+                    try:
+                        # Extract number from exp_XXX or exp_XXX_* format
+                        parts = exp_dir.split('_')
+                        if len(parts) >= 2 and parts[0] == 'exp':
+                            num = int(parts[1])
+                            existing_numbers.append(num)
+                    except (ValueError, IndexError):
+                        continue
+            except (OSError, PermissionError):
+                pass
+        
+        # Check GCS if using GCS paths
+        if experiments_dir.startswith('/gcs/') or 'styleme-production' in experiments_dir:
+            try:
+                from google.cloud import storage
+                gcp_bucket_name = DATA_CONFIG.get('gcp_bucket_name', 'styleme-production')
+                gcp_project_id = DATA_CONFIG.get('gcp_project_id', 'styleme-475201')
+                
+                # Extract bucket name and prefix from path
+                # e.g., /gcs/styleme-production/experiments -> bucket=styleme-production, prefix=experiments/
+                if experiments_dir.startswith('/gcs/'):
+                    path_parts = experiments_dir.replace('/gcs/', '').split('/', 1)
+                    bucket_name = path_parts[0]
+                    prefix = f"{path_parts[1]}/" if len(path_parts) > 1 else ""
+                else:
+                    # Fallback parsing
+                    bucket_name = gcp_bucket_name
+                    prefix = "experiments/"
+                
+                client = storage.Client(project=gcp_project_id)
+                bucket = client.bucket(bucket_name)
+                
+                # List all blobs with prefix
+                blobs = bucket.list_blobs(prefix=prefix)
+                
+                # Extract experiment directories from blob paths
+                seen_dirs = set()
+                for blob in blobs:
+                    # Extract directory name from blob path
+                    # e.g., experiments/exp_001/best_model.pth -> exp_001
+                    path_parts = blob.name.replace(prefix, '').split('/')
+                    if path_parts and path_parts[0].startswith('exp_'):
+                        exp_dir_name = path_parts[0]
+                        if exp_dir_name not in seen_dirs:
+                            seen_dirs.add(exp_dir_name)
+                            try:
+                                parts = exp_dir_name.split('_')
+                                if len(parts) >= 2 and parts[0] == 'exp':
+                                    num = int(parts[1])
+                                    existing_numbers.append(num)
+                            except (ValueError, IndexError):
+                                continue
+                
+                print(f"📊 Checked GCS bucket {bucket_name} for existing experiments")
+            except Exception as e:
+                print(f"⚠️  Could not check GCS for existing experiments: {e}")
+                print(f"   Will use local filesystem check only")
         
         # Find the next available experiment number
         if existing_numbers:
             next_exp_num = max(existing_numbers) + 1
+            print(f"📋 Found existing experiments: {sorted(set(existing_numbers))}")
         else:
             next_exp_num = 1
+            print(f"📋 No existing experiments found, starting with exp_001")
         
         exp_id = f"exp_{next_exp_num:03d}"
+        print(f"✅ Next experiment ID: {exp_id}")
         
-        # Determine experiment type based on target accuracy
+        # Determine experiment type based on target accuracy (for documentation only)
         target_acc = TRAINING_CONFIG['target_accuracy']
         if target_acc >= 0.9:
             exp_type = "simple_evaluation"
@@ -750,16 +838,14 @@ class FashionTrainer:
             exp_type = "strict_evaluation"
             exp_name = "Strict Fashion Compatibility Evaluation"
         
-        # Create experiment folder
-        exp_folder = os.path.join(experiments_dir, f"{exp_id}_{exp_type}")
+        # Create experiment folder - use just exp_XXX format (no suffix) for inference compatibility
+        exp_folder = os.path.join(experiments_dir, exp_id)
         
         # Check if experiment folder already exists and warn user
         if os.path.exists(exp_folder):
             print(f"⚠️  Warning: Experiment folder {exp_folder} already exists!")
-            print(f"   This might indicate a previous training run. Consider cleaning up old experiments.")
-            # Add timestamp to make it unique
-            exp_folder = os.path.join(experiments_dir, f"{exp_id}_{exp_type}_{timestamp}")
-            print(f"   Creating new folder: {exp_folder}")
+            print(f"   This might indicate a previous training run. Skipping folder creation.")
+            return
         
         os.makedirs(exp_folder, exist_ok=True)
         
@@ -813,15 +899,17 @@ This experiment used {exp_name.lower()} and achieved {best_accuracy*100:.2f}% co
         with open(os.path.join(exp_folder, "README.md"), 'w') as f:
             f.write(readme_content)
         
-        # Update experiment configs
+        # Update experiment configs (save to same experiments directory)
         data_version = DATA_CONFIG.get('data_version', None)
-        self.update_experiment_configs(exp_id, exp_type, exp_name, best_accuracy, timestamp, data_version)
+        configs_file = os.path.join(experiments_dir, "experiment_configs.json")
+        self.update_experiment_configs(exp_id, exp_type, exp_name, best_accuracy, timestamp, data_version, configs_file)
         
         print(f"📝 Experiment {exp_id} logs generated in {exp_folder}/")
     
-    def update_experiment_configs(self, exp_id: str, exp_type: str, exp_name: str, best_accuracy: float, timestamp: str, data_version: str = None):
+    def update_experiment_configs(self, exp_id: str, exp_type: str, exp_name: str, best_accuracy: float, timestamp: str, data_version: str = None, configs_file: str = None):
         """Update experiment_configs.json with new experiment"""
-        configs_file = "experiments/experiment_configs.json"
+        if configs_file is None:
+            configs_file = "experiments/experiment_configs.json"
         
         # Load existing configs or create new
         if os.path.exists(configs_file):

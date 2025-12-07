@@ -281,8 +281,8 @@ def main():
     parser = argparse.ArgumentParser(description='Build catalog index from Farfetch data')
     parser.add_argument('--data-dir', default='/app/data', help='Data directory')
     parser.add_argument('--image-dir', default='/app/data/images', help='Image directory')
-    parser.add_argument('--experiments-dir', default='/app/experiments', help='Experiments directory')
-    parser.add_argument('--output-dir', default='/app/catalog', help='Output directory')
+    parser.add_argument('--experiments-dir', default=os.getenv('EXPERIMENTS_DIR', '/gcs/styleme-production/experiments'), help='Experiments directory')
+    parser.add_argument('--output-dir', default=os.getenv('CATALOG_DIR', '/gcs/styleme-production/catalog'), help='Output directory')
     
     args = parser.parse_args()
     

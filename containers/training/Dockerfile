@@ -1,14 +1,20 @@
-FROM python:3.9-slim
+# Use CUDA-enabled base image for GPU support (includes Python)
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies
+# Install Python 3 and pip if not already present
 RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
     git \
     wget \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for python
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# Set working directory
+WORKDIR /app
 
 # Copy requirements and install Python dependencies
 COPY containers/training/requirements.txt /app/requirements.txt
