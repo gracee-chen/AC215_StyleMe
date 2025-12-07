@@ -66,17 +66,41 @@ export async function analyzeClothingItem(imageFile: File): Promise<ItemAnalysis
   "description": "brief description of the item"
 }
 
-CRITICAL REQUIREMENTS:
+CRITICAL REQUIREMENTS - READ CAREFULLY:
 1. The "category" field is REQUIRED and must be EXACTLY one of: 'shirt', 'pants', 'dress', 'jacket', 'shoes', 'accessories'. Do not use variations or synonyms.
+
+   CATEGORY IDENTIFICATION RULES (in priority order):
+   
+   a) SHOES - If you see ANY type of footwear (boots, sneakers, sandals, heels, flats, ankle boots, UGG boots, leather boots, suede boots, etc.), the category MUST be 'shoes'. 
+      - Look for items worn on the feet
+      - If you see a boot, shoe, sneaker, or any footwear item, category = 'shoes'
+      - DO NOT confuse shoes with shirts or tops
+   
+   b) DRESS - If you see a one-piece garment that covers both the upper body and extends down to form a skirt (a dress), the category MUST be 'dress'.
+      - A dress is a single garment that combines a top and skirt in one piece
+      - If you see a garment that extends from shoulders/chest down to form a skirt-like bottom, it is a DRESS
+      - DO NOT confuse dresses with shirts or tops
+   
+   c) PANTS - If you see trousers, jeans, shorts, or any lower body garment, category = 'pants'
+   
+   d) JACKET - If you see outerwear like jackets, coats, sweaters, blazers, category = 'jacket'
+   
+   e) SHIRT - If you see a top, shirt, blouse, t-shirt, or upper body garment (that is NOT a dress), category = 'shirt'
+   
+   f) ACCESSORIES - If you see bags, hats, scarves, belts, jewelry, category = 'accessories'
 
 2. The "color" field is REQUIRED and MUST be the PRIMARY/MAIN color of the OUTERMOST clothing item visible in the image. 
    - IGNORE the color of undergarments, undershirts, collars peeking out, or any inner layers
    - IGNORE the background color
-   - FOCUS ONLY on the dominant color of the main garment itself (the sweater, shirt, dress, etc.)
+   - FOCUS ONLY on the dominant color of the main garment itself (the sweater, shirt, dress, shoes, etc.)
    - If you see a green sweater over a white shirt, the color should be 'green', NOT 'white'
+   - If you see a green dress (mint green, light green, olive green, etc.), the color should be 'green', NOT 'white'
+   - If you see brown/tan/beige shoes (UGG-style, suede, leather boots), the color should be 'brown' or 'beige', NOT 'white'
    - If you see a maroon dress, the color should be 'red' (maroon maps to red)
    - Must be a valid color name: 'black', 'white', 'blue', 'brown', 'green', 'red', 'pink', 'purple', 'yellow', 'orange', 'gray', 'beige', 'navy', 'cream', 'khaki'
-   - Dark green, olive green, forest green → use 'green'
+   - Dark green, olive green, forest green, mint green, light green, sage green, emerald green → use 'green'
+   - Brown, tan, camel, taupe, chocolate, coffee, caramel → use 'brown' (for shoes, leather items, etc.)
+   - Light brown, beige, nude, sand → use 'beige' (for lighter brown tones)
    - Maroon, burgundy, dark red, wine → use 'red'
 
 3. The "style" field is REQUIRED and must be a valid style description (e.g., 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic').
@@ -129,15 +153,31 @@ CRITICAL REQUIREMENTS:
       // Ensure all three required fields are present, use fallback if missing
       const validCategories = ['shirt', 'pants', 'dress', 'jacket', 'shoes', 'accessories'];
       
-      // Ensure category exists, if not valid, use 'shirt' as fallback
+      // Ensure category exists, if not valid, try to match using normalizeCategoryForSelect logic
       if (!analysis.category || analysis.category.trim() === '') {
         analysis.category = 'shirt';
       } else {
         const categoryLower = analysis.category.toLowerCase().trim();
         const isValidCategory = validCategories.some(cat => cat.toLowerCase() === categoryLower);
         if (!isValidCategory) {
-          // Choose closest match or default to 'shirt'
-          analysis.category = 'shirt';
+          // Try to infer from the category string itself before defaulting
+          // Check for shoes first
+          if (categoryLower.includes('boot') || categoryLower.includes('sneaker') || 
+              categoryLower.includes('sandal') || categoryLower.includes('heel') || 
+              categoryLower.includes('flat') || categoryLower.includes('shoe')) {
+            analysis.category = 'shoes';
+          } else if (categoryLower.includes('dress')) {
+            analysis.category = 'dress';
+          } else if (categoryLower.includes('pant') || categoryLower.includes('jean') || 
+                     categoryLower.includes('trouser')) {
+            analysis.category = 'pants';
+          } else if (categoryLower.includes('jacket') || categoryLower.includes('coat') || 
+                     categoryLower.includes('sweater')) {
+            analysis.category = 'jacket';
+          } else {
+            // Default to 'shirt' only if we can't determine
+            analysis.category = 'shirt';
+          }
         }
       }
       
@@ -157,12 +197,51 @@ CRITICAL REQUIREMENTS:
       console.warn('Failed to parse JSON, attempting text extraction');
       const extracted = extractAnalysisFromText(analysisText);
       
-      // Ensure all three fields exist with fallbacks
+      // Ensure all three fields exist with fallbacks, with smart inference
       if (!extracted.category || extracted.category.trim() === '') {
         extracted.category = 'shirt';
+      } else {
+        // Try to infer category from the text if not a valid category
+        const categoryLower = extracted.category.toLowerCase().trim();
+        const validCategories = ['shirt', 'pants', 'dress', 'jacket', 'shoes', 'accessories'];
+        const isValidCategory = validCategories.some(cat => cat.toLowerCase() === categoryLower);
+        
+        if (!isValidCategory) {
+          // Try to infer from the category string
+          if (categoryLower.includes('boot') || categoryLower.includes('sneaker') || 
+              categoryLower.includes('sandal') || categoryLower.includes('heel') || 
+              categoryLower.includes('flat') || categoryLower.includes('shoe')) {
+            extracted.category = 'shoes';
+          } else if (categoryLower.includes('dress')) {
+            extracted.category = 'dress';
+          } else if (categoryLower.includes('pant') || categoryLower.includes('jean') || 
+                     categoryLower.includes('trouser')) {
+            extracted.category = 'pants';
+          } else if (categoryLower.includes('jacket') || categoryLower.includes('coat') || 
+                     categoryLower.includes('sweater')) {
+            extracted.category = 'jacket';
+          } else {
+            extracted.category = 'shirt';
+          }
+        }
       }
       if (!extracted.color || extracted.color.trim() === '') {
         extracted.color = 'white';
+      } else {
+        // Try to infer color - check for brown/beige/green before white
+        const colorLower = extracted.color.toLowerCase().trim();
+        if (colorLower.includes('brown') || colorLower.includes('tan') || 
+            colorLower.includes('camel') || colorLower.includes('taupe') ||
+            colorLower.includes('suede') || colorLower.includes('leather')) {
+          extracted.color = 'brown';
+        } else if (colorLower.includes('beige') || colorLower.includes('nude') || 
+                   colorLower.includes('sand') || colorLower.includes('cream')) {
+          extracted.color = 'beige';
+        } else if (colorLower.includes('green') || colorLower.includes('mint') || 
+                   colorLower.includes('olive') || colorLower.includes('emerald') ||
+                   colorLower.includes('sage') || colorLower.includes('forest')) {
+          extracted.color = 'green';
+        }
       }
       if (!extracted.style || extracted.style.trim() === '') {
         extracted.style = 'casual';
@@ -189,22 +268,76 @@ CRITICAL REQUIREMENTS:
 function extractAnalysisFromText(text: string): ItemAnalysis {
   const analysis: ItemAnalysis = {};
   
-  // Try to extract common patterns
-  const categoryMatch = text.match(/category["\s:]+([^",}\n]+)/i);
-  if (categoryMatch) analysis.category = categoryMatch[1].trim();
+  // Try to extract common patterns - be more flexible with regex
+  const categoryMatch = text.match(/category["\s:]+([^",}\n]+)/i) || 
+                       text.match(/["']category["']\s*:\s*["']([^"']+)["']/i) ||
+                       text.match(/category\s*:\s*([^,\n}]+)/i);
+  if (categoryMatch) analysis.category = categoryMatch[1].trim().replace(/["']/g, '');
   
-  const colorMatch = text.match(/color["\s:]+([^",}\n]+)/i);
-  if (colorMatch) analysis.color = colorMatch[1].trim();
+  const colorMatch = text.match(/color["\s:]+([^",}\n]+)/i) ||
+                    text.match(/["']color["']\s*:\s*["']([^"']+)["']/i) ||
+                    text.match(/color\s*:\s*([^,\n}]+)/i);
+  if (colorMatch) analysis.color = colorMatch[1].trim().replace(/["']/g, '');
   
-  const styleMatch = text.match(/style["\s:]+([^",}\n]+)/i);
-  if (styleMatch) analysis.style = styleMatch[1].trim();
+  const styleMatch = text.match(/style["\s:]+([^",}\n]+)/i) ||
+                    text.match(/["']style["']\s*:\s*["']([^"']+)["']/i) ||
+                    text.match(/style\s*:\s*([^,\n}]+)/i);
+  if (styleMatch) analysis.style = styleMatch[1].trim().replace(/["']/g, '');
+  
+  // Also try to extract from description if category/color not found
+  if (!analysis.category && text.toLowerCase().includes('dress')) {
+    analysis.category = 'dress';
+  }
+  if (!analysis.category && (text.toLowerCase().includes('boot') || text.toLowerCase().includes('shoe') || 
+                              text.toLowerCase().includes('sneaker') || text.toLowerCase().includes('sandal'))) {
+    analysis.category = 'shoes';
+  }
   
   // Ensure all three fields exist with fallbacks (never throw error)
   if (!analysis.category || analysis.category.trim() === '') {
     analysis.category = 'shirt';
+  } else {
+    // Try to infer category from the text if not a valid category
+    const categoryLower = analysis.category.toLowerCase().trim();
+    const validCategories = ['shirt', 'pants', 'dress', 'jacket', 'shoes', 'accessories'];
+    const isValidCategory = validCategories.some(cat => cat.toLowerCase() === categoryLower);
+    
+    if (!isValidCategory) {
+      // Try to infer from the category string
+      if (categoryLower.includes('boot') || categoryLower.includes('sneaker') || 
+          categoryLower.includes('sandal') || categoryLower.includes('heel') || 
+          categoryLower.includes('flat') || categoryLower.includes('shoe')) {
+        analysis.category = 'shoes';
+      } else if (categoryLower.includes('dress')) {
+        analysis.category = 'dress';
+      } else if (categoryLower.includes('pant') || categoryLower.includes('jean') || 
+                 categoryLower.includes('trouser')) {
+        analysis.category = 'pants';
+      } else if (categoryLower.includes('jacket') || categoryLower.includes('coat') || 
+                 categoryLower.includes('sweater')) {
+        analysis.category = 'jacket';
+      } else {
+        analysis.category = 'shirt';
+      }
+    }
   }
   if (!analysis.color || analysis.color.trim() === '') {
     analysis.color = 'white';
+  } else {
+    // Try to infer color - check for brown/beige/green before white
+    const colorLower = analysis.color.toLowerCase().trim();
+    if (colorLower.includes('brown') || colorLower.includes('tan') || 
+        colorLower.includes('camel') || colorLower.includes('taupe') ||
+        colorLower.includes('suede') || colorLower.includes('leather')) {
+      analysis.color = 'brown';
+    } else if (colorLower.includes('beige') || colorLower.includes('nude') || 
+               colorLower.includes('sand') || colorLower.includes('cream')) {
+      analysis.color = 'beige';
+    } else if (colorLower.includes('green') || colorLower.includes('mint') || 
+               colorLower.includes('olive') || colorLower.includes('emerald') ||
+               colorLower.includes('sage') || colorLower.includes('forest')) {
+      analysis.color = 'green';
+    }
   }
   if (!analysis.style || analysis.style.trim() === '') {
     analysis.style = 'casual';

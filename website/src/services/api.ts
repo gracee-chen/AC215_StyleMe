@@ -253,6 +253,107 @@ export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
   
   const data = await response.json();
   
+  // Helper function to normalize category - prioritize shoes and dresses
+  const normalizeCategory = (category: string): string => {
+    if (!category || category.trim() === '' || category === 'Unknown' || category === 'OTHER') {
+      return 'tops';
+    }
+    const lower = category.toLowerCase().trim();
+    const FIXED_CATEGORIES = ['tops', 'bottoms', 'layers', 'shoes', 'dresses', 'accessories'];
+    
+    // Direct exact matches
+    for (const cat of FIXED_CATEGORIES) {
+      if (lower === cat.toLowerCase()) {
+        return cat.toLowerCase();
+      }
+    }
+    
+    // Direct mapping
+    if (lower === 'shirt' || lower === 'shirts' || lower === 'top' || lower === 'tops') return 'tops';
+    if (lower === 'pants' || lower === 'pant' || lower === 'bottom' || lower === 'bottoms') return 'bottoms';
+    if (lower === 'dress' || lower === 'dresses') return 'dresses';
+    if (lower === 'jacket' || lower === 'jackets' || lower === 'layer' || lower === 'layers') return 'layers';
+    if (lower === 'shoes' || lower === 'shoe') return 'shoes';
+    if (lower === 'accessories' || lower === 'accessory') return 'accessories';
+    
+    // Pattern matches - prioritize shoes FIRST
+    if (lower.includes('boot') || lower.includes('sneaker') || lower.includes('sandal') || 
+        lower.includes('heel') || lower.includes('flat') || lower.includes('shoe') ||
+        lower.includes('slipper') || lower.includes('loafer') || lower.includes('pump') ||
+        lower.includes('oxford') || lower.includes('moccasin') || lower.includes('clog')) {
+      return 'shoes';
+    }
+    // Check dress BEFORE top
+    if (lower.includes('dress') && !lower.includes('undress') && !lower.includes('address')) {
+      return 'dresses';
+    }
+    if (lower.includes('shirt') || lower.includes('top') || lower.includes('blouse') || 
+        lower.includes('t-shirt') || lower.includes('tee') || lower.includes('tank')) {
+      return 'tops';
+    }
+    if (lower.includes('pant') || lower.includes('jean') || lower.includes('trouser') || 
+        lower.includes('short') || lower.includes('legging') || lower.includes('bottom')) {
+      return 'bottoms';
+    }
+    if (lower.includes('jacket') || lower.includes('coat') || lower.includes('blazer') || 
+        lower.includes('cardigan') || lower.includes('sweater') || lower.includes('hoodie') || 
+        lower.includes('vest') || lower.includes('outerwear') || lower.includes('layer')) {
+      return 'layers';
+    }
+    if (lower.includes('accessory') || lower.includes('bag') || lower.includes('hat') || 
+        lower.includes('scarf') || lower.includes('belt') || lower.includes('jewelry')) {
+      return 'accessories';
+    }
+    return 'tops';
+  };
+
+  // Helper function to normalize color - prioritize brown/beige/green before white
+  const normalizeColor = (color: string): string => {
+    if (!color || color.trim() === '') {
+      return 'White';
+    }
+    const lower = color.toLowerCase().trim();
+    const FIXED_COLORS = ['Black', 'White', 'Gray', 'Beige', 'Brown', 'Navy', 'Blue', 
+      'Green', 'Red', 'Pink', 'Purple', 'Yellow', 'Orange', 'Cream', 'Khaki'];
+    
+    // Direct exact matches
+    for (const col of FIXED_COLORS) {
+      if (lower === col.toLowerCase()) {
+        return col;
+      }
+    }
+    
+    // Pattern matches - prioritize green/brown/beige BEFORE white
+    if (lower.includes('green') || lower.includes('emerald') || lower.includes('forest') || 
+        lower.includes('olive') || lower.includes('sage') || lower.includes('mint') ||
+        lower.includes('lime') || lower.includes('teal') || lower.includes('jade')) return 'Green';
+    if (lower.includes('maroon') || lower.includes('burgundy') || lower.includes('crimson') ||
+        lower.includes('wine') || lower.includes('cherry') || (lower.includes('dark') && lower.includes('red'))) return 'Red';
+    if (lower.includes('black') || lower.includes('ebony') || lower.includes('charcoal')) return 'Black';
+    // Check brown/beige BEFORE white
+    if (lower.includes('brown') || lower.includes('chocolate') || lower.includes('coffee') ||
+        lower.includes('caramel') || lower.includes('taupe') || lower.includes('camel') ||
+        lower.includes('suede') || lower.includes('leather')) return 'Brown';
+    if (lower.includes('beige') || lower.includes('tan') || lower.includes('nude') ||
+        lower.includes('sand') || lower.includes('cream')) return 'Beige';
+    // Check white AFTER brown/beige/green
+    if (lower.includes('white') || lower.includes('ivory') || lower.includes('snow')) return 'White';
+    if (lower.includes('gray') || lower.includes('grey') || lower.includes('silver')) return 'Gray';
+    if (lower.includes('navy') || (lower.includes('dark') && lower.includes('blue'))) return 'Navy';
+    if (lower.includes('blue') && !lower.includes('navy')) return 'Blue';
+    if (lower.includes('red') || lower.includes('scarlet') || lower.includes('ruby')) return 'Red';
+    if (lower.includes('pink') || lower.includes('rose') || lower.includes('salmon') ||
+        lower.includes('magenta') || lower.includes('fuchsia')) return 'Pink';
+    if (lower.includes('purple') || lower.includes('violet') || lower.includes('lavender') ||
+        lower.includes('plum') || lower.includes('mauve')) return 'Purple';
+    if (lower.includes('yellow') || lower.includes('gold') || lower.includes('lemon') ||
+        lower.includes('amber')) return 'Yellow';
+    if (lower.includes('orange') || lower.includes('coral') || lower.includes('peach') ||
+        lower.includes('tangerine')) return 'Orange';
+    if (lower.includes('khaki')) return 'Khaki';
+    return 'White';
+  };
+
   // Merge metadata from localStorage
   const itemsWithMetadata = data.items.map((item: ClothingItem) => {
     // Extract filename from image path
@@ -265,10 +366,13 @@ export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
       const metadataStr = localStorage.getItem(metadataKey);
       if (metadataStr) {
         const metadata = JSON.parse(metadataStr);
+        // Normalize category and color to ensure they match our fixed categories/colors
+        const normalizedCategory = normalizeCategory(metadata.category || item.category || 'tops');
+        const normalizedColor = normalizeColor(metadata.color || item.color || 'White');
         return {
           ...item,
-          category: metadata.category || item.category || 'tops',
-          color: metadata.color || item.color || 'White',
+          category: normalizedCategory,
+          color: normalizedColor,
           style: metadata.style || 'Casual',
           material: metadata.material || '',
           pattern: metadata.pattern || '',
@@ -278,15 +382,21 @@ export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
       console.warn('Failed to load metadata for item:', e);
     }
     
-    // If no metadata found, ensure all three tags exist with fallback values
+    // If no metadata found, normalize and ensure all three tags exist with fallback values
+    const normalizedCategory = normalizeCategory(
+      item.category === 'Unknown' || item.category === 'OTHER' || !item.category 
+        ? 'tops' 
+        : item.category
+    );
+    const normalizedColor = normalizeColor(
+      item.color === 'Unknown' || !item.color 
+        ? 'White' 
+        : item.color
+    );
     return {
       ...item,
-      category: item.category === 'Unknown' || item.category === 'OTHER' || !item.category 
-        ? 'tops' 
-        : item.category,
-      color: item.color === 'Unknown' || !item.color 
-        ? 'White' 
-        : item.color,
+      category: normalizedCategory,
+      color: normalizedColor,
       style: (item as any).style || 'Casual',
     };
   });

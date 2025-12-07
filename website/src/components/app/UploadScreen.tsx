@@ -45,7 +45,17 @@ const normalizeCategoryForSelect = (aiCategory: string): string => {
   }
   
   // Pattern matches - prioritize most specific matches first
-  if (lower.includes('dress')) {
+  // IMPORTANT: Check for shoes FIRST to avoid misclassification to tops
+  // Shoes are footwear - boots, sneakers, sandals, heels, flats, etc.
+  if (lower.includes('boot') || lower.includes('sneaker') || lower.includes('sandal') || 
+      lower.includes('heel') || lower.includes('flat') || lower.includes('shoe') ||
+      lower.includes('slipper') || lower.includes('loafer') || lower.includes('pump') ||
+      lower.includes('oxford') || lower.includes('moccasin') || lower.includes('clog')) {
+    return 'shoes';
+  }
+  // IMPORTANT: Check for 'dress' BEFORE 'top' to avoid misclassification
+  // A dress is a one-piece garment, so 'dress' should take priority
+  if (lower.includes('dress') && !lower.includes('undress') && !lower.includes('address')) {
     return 'dresses';
   }
   if (lower.includes('top') || lower.includes('blouse') || lower.includes('t-shirt') || 
@@ -60,10 +70,6 @@ const normalizeCategoryForSelect = (aiCategory: string): string => {
       lower.includes('sweater') || lower.includes('hoodie') || lower.includes('vest') ||
       lower.includes('jacket') || lower.includes('layer') || lower.includes('outerwear')) {
     return 'layers';
-  }
-  if (lower.includes('sneaker') || lower.includes('boot') || lower.includes('sandal') || 
-      lower.includes('heel') || lower.includes('flat') || lower.includes('shoe')) {
-    return 'shoes';
   }
   if (lower.includes('bag') || lower.includes('hat') || lower.includes('scarf') || 
       lower.includes('belt') || lower.includes('jewelry') || lower.includes('accessory')) {
@@ -106,12 +112,15 @@ const normalizeColorForSelect = (aiColor: string): string => {
       lower.includes('wine') || lower.includes('cherry') || (lower.includes('dark') && lower.includes('red'))) return 'Red';
   
   if (lower.includes('black') || lower.includes('ebony') || lower.includes('charcoal')) return 'Black';
-  // Check white AFTER green to avoid misclassifying green items with white accents
+  // Check brown/beige BEFORE white to avoid misclassifying brown/tan items as white
+  if (lower.includes('brown') || lower.includes('chocolate') || lower.includes('coffee') ||
+      lower.includes('caramel') || lower.includes('taupe') || lower.includes('camel') ||
+      lower.includes('suede') || lower.includes('leather')) return 'Brown';
+  if (lower.includes('beige') || lower.includes('tan') || lower.includes('nude') ||
+      lower.includes('sand') || lower.includes('cream')) return 'Beige';
+  // Check white AFTER brown/beige to avoid misclassifying brown items as white
   if (lower.includes('white') || lower.includes('ivory') || lower.includes('snow')) return 'White';
   if (lower.includes('gray') || lower.includes('grey') || lower.includes('silver')) return 'Gray';
-  if (lower.includes('beige') || lower.includes('tan') || lower.includes('nude')) return 'Beige';
-  if (lower.includes('brown') || lower.includes('chocolate') || lower.includes('coffee') ||
-      lower.includes('caramel') || lower.includes('taupe')) return 'Brown';
   if (lower.includes('navy') || (lower.includes('dark') && lower.includes('blue'))) return 'Navy';
   if (lower.includes('blue') && !lower.includes('navy')) return 'Blue';
   // General red check (after maroon/burgundy)
@@ -235,6 +244,14 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           if (!analysis.color) analysis.color = 'white';
           if (!analysis.style) analysis.style = 'casual';
           
+          // Log raw analysis for debugging
+          console.log('Raw AI analysis:', {
+            category: analysis.category,
+            color: analysis.color,
+            style: analysis.style,
+            description: analysis.description
+          });
+          
           // Normalize category to our fixed categories (always returns a valid category)
           const normalizedCategory = normalizeCategoryForSelect(analysis.category);
           
@@ -245,9 +262,12 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           const normalizedStyle = normalizeStyleForSelect(analysis.style);
           
           console.log('Normalized features:', {
-            category: normalizedCategory,
-            color: normalizedColor,
-            style: normalizedStyle
+            originalCategory: analysis.category,
+            normalizedCategory: normalizedCategory,
+            originalColor: analysis.color,
+            normalizedColor: normalizedColor,
+            originalStyle: analysis.style,
+            normalizedStyle: normalizedStyle
           });
           
           // Upload the file

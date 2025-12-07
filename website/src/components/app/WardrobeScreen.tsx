@@ -96,7 +96,18 @@ function normalizeCategory(category: string): string {
   if (lower === 'shoes' || lower === 'shoe') return 'shoes';
   if (lower === 'accessories' || lower === 'accessory') return 'accessories';
   
-  // Pattern matches
+  // Pattern matches - prioritize most specific matches first
+  // IMPORTANT: Check for shoes FIRST to avoid misclassification to tops
+  if (lower.includes('boot') || lower.includes('sneaker') || lower.includes('sandal') || 
+      lower.includes('heel') || lower.includes('flat') || lower.includes('shoe') ||
+      lower.includes('slipper') || lower.includes('loafer') || lower.includes('pump') ||
+      lower.includes('oxford') || lower.includes('moccasin') || lower.includes('clog')) {
+    return 'shoes';
+  }
+  // IMPORTANT: Check for 'dress' BEFORE 'top' to avoid misclassification
+  if (lower.includes('dress') && !lower.includes('undress') && !lower.includes('address')) {
+    return 'dresses';
+  }
   if (lower.includes('shirt') || lower.includes('top') || lower.includes('blouse') || 
       lower.includes('t-shirt') || lower.includes('tee') || lower.includes('tank')) {
     return 'tops';
@@ -109,13 +120,6 @@ function normalizeCategory(category: string): string {
       lower.includes('cardigan') || lower.includes('sweater') || lower.includes('hoodie') || 
       lower.includes('vest') || lower.includes('outerwear') || lower.includes('layer')) {
     return 'layers';
-  }
-  if (lower.includes('shoe') || lower.includes('sneaker') || lower.includes('boot') || 
-      lower.includes('sandal') || lower.includes('heel') || lower.includes('flat')) {
-    return 'shoes';
-  }
-  if (lower.includes('dress')) {
-    return 'dresses';
   }
   if (lower.includes('accessory') || lower.includes('bag') || lower.includes('hat') || 
       lower.includes('scarf') || lower.includes('belt') || lower.includes('jewelry')) {
