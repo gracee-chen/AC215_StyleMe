@@ -26,9 +26,11 @@ CORS(app)  # Enable CORS for frontend
 
 # Configuration
 UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', '/app/uploads')
-WARDROBES_DIR = Path(os.getenv('WARDROBES_DIR', '/app/wardrobes'))
-CATALOG_DIR = Path(os.getenv('CATALOG_DIR', '/app/catalog'))
-EXPERIMENTS_DIR = Path(os.getenv('EXPERIMENTS_DIR', '/app/experiments'))
+WARDROBES_DIR = Path(os.getenv('WARDROBES_DIR', '/gcs/styleme-production/wardrobes'))
+CATALOG_DIR = Path(os.getenv('CATALOG_DIR', '/gcs/styleme-production/catalog'))
+EXPERIMENTS_DIR = Path(os.getenv('EXPERIMENTS_DIR', '/gcs/styleme-production/experiments'))
+RESULTS_DIR = Path(os.getenv('RESULTS_DIR', '/gcs/styleme-production/results'))
+QUERIES_DIR = Path(os.getenv('QUERIES_DIR', '/gcs/styleme-production/queries'))
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 # Create upload directory
@@ -43,17 +45,8 @@ def get_inference_service():
     """Lazy initialization of inference service"""
     global inference_service, inference_service_error
     if inference_service is None and inference_service_error is None:
-        # Check if model exists before trying to initialize
-        model_found = False
-        for exp_dir in sorted(EXPERIMENTS_DIR.glob("exp_*"), reverse=True):
-            best_model = exp_dir / "best_model.pth"
-            if best_model.exists():
-                model_found = True
-                break
-        
-        if not model_found:
-            inference_service_error = "No trained model found. Please train a model first."
-            return None, inference_service_error
+        # Skip filesystem check in Cloud Run - will use GCS client library
+        # The InferenceService will handle GCS access automatically
         
         # Model exists, try to initialize service
         # Disable background removal for faster startup (can be enabled later)
@@ -94,6 +87,56 @@ def save_image_from_base64(base64_string, output_path):
     except Exception as e:
         print(f"Error saving image: {e}")
         return False
+
+def save_query_to_gcs(user_id: str, request_id: str, query_image_path: Path) -> str:
+    """Save query image to GCS queries/{user_id}/{request_id}/query.jpg"""
+    from google.cloud import storage
+    
+    gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+    gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+    
+    # GCS path
+    gcs_path = f"queries/{user_id}/{request_id}/query.jpg"
+    
+    try:
+        client = storage.Client(project=gcp_project_id)
+        bucket = client.bucket(gcp_bucket_name)
+        blob = bucket.blob(gcs_path)
+        
+        # Upload query image
+        blob.upload_from_filename(str(query_image_path))
+        print(f"✅ Saved query image to gs://{gcp_bucket_name}/{gcs_path}")
+        return gcs_path
+    except Exception as e:
+        print(f"⚠️  Failed to save query to GCS: {e}")
+        # Return local path as fallback
+        return str(query_image_path)
+
+def save_result_to_gcs(user_id: str, request_id: str, result_data: dict):
+    """Save inference results to GCS results/{user_id}/{request_id}.json"""
+    from google.cloud import storage
+    import json
+    
+    gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+    gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+    
+    # GCS path
+    gcs_path = f"results/{user_id}/{request_id}.json"
+    
+    try:
+        client = storage.Client(project=gcp_project_id)
+        bucket = client.bucket(gcp_bucket_name)
+        blob = bucket.blob(gcs_path)
+        
+        # Upload results as JSON
+        blob.upload_from_string(
+            json.dumps(result_data, indent=2),
+            content_type='application/json'
+        )
+        print(f"✅ Saved results to gs://{gcp_bucket_name}/{gcs_path}")
+    except Exception as e:
+        print(f"⚠️  Failed to save results to GCS: {e}")
+        raise
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -211,6 +254,19 @@ def get_recommendations():
                 'hint': 'Run the training pipeline to create a model, or ensure best_model.pth exists in experiments directory.'
             }), 503  # Service Unavailable
         
+        # Generate request ID for organizing query and results
+        from datetime import datetime
+        import uuid
+        request_id = data.get('request_id') or f"query_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        
+        # Save query image to GCS queries/{user_id}/{request_id}/
+        query_saved_path = None
+        try:
+            # Save query image to GCS
+            query_saved_path = save_query_to_gcs(user_id, request_id, query_image_path)
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to save query image to GCS: {e}")
+        
         # Run inference
         result = service.inference(
             user_id=user_id,
@@ -221,11 +277,10 @@ def get_recommendations():
             gender=gender
         )
         
-        # Clean up temp file
-        try:
-            query_image_path.unlink()
-        except:
-            pass
+        # Add metadata to result
+        result['request_id'] = request_id
+        result['query_image_path'] = str(query_saved_path) if query_saved_path else str(query_image_path)
+        result['timestamp'] = datetime.now().isoformat()
         
         # Format response for frontend
         formatted_items = []
@@ -256,14 +311,30 @@ def get_recommendations():
             }
             formatted_items.append(formatted_item)
         
-        return jsonify({
+        # Prepare response
+        response_data = {
             'success': True,
             'user_id': result.get('user_id'),
+            'request_id': request_id,
             'used_wardrobe': result.get('used_wardrobe', False),
             'items': formatted_items,
             'num_results': len(formatted_items),
             'threshold': threshold
-        }), 200
+        }
+        
+        # Save results to GCS
+        try:
+            save_result_to_gcs(user_id, request_id, response_data)
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to save results to GCS: {e}")
+        
+        # Clean up temp file (after saving to GCS)
+        try:
+            query_image_path.unlink()
+        except:
+            pass
+        
+        return jsonify(response_data), 200
         
     except Exception as e:
         import traceback

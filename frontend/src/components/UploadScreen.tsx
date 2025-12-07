@@ -288,4 +288,3 @@ export function UploadScreen({ userId, onUpload, onComplete }: UploadScreenProps
     </div>
   );
 }
-}
