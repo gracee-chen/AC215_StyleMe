@@ -11,6 +11,7 @@ metadata:
 data:
   # GCP Configuration
   GCP_BUCKET_NAME: "styleme-data-bucket"
+  GCS_BUCKET: "styleme-production"
   GCP_PROJECT_ID: "styleme-475201"
   DATA_PREFIX: "json"
   IMAGES_PREFIX: "images"
@@ -19,12 +20,13 @@ data:
   LOG_LEVEL: "INFO"
   
   # Data directories (shared across containers)
+  # NOTE: Using GCS paths for experiments, catalog, wardrobes since models come from Vertex AI
   DATA_DIR: "/app/data"
-  EXPERIMENTS_DIR: "/app/experiments"
-  CATALOG_DIR: "/app/catalog"
-  WARDROBES_DIR: "/app/wardrobes"
-  QUERIES_DIR: "/app/queries"
-  RESULTS_DIR: "/app/results"
+  EXPERIMENTS_DIR: "/gcs/styleme-production/experiments"
+  CATALOG_DIR: "/gcs/styleme-production/catalog"
+  WARDROBES_DIR: "/gcs/styleme-production/wardrobes"
+  QUERIES_DIR: "/gcs/styleme-production/queries"
+  RESULTS_DIR: "/gcs/styleme-production/results"
   LOGS_DIR: "/app/logs"
   
   # Inference service specific

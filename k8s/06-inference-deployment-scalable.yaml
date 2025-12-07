@@ -1,6 +1,7 @@
 ---
-# Inference Deployment - Long-running service that serves the API
-# This is a Deployment (not Job) because it needs to run continuously
+# Inference Deployment - Scalable version (without PVC requirement)
+# This version uses emptyDir instead of PVC to allow multiple replicas
+# The inference service uses GCS for all data, so PVC is not required
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,7 +11,7 @@ metadata:
     app: styleme
     component: inference
 spec:
-  replicas: 1  # Start with 1 replica (PVC is ReadWriteOnce, can't share between pods)
+  replicas: 1  # Will be managed by HPA
   selector:
     matchLabels:
       app: styleme
@@ -24,7 +25,7 @@ spec:
       serviceAccountName: styleme-workload-identity
       containers:
       - name: inference
-        image: us-central1-docker.pkg.dev/styleme-475201/styleme-repo/styleme-inference:latest  # You'll need to build and push this image
+        image: us-central1-docker.pkg.dev/styleme-475201/styleme-repo/styleme-inference:latest
         imagePullPolicy: Always
         envFrom:
         - configMapRef:
@@ -33,34 +34,19 @@ spec:
         - containerPort: 5000
           name: http
           protocol: TCP
+        # Use emptyDir instead of PVC - inference uses GCS for all data
         volumeMounts:
-        - name: shared-data
+        - name: local-data
           mountPath: /app/data
-          subPath: data
-        - name: shared-data
-          mountPath: /app/experiments
-          subPath: experiments
-        - name: shared-data
-          mountPath: /app/catalog
-          subPath: catalog
-        - name: shared-data
-          mountPath: /app/wardrobes
-          subPath: wardrobes
-        - name: shared-data
-          mountPath: /app/queries
-          subPath: queries
-        - name: shared-data
-          mountPath: /app/results
-          subPath: results
         - name: logs
           mountPath: /app/logs
         resources:
           requests:
             memory: "1Gi"
-            cpu: "500m"  # Reduced to fit available resources
+            cpu: "500m"
           limits:
             memory: "2Gi"
-            cpu: "1000m"  # Reduced to fit available resources
+            cpu: "1000m"
         # Health checks
         livenessProbe:
           httpGet:
@@ -79,9 +65,8 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
       volumes:
-      - name: shared-data
-        persistentVolumeClaim:
-          claimName: styleme-data-pvc
+      - name: local-data
+        emptyDir: {}  # Temporary storage - inference uses GCS for persistent data
       - name: logs
         emptyDir: {}
 
@@ -96,8 +81,7 @@ metadata:
     app: styleme
     component: inference
 spec:
-  type: LoadBalancer  # Use LoadBalancer for public access (GCP will create external IP)
-  # Alternative: Use NodePort for simpler setup, or ClusterIP + Ingress
+  type: LoadBalancer
   ports:
   - port: 80
     targetPort: 5000
@@ -106,6 +90,5 @@ spec:
   selector:
     app: styleme
     component: inference
-  # Session affinity for stateful connections (optional)
   sessionAffinity: None
 

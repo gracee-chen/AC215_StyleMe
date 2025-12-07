@@ -37,13 +37,93 @@ class CatalogIndexBuilder:
         """Load trained FashionCLIP model"""
         print("\n📦 Loading trained model...")
         
-        # Find best model
+        # Check if using GCS path and download to local temp if needed
+        experiments_path = str(self.experiments_dir)
+        use_gcs_client = False
+        local_experiments_dir = None
+        
+        # If path starts with /gcs/ or looks like GCS path, try to access via filesystem first
+        if experiments_path.startswith('/gcs/'):
+            # Check if gcsfuse mount worked
+            if os.path.exists(experiments_path) and os.listdir(experiments_path):
+                print(f"   Using GCS mount at {experiments_path}")
+                local_experiments_dir = Path(experiments_path)
+            else:
+                # Mount failed, use GCS client library
+                use_gcs_client = True
+                print(f"   GCS mount not available, using GCS client library")
+        elif 'gs://' in experiments_path or 'styleme-production' in experiments_path:
+            # Explicit GCS path, use client library
+            use_gcs_client = True
+            print(f"   Using GCS client library for {experiments_path}")
+        else:
+            # Local path
+            local_experiments_dir = Path(experiments_path)
+        
         model_path = None
-        for exp_dir in sorted(self.experiments_dir.glob("exp_*"), reverse=True):
-            best_model = exp_dir / "best_model.pth"
-            if best_model.exists():
-                model_path = best_model
-                break
+        
+        if use_gcs_client:
+            # Find and download model from GCS
+            from google.cloud import storage
+            gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+            gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+            
+            client = storage.Client(project=gcp_project_id)
+            bucket = client.bucket(gcp_bucket_name)
+            
+            # Extract prefix from experiments_dir path
+            if experiments_path.startswith('/gcs/'):
+                prefix = experiments_path.replace('/gcs/', '').replace(gcp_bucket_name, '').lstrip('/')
+            else:
+                prefix = 'experiments/'
+            
+            if not prefix.endswith('/'):
+                prefix += '/'
+            
+            print(f"   Searching GCS bucket {gcp_bucket_name} with prefix {prefix}")
+            
+            # List experiment directories
+            exp_dirs = set()
+            for blob in bucket.list_blobs(prefix=prefix):
+                # Extract exp_XXX from path
+                path_parts = blob.name.replace(prefix, '').split('/')
+                if path_parts and path_parts[0].startswith('exp_'):
+                    exp_dirs.add(path_parts[0])
+            
+            # Sort experiment directories (highest number first)
+            exp_numbers = []
+            for exp_dir in exp_dirs:
+                try:
+                    num = int(exp_dir.replace('exp_', ''))
+                    exp_numbers.append((num, exp_dir))
+                except ValueError:
+                    continue
+            
+            exp_numbers.sort(reverse=True)
+            
+            # Find first experiment with best_model.pth
+            for exp_num, exp_dir in exp_numbers:
+                model_blob_path = f"{prefix}{exp_dir}/best_model.pth"
+                blob = bucket.blob(model_blob_path)
+                if blob.exists():
+                    # Download to local temp file
+                    import tempfile
+                    temp_dir = Path(tempfile.gettempdir()) / "styleme_models"
+                    temp_dir.mkdir(exist_ok=True)
+                    local_model_path = temp_dir / f"{exp_dir}_best_model.pth"
+                    
+                    print(f"   Downloading {model_blob_path} to {local_model_path}...")
+                    blob.download_to_filename(str(local_model_path))
+                    model_path = local_model_path
+                    print(f"   ✅ Downloaded model: {local_model_path}")
+                    break
+        else:
+            # Use filesystem access (local or mounted)
+            for exp_dir in sorted(local_experiments_dir.glob("exp_*"), reverse=True):
+                best_model = exp_dir / "best_model.pth"
+                if best_model.exists():
+                    model_path = best_model
+                    break
         
         if model_path is None:
             raise FileNotFoundError("No trained model found in experiments directory")
@@ -52,7 +132,7 @@ class CatalogIndexBuilder:
         
         # Load model
         model = FashionCLIPModel()
-        checkpoint = torch.load(model_path, map_location=self.device)
+        checkpoint = torch.load(str(model_path), map_location=self.device)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.to(self.device)
         model.eval()
@@ -135,6 +215,11 @@ class CatalogIndexBuilder:
         df = pd.DataFrame(items)
         print(f"   ✅ Loaded {len(df)} catalog items (before deduplication)")
         
+        if len(df) == 0:
+            print("   ⚠️  No catalog items found - catalog will be empty")
+            # Return empty dataframe with expected columns
+            return pd.DataFrame(columns=['id', 'title', 'description', 'brand', 'price', 'url', 'category', 'gender', 'image_path'])
+        
         # Deduplicate by product ID (keep first occurrence)
         df = df.drop_duplicates(subset='id', keep='first').reset_index(drop=True)
         print(f"   ✅ After deduplication: {len(df)} unique items")
@@ -190,6 +275,15 @@ class CatalogIndexBuilder:
     def build_faiss_index(self, embeddings):
         """Build FAISS index for fast similarity search"""
         print("\n🔍 Building FAISS index...")
+        
+        # Handle empty embeddings case
+        if len(embeddings) == 0 or embeddings.shape[0] == 0:
+            print("   ⚠️  No embeddings to index - returning empty index")
+            # Return a dummy index with expected dimension (512 for CLIP)
+            dimension = 512
+            index = faiss.IndexFlatL2(dimension)
+            print(f"   ✅ Empty FAISS index created (dimension: {dimension})")
+            return index
         
         dimension = embeddings.shape[1]
         

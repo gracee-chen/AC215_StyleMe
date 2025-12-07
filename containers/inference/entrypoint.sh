@@ -39,8 +39,10 @@ else
     echo "   Code will attempt to load from GCS using client library"
 fi
 
-# Skip catalog check in Cloud Run - will be loaded from GCS on demand
-if [ -z "$K_SERVICE" ] && [ -z "$CLOUD_RUN" ]; then
+# Skip catalog check in Cloud Run and Kubernetes - will be loaded from GCS on demand
+# In Kubernetes, catalog should already exist in GCS, so we don't need to build it locally
+# Check for Kubernetes by looking for service account token (more reliable than env var)
+if [ -z "$K_SERVICE" ] && [ -z "$CLOUD_RUN" ] && [ ! -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
     # Only check catalog locally
     CATALOG_EXISTS=false
     if [ -d "$CATALOG_DIR" ] && [ "$(ls -A $CATALOG_DIR 2>/dev/null)" ]; then
@@ -53,8 +55,9 @@ if [ -z "$K_SERVICE" ] && [ -z "$CLOUD_RUN" ]; then
     # Build catalog if it doesn't exist (only locally)
     if [ "$CATALOG_EXISTS" = false ]; then
         echo ""
-        echo "📦 Catalog index not found - building now..."
+        echo "📦 Catalog index not found - attempting to build..."
         echo "   This may take 10-30 minutes depending on catalog size"
+        echo "   Note: If no data is available, catalog will be empty and loaded from GCS on demand"
         echo ""
         
         python /app/build_catalog_index.py \
@@ -64,12 +67,12 @@ if [ -z "$K_SERVICE" ] && [ -z "$CLOUD_RUN" ]; then
             --output-dir "$CATALOG_DIR"
         
         if [ $? -ne 0 ]; then
-            echo "❌ Failed to build catalog index"
-            exit 1
+            echo "⚠️  Failed to build catalog index (this is OK if no local data exists)"
+            echo "   Catalog will be loaded from GCS on first use"
+        else
+            echo ""
+            echo "✅ Catalog index built successfully"
         fi
-        
-        echo ""
-        echo "✅ Catalog index built successfully"
     fi
 else
     echo "☁️  Cloud Run: Catalog will be loaded from GCS on first use"
