@@ -1,0 +1,21 @@
+---
+# PersistentVolumeClaim for shared data storage
+# This allows all services to share the same data directory
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: styleme-data-pvc
+  namespace: default
+  labels:
+    app: styleme
+spec:
+  accessModes:
+    - ReadWriteOnce  # Changed to ReadWriteOnce for GKE compatibility (standard storage class)
+  resources:
+    requests:
+      storage: 50Gi  # Adjust based on your data size
+  # Note: For GKE, you may need to use a StorageClass that supports ReadWriteMany
+  # For example: storageClassName: "nfs-client" or "gce-pd-sc"
+  # For now, we'll let Kubernetes use the default storage class
+  # You may need to adjust this based on your cluster's available storage classes
+

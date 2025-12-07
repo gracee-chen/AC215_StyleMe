@@ -1,0 +1,4 @@
+name: styleme-infrastructure
+runtime: nodejs
+description: StyleMe infrastructure automation using Pulumi
+

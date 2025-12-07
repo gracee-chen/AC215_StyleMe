@@ -1,0 +1,47 @@
+---
+# Ingestion Job - Runs once to load data from GCS
+# This is a Job (not Deployment) because it runs to completion
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: styleme-ingestion
+  namespace: default
+  labels:
+    app: styleme
+    component: ingestion
+spec:
+  # Job will be retried up to 3 times if it fails
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: styleme
+        component: ingestion
+    spec:
+      restartPolicy: Never  # Jobs use Never, not Always
+      containers:
+      - name: ingestion
+        image: us-central1-docker.pkg.dev/styleme-475201/styleme-repo/styleme-ingestion:latest  # You'll need to build and push this image
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: styleme-config
+        volumeMounts:
+        - name: shared-data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: styleme-data-pvc
+      - name: logs
+        emptyDir: {}  # Temporary logs, can be changed to PVC if needed
+

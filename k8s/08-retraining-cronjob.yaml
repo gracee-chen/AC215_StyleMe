@@ -1,0 +1,69 @@
+---
+# CronJob to trigger model retraining based on schedule or data changes
+# This demonstrates automated retraining as per Milestone 5 requirements
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: styleme-retraining-trigger
+  namespace: default
+  labels:
+    app: styleme
+    component: retraining
+spec:
+  # Run weekly on Sunday at 2 AM UTC
+  # Adjust schedule as needed: "minute hour day month weekday"
+  schedule: "0 2 * * 0"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: styleme
+            component: retraining
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: retrain-trigger
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Checking for new data and model performance..."
+              
+              # Check if new data exists in GCS bucket
+              # This is a placeholder - implement actual data check logic
+              NEW_DATA=$(gsutil ls gs://styleme-data-bucket/json/ | wc -l)
+              echo "Found $NEW_DATA data files"
+              
+              # Check if model performance is below threshold
+              # This is a placeholder - implement actual performance check
+              PERFORMANCE_THRESHOLD=0.85
+              
+              # If conditions met, trigger training job
+              if [ "$NEW_DATA" -gt 0 ]; then
+                echo "New data detected. Triggering retraining..."
+                TIMESTAMP=$(date +%s)
+                kubectl create job styleme-training-$TIMESTAMP \
+                  --from=job/styleme-training \
+                  --dry-run=client -o yaml | kubectl apply -f -
+                echo "Training job styleme-training-$TIMESTAMP created"
+              else
+                echo "No new data. Skipping retraining."
+              fi
+            env:
+            - name: GCP_PROJECT_ID
+              value: "styleme-475201"
+            - name: GCP_BUCKET_NAME
+              value: "styleme-data-bucket"
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "200m"
+          serviceAccountName: default
+

@@ -6,3 +6,4 @@ torchvision>=0.15.0
 rembg>=2.0.50
 tqdm>=4.66.0
 
+google-cloud-storage>=2.0.0

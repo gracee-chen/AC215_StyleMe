@@ -1,0 +1,7 @@
+config:
+  gcp:project: styleme-475201
+  gcp:region: us-central1
+  gcp:zone: us-central1-b
+  styleme-infrastructure:clusterName: styleme-cluster
+  styleme-infrastructure:nodeCount: "2"
+  styleme-infrastructure:gpuNodeCount: "1"

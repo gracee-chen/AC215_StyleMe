@@ -1,0 +1,38 @@
+---
+# ConfigMap for shared environment variables
+# This contains non-sensitive configuration that all services need
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: styleme-config
+  namespace: default
+  labels:
+    app: styleme
+data:
+  # GCP Configuration
+  GCP_BUCKET_NAME: "styleme-data-bucket"
+  GCP_PROJECT_ID: "styleme-475201"
+  DATA_PREFIX: "json"
+  IMAGES_PREFIX: "images"
+  
+  # Logging
+  LOG_LEVEL: "INFO"
+  
+  # Data directories (shared across containers)
+  DATA_DIR: "/app/data"
+  EXPERIMENTS_DIR: "/app/experiments"
+  CATALOG_DIR: "/app/catalog"
+  WARDROBES_DIR: "/app/wardrobes"
+  QUERIES_DIR: "/app/queries"
+  RESULTS_DIR: "/app/results"
+  LOGS_DIR: "/app/logs"
+  
+  # Inference service specific
+  PORT: "5000"
+  FLASK_DEBUG: "false"
+  UPLOAD_FOLDER: "/app/uploads"
+  RUN_API_SERVER: "true"
+  
+  # Training specific
+  CUDA_VISIBLE_DEVICES: "0"
+
