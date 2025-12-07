@@ -49,13 +49,13 @@ def get_inference_service():
         # The InferenceService will handle GCS access automatically
         
         # Model exists, try to initialize service
-        # Disable background removal for faster startup (can be enabled later)
+        # Enable background removal for wardrobe images
         try:
             inference_service = InferenceService(
                 catalog_dir=str(CATALOG_DIR),
                 experiments_dir=str(EXPERIMENTS_DIR),
                 wardrobes_dir=str(WARDROBES_DIR),
-                bg_removal_enabled=False  # Disabled for faster startup - can enable if needed
+                bg_removal_enabled=True  # Enable background removal for wardrobe images
             )
         except FileNotFoundError as e:
             if "No trained model found" in str(e):
@@ -146,7 +146,7 @@ def health():
 @app.route('/api/upload', methods=['POST'])
 def upload_image():
     """
-    Upload an image to user's wardrobe
+    Upload an image to user's wardrobe with background removal
     POST /api/upload
     Body: {
         "user_id": "string",
@@ -165,32 +165,82 @@ def upload_image():
         user_wardrobe_dir.mkdir(parents=True, exist_ok=True)
         
         # Handle image upload
-        image_path = None
+        temp_image_path = None
         
         # Try base64 first
         if 'image' in data:
-            image_filename = f"{user_id}_{len(list(user_wardrobe_dir.glob('*.jpg')))}.jpg"
-            image_path = user_wardrobe_dir / image_filename
-            if not save_image_from_base64(data['image'], image_path):
+            temp_filename = f"temp_{user_id}_{os.getpid()}.jpg"
+            temp_image_path = Path(UPLOAD_FOLDER) / temp_filename
+            if not save_image_from_base64(data['image'], temp_image_path):
                 return jsonify({'error': 'Failed to save image'}), 400
         
         # Try multipart form data
         elif 'file' in request.files:
             file = request.files['file']
             if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                image_path = user_wardrobe_dir / filename
-                file.save(image_path)
+                temp_filename = f"temp_{user_id}_{os.getpid()}.jpg"
+                temp_image_path = Path(UPLOAD_FOLDER) / temp_filename
+                file.save(temp_image_path)
         
-        if not image_path or not image_path.exists():
+        if not temp_image_path or not temp_image_path.exists():
             return jsonify({'error': 'No valid image provided'}), 400
+        
+        # Process image: remove background and save with white background
+        final_image_path = None
+        try:
+            # Get inference service for background removal
+            service, error = get_inference_service()
+            
+            # Generate final image filename
+            image_filename = f"{user_id}_{len(list(user_wardrobe_dir.glob('*.jpg')))}.jpg"
+            final_image_path = user_wardrobe_dir / image_filename
+            
+            if service and service.bg_removal_enabled and service.bg_remover:
+                # Load original image
+                original_image = Image.open(temp_image_path).convert('RGB')
+                
+                # Remove background
+                processed_image = service.bg_remover.remove_background(original_image)
+                
+                # Convert to RGB with white background
+                if processed_image.mode == 'RGBA':
+                    background = Image.new('RGB', processed_image.size, (255, 255, 255))
+                    if len(processed_image.split()) == 4:  # Has alpha channel
+                        background.paste(processed_image, mask=processed_image.split()[3])
+                    else:
+                        background.paste(processed_image)
+                    processed_image = background
+                elif processed_image.mode != 'RGB':
+                    processed_image = processed_image.convert('RGB')
+                
+                # Save processed image to wardrobe
+                processed_image.save(final_image_path, 'JPEG', quality=95)
+                
+            else:
+                # If background removal is not available, save original image
+                Image.open(temp_image_path).save(final_image_path, 'JPEG', quality=95)
+        
+        except Exception as e:
+            print(f"⚠️  Background removal failed: {e}, saving original image")
+            # Fallback: save original image
+            if final_image_path is None:
+                image_filename = f"{user_id}_{len(list(user_wardrobe_dir.glob('*.jpg')))}.jpg"
+                final_image_path = user_wardrobe_dir / image_filename
+            Image.open(temp_image_path).save(final_image_path, 'JPEG', quality=95)
+        finally:
+            # Clean up temp file
+            if temp_image_path and temp_image_path.exists():
+                temp_image_path.unlink()
+        
+        if not final_image_path or not final_image_path.exists():
+            return jsonify({'error': 'Failed to process image'}), 500
         
         # Return success with image info
         return jsonify({
             'success': True,
             'user_id': user_id,
-            'image_path': str(image_path),
-            'message': 'Image uploaded successfully. Wardrobe index will be rebuilt automatically on next recommendation.'
+            'image_path': str(final_image_path),
+            'message': 'Image uploaded and processed successfully. Background removed with white background.'
         }), 200
         
     except Exception as e:
