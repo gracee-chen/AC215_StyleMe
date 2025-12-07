@@ -25,7 +25,7 @@ sys.path.insert(0, project_root)
 
 class InferenceService:
     def __init__(self, catalog_dir, experiments_dir, wardrobes_dir, device=None,
-                 bg_removal_enabled=True, bg_removal_model="briaai/RMBG-1.4"):
+                 bg_removal_enabled=False, bg_removal_model="briaai/RMBG-1.4"):
         self.catalog_dir = Path(catalog_dir)
         self.experiments_dir = Path(experiments_dir)
         self.wardrobes_dir = Path(wardrobes_dir)
@@ -38,7 +38,7 @@ class InferenceService:
         print(f"🔧 Initializing Inference Service")
         print(f"   Device: {self.device}")
         
-        # Initialize background remover
+        # Initialize background remover (optional, disabled by default)
         if bg_removal_enabled:
             print("🎨 Initializing background remover...")
             try:
@@ -50,14 +50,14 @@ class InferenceService:
                 self.bg_removal_enabled = True
                 print("   ✅ Background remover ready")
             except Exception as e:
-                print(f"   ⚠️  Failed to initialize background remover: {e}")
+                print(f"   ⚠️  Failed to initialize background remover: {str(e)}")
                 print("   ⚠️  Continuing without background removal")
                 self.bg_remover = None
                 self.bg_removal_enabled = False
         else:
             self.bg_remover = None
             self.bg_removal_enabled = False
-            print("   ⚠️  Background removal disabled")
+            print("   ℹ️  Background removal disabled (default)")
         
         # Load model
         self.model = self._load_model()
@@ -299,27 +299,23 @@ class InferenceService:
             # Step 1: Load image
             image = Image.open(image_path).convert('RGB')
             
-            # Step 2: Remove background (if enabled)
+            # Step 2: Remove background (REQUIRED if enabled)
+            # Background removal is mandatory for all images when enabled
             if self.bg_removal_enabled and self.bg_remover:
-                try:
-                    # Remove background (returns PIL Image with transparent bg)
-                    image = self.bg_remover.remove_background(image)
-                    
-                    # Convert RGBA to RGB with white background
-                    if image.mode == 'RGBA':
-                        background = Image.new('RGB', image.size, (255, 255, 255))
-                        if len(image.split()) == 4:  # Has alpha channel
-                            background.paste(image, mask=image.split()[3])
-                        else:
-                            background.paste(image)
-                        image = background
-                    elif image.mode != 'RGB':
-                        image = image.convert('RGB')
-                        
-                except Exception as e:
-                    print(f"⚠️  Background removal failed: {e}, using original image")
-                    # Fallback: reload original image
-                    image = Image.open(image_path).convert('RGB')
+                # Remove background (returns PIL Image with transparent bg)
+                # This is REQUIRED - no fallback to original image
+                image = self.bg_remover.remove_background(image)
+                
+                # Convert RGBA to RGB with white background
+                if image.mode == 'RGBA':
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    if len(image.split()) == 4:  # Has alpha channel
+                        background.paste(image, mask=image.split()[3])
+                    else:
+                        background.paste(image)
+                    image = background
+                elif image.mode != 'RGB':
+                    image = image.convert('RGB')
             
             # Step 3: Transform and embed
             image_tensor = self.transform(image).unsqueeze(0).to(self.device)
@@ -715,33 +711,44 @@ class InferenceService:
         print("   📊 Generating query embedding...")
         query_embedding = self.embed_image(query_image_path)
         
-        # Step 2: Search wardrobe first
-        print("   👔 Searching user wardrobe...")
-        wardrobe_items, best_wardrobe_score = self.search_wardrobe(user_id, query_embedding, k=wardrobe_k)
-        
-        # Step 3: Decide source
+        # Step 2: Search wardrobe first (only if wardrobe_k > 0)
+        wardrobe_items = None
+        best_wardrobe_score = 0.0
         used_wardrobe = False
         items = []
         reason = None
         
-        if wardrobe_items is None:
-            reason = "empty_wardrobe"
-            print(f"   ⚠️  No wardrobe found, falling back to catalog")
-        elif best_wardrobe_score < threshold:
-            reason = "low_score"
-            print(f"   ⚠️  Best wardrobe score ({best_wardrobe_score:.3f}) < threshold ({threshold}), falling back to catalog")
+        if wardrobe_k > 0:
+            print("   👔 Searching user wardrobe...")
+            wardrobe_items, best_wardrobe_score = self.search_wardrobe(user_id, query_embedding, k=wardrobe_k)
+            
+            # Step 3: Decide source
+            if wardrobe_items is None:
+                reason = "empty_wardrobe"
+                print(f"   ⚠️  No wardrobe found, falling back to catalog")
+            elif len(wardrobe_items) == 0:
+                reason = "no_matches"
+                print(f"   ⚠️  No wardrobe matches found, falling back to catalog")
+            elif best_wardrobe_score < threshold:
+                reason = "low_score"
+                print(f"   ⚠️  Best wardrobe score ({best_wardrobe_score:.3f}) < threshold ({threshold}), falling back to catalog")
+            else:
+                used_wardrobe = True
+                items = wardrobe_items
+                print(f"   ✅ Using wardrobe results (best score: {best_wardrobe_score:.3f}, {len(items)} items)")
         else:
-            used_wardrobe = True
-            items = wardrobe_items
-            print(f"   ✅ Using wardrobe results (best score: {best_wardrobe_score:.3f})")
+            print("   ⏭️  Skipping wardrobe search (wardrobe_k=0)")
+            reason = "wardrobe_disabled"
         
-        # Step 4: Fallback to catalog if needed
-        if not used_wardrobe:
+        # Step 4: Fallback to catalog if needed (only if catalog_k > 0)
+        if not used_wardrobe and catalog_k > 0:
             print("   🛍️  Searching global catalog...")
             if gender:
                 print(f"   🔍 Filtering by gender: {gender}")
             items = self.search_catalog(query_embedding, k=catalog_k, gender=gender)
             print(f"   ✅ Found {len(items)} catalog items")
+        elif not used_wardrobe and catalog_k == 0:
+            print("   ⚠️  Catalog search disabled (catalog_k=0) and wardrobe search failed, returning empty results")
         
         # Step 5: Build result
         result = {

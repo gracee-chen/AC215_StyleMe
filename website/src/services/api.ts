@@ -5,11 +5,12 @@
 
 // Note: Docker maps container port 5000 to host port 5001
 // If running API server directly (not in Docker), use port 5000
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 
 export interface ClothingItem {
   id: string;
   image: string;
+  filename?: string;  // Filename for deletion
   category: string;
   color: string;
   dateAdded: Date | number;
@@ -78,7 +79,17 @@ export async function healthCheck(): Promise<{ status: string; service: string }
  */
 export async function uploadImage(
   userId: string,
-  image: File | string
+  image: File | string,
+  metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }
 ): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('user_id', userId);
@@ -93,6 +104,7 @@ export async function uploadImage(
         body: JSON.stringify({
           user_id: userId,
           image: image,
+          metadata: metadata || {},
         }),
       });
       
@@ -110,6 +122,9 @@ export async function uploadImage(
       return response.json();
     } else {
       formData.append('file', image);
+      if (metadata) {
+        formData.append('metadata', JSON.stringify(metadata));
+      }
       
       const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
@@ -354,13 +369,28 @@ export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
     return 'White';
   };
 
-  // Merge metadata from localStorage
+  // Merge metadata - prioritize backend metadata, fallback to localStorage
   const itemsWithMetadata = data.items.map((item: ClothingItem) => {
     // Extract filename from image path
     const imagePath = item.image;
     const filename = imagePath.split('/').pop() || '';
     
-    // Get metadata from localStorage
+    // Use backend metadata if available (from JSON file)
+    if (item.category && item.category !== 'Unknown' && (item as any).style) {
+      // Backend has metadata, use it
+      const normalizedCategory = normalizeCategory(item.category || 'tops');
+      const normalizedColor = normalizeColor(item.color || 'White');
+      return {
+        ...item,
+        category: normalizedCategory,
+        color: normalizedColor,
+        style: (item as any).style || 'Casual',
+        material: (item as any).material || '',
+        pattern: (item as any).pattern || '',
+      };
+    }
+    
+    // Fallback to localStorage if backend doesn't have metadata
     try {
       const metadataKey = `wardrobe_metadata_${userId}_${filename}`;
       const metadataStr = localStorage.getItem(metadataKey);
@@ -405,6 +435,39 @@ export async function getWardrobe(userId: string): Promise<WardrobeResponse> {
     ...data,
     items: itemsWithMetadata,
   };
+}
+
+/**
+ * Delete a wardrobe item (image and metadata)
+ */
+export async function deleteWardrobeItem(userId: string, filename: string): Promise<{ success: boolean; message: string }> {
+  // URL encode the filename to handle special characters
+  const encodedFilename = encodeURIComponent(filename);
+  
+  console.log('Deleting item:', { userId, filename, encodedFilename, apiUrl: `${API_BASE_URL}/api/wardrobe/${userId}/item/${encodedFilename}` });
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/wardrobe/${userId}/item/${encodedFilename}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+      console.error('Delete failed:', error);
+      throw new Error(error.error || error.message || `Failed to delete item: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('Network error:', error);
+      throw new Error(`Cannot connect to server at ${API_BASE_URL}. Please make sure the API server is running.`);
+    }
+    throw error;
+  }
 }
 
 /**

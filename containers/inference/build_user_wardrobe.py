@@ -34,6 +34,11 @@ class WardrobeIndexBuilder:
         print(f"🔧 Building wardrobe for user: {user_id}")
         print(f"   Device: {self.device}")
         
+        # Initialize background remover (optional, disabled by default)
+        self.bg_remover = None
+        self.bg_removal_enabled = False
+        print("   ℹ️  Background removal disabled (default)")
+        
         # Load model
         self.model = self._load_model()
         self.transform = self._get_transform()
@@ -113,8 +118,27 @@ class WardrobeIndexBuilder:
         with torch.no_grad():
             for img_path in tqdm(image_files, desc="Processing images"):
                 try:
-                    # Load and transform
+                    # Step 1: Load image
                     image = Image.open(img_path).convert('RGB')
+                    
+                    # Step 2: Optional background removal (if enabled)
+                    # Background removal is optional - images are processed as-is if disabled
+                    if self.bg_removal_enabled and self.bg_remover:
+                        # Remove background (returns PIL Image with transparent bg)
+                        image = self.bg_remover.remove_background(image)
+                        
+                        # Convert RGBA to RGB with white background
+                        if image.mode == 'RGBA':
+                            background = Image.new('RGB', image.size, (255, 255, 255))
+                            if len(image.split()) == 4:  # Has alpha channel
+                                background.paste(image, mask=image.split()[3])
+                            else:
+                                background.paste(image)
+                            image = background
+                        elif image.mode != 'RGB':
+                            image = image.convert('RGB')
+                    
+                    # Step 3: Transform and generate embedding
                     image_tensor = self.transform(image).unsqueeze(0).to(self.device)
                     
                     # Generate embedding

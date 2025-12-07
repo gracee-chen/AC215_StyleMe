@@ -16,7 +16,16 @@ interface WardrobeScreenProps {
   items: ClothingItem[];
   onItemClick: (item: ClothingItem) => void;
   userId: string;
-  onAddItem: (file: File, addToWardrobe: boolean) => Promise<void>;
+  onAddItem: (file: File, addToWardrobe: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => Promise<void>;
 }
 
 // Fixed categories - map any input to these fixed categories
@@ -133,11 +142,14 @@ export function WardrobeScreen({ items, onItemClick, userId, onAddItem }: Wardro
   const navigate = useNavigate();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
 
+  // Ensure items is always an array
+  const safeItems = Array.isArray(items) ? items : [];
+
   // Group items by category - only include items with complete tags (category, color, style)
   const itemsByCategory = useMemo(() => {
     const grouped: Record<string, ClothingItem[]> = {};
     
-    items.forEach(item => {
+    safeItems.forEach(item => {
       // Ensure all items have complete tags - use fallback if missing
       // This ensures every uploaded item will be displayed
       const category = normalizeCategory(item.category || 'tops');
@@ -179,9 +191,9 @@ export function WardrobeScreen({ items, onItemClick, userId, onAddItem }: Wardro
     });
 
     return sorted;
-  }, [items]);
+  }, [safeItems]);
 
-  const totalItems = items.length;
+  const totalItems = safeItems.length;
 
   const handleUploadComplete = async (file: File, addToWardrobe: boolean) => {
     // In wardrobe page, always add to wardrobe (don't show recommendations)

@@ -135,7 +135,7 @@ export async function getRecommendations(
   formData.append('user_id', userId);
   
   if (typeof image === 'string') {
-    // Base64 string
+    // Base64 string or URL
     const response = await fetch(`${API_BASE_URL}/api/recommend`, {
       method: 'POST',
       headers: {
@@ -152,11 +152,40 @@ export async function getRecommendations(
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to get recommendations');
+      let errorMessage = 'Failed to get recommendations';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+        // Handle specific error messages
+        if (errorMessage.includes('No trained model') || errorMessage.includes('train')) {
+          errorMessage = 'No trained model found. Please train a model first.';
+        }
+        // Include hint if available
+        if (error.hint) {
+          errorMessage += ` ${error.hint}`;
+        }
+      } catch (e) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
     
-    return response.json();
+    const data = await response.json();
+    
+    // Check if response indicates an error even with 200 status
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    // Convert relative image paths to full URLs
+    if (data.items && Array.isArray(data.items)) {
+      data.items = data.items.map((item: ClothingItem) => ({
+        ...item,
+        image: getImageUrl(item.image),
+      }));
+    }
+    
+    return data;
   } else {
     // File object
     formData.append('file', image);
@@ -171,11 +200,40 @@ export async function getRecommendations(
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to get recommendations');
+      let errorMessage = 'Failed to get recommendations';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+        // Handle specific error messages
+        if (errorMessage.includes('No trained model') || errorMessage.includes('train')) {
+          errorMessage = 'No trained model found. Please train a model first.';
+        }
+        // Include hint if available
+        if (error.hint) {
+          errorMessage += ` ${error.hint}`;
+        }
+      } catch (e) {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
     
-    return response.json();
+    const data = await response.json();
+    
+    // Check if response indicates an error even with 200 status
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
+    // Convert relative image paths to full URLs
+    if (data.items && Array.isArray(data.items)) {
+      data.items = data.items.map((item: ClothingItem) => ({
+        ...item,
+        image: getImageUrl(item.image),
+      }));
+    }
+    
+    return data;
   }
 }
 

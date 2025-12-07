@@ -72,11 +72,13 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
           
           setUploadedItem(uploadedItemData);
           
-          // Get recommendations based on current selection (default to wardrobe)
+          // Get recommendations based on current selection
+          // For wardrobe: try wardrobe first, fallback to catalog if no results
+          // For catalog: only search catalog
           const result = await getRecommendations(userId, file, {
             threshold: 0.7,
             wardrobe_k: recommendationType === 'wardrobe' ? 5 : 0,
-            catalog_k: recommendationType === 'catalog' ? 5 : 0
+            catalog_k: recommendationType === 'wardrobe' ? 3 : 5  // Fallback for wardrobe, primary for catalog
           });
           
           // Format recommendations
@@ -141,11 +143,13 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
       setError(null);
       
       try {
-        // Get recommendations based on current selection (default to wardrobe)
+        // Get recommendations based on current selection
+        // For wardrobe: try wardrobe first, fallback to catalog if no results
+        // For catalog: only search catalog
         const result = await getRecommendations(userId, file, {
           threshold: 0.7,
           wardrobe_k: recommendationType === 'wardrobe' ? 5 : 0,
-          catalog_k: recommendationType === 'catalog' ? 5 : 0
+          catalog_k: recommendationType === 'wardrobe' ? 3 : 5  // Fallback for wardrobe, primary for catalog
         });
         
         // Format the uploaded item with preview
@@ -218,10 +222,12 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
       const file = new File([blob], 'item.jpg', { type: blob.type });
       
       // Get recommendations based on selected type
+      // For wardrobe: try wardrobe first, fallback to catalog if no results
+      // For catalog: only search catalog
       const result = await getRecommendations(userId, file, {
         threshold: 0.7,
         wardrobe_k: type === 'wardrobe' ? 5 : 0,
-        catalog_k: type === 'catalog' ? 5 : 0
+        catalog_k: type === 'wardrobe' ? 3 : 5  // Fallback for wardrobe, primary for catalog
       });
       
       // Format recommendations

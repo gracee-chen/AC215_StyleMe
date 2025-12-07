@@ -1,52 +1,52 @@
 #!/bin/bash
-# NVIDIA 驱动安装脚本
+# NVIDIA Driver Installation Script
 
-echo "🚀 安装 NVIDIA GPU 驱动"
+echo "🚀 Installing NVIDIA GPU Driver"
 echo "======================"
 
-# 1. 安装必要的工具
-echo "📦 步骤 1: 安装必要的工具..."
+# 1. Install necessary tools
+echo "📦 Step 1: Installing necessary tools..."
 sudo apt-get update
 sudo apt-get install -y wget software-properties-common
 
-# 2. 禁用自带驱动
-echo "📦 步骤 2: 禁用可能导致冲突的驱动..."
+# 2. Disable built-in drivers
+echo "📦 Step 2: Disabling drivers that may cause conflicts..."
 sudo bash -c 'cat > /etc/modprobe.d/blacklist-nouveau.conf << EOF
 blacklist nouveau
 options nouveau modeset=0
 EOF'
 
-# 3. 添加 NVIDIA 官方 PPA (Debian 11)
-echo "📦 步骤 3: 添加 NVIDIA 仓库..."
+# 3. Add NVIDIA official PPA (Debian 11)
+echo "📦 Step 3: Adding NVIDIA repository..."
 distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
 
-# 4. 下载并安装 NVIDIA 驱动
-echo "📦 步骤 4: 安装 NVIDIA 驱动..."
+# 4. Download and install NVIDIA driver
+echo "📦 Step 4: Installing NVIDIA driver..."
 sudo apt-get install -y \
     linux-headers-$(uname -r) \
     build-essential
 
-# 5. 提示用户需要重启
+# 5. Prompt user to restart
 echo ""
-echo "✅ NVIDIA 驱动安装脚本准备完成"
+echo "✅ NVIDIA driver installation script ready"
 echo "================================="
 echo ""
-echo "⚠️  重要提示："
-echo "   1. 安装完成后需要重启服务器"
-echo "   2. 重启后运行: nvidia-smi 验证"
-echo "   3. 验证成功后再运行训练"
+echo "⚠️  Important Notes:"
+echo "   1. Server restart required after installation"
+echo "   2. After restart, run: nvidia-smi to verify"
+echo "   3. Run training only after successful verification"
 echo ""
-echo "现在运行安装吗？(需要重启服务器)"
-read -p "继续安装? (y/n) " -n 1 -r
+echo "Proceed with installation now? (Server restart required)"
+read -p "Continue installation? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]
 then
-    echo "📦 开始安装 GPU 驱动 (这需要一些时间)..."
+    echo "📦 Starting GPU driver installation (this may take some time)..."
     sudo apt-get install -y nvidia-driver-470
     echo ""
-    echo "✅ 驱动安装完成！现在需要重启服务器"
-    echo "   运行: sudo reboot"
+    echo "✅ Driver installation complete! Server restart required"
+    echo "   Run: sudo reboot"
 else
-    echo "安装已取消"
+    echo "Installation cancelled"
 fi
 

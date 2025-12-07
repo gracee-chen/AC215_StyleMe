@@ -5,7 +5,7 @@ import { WardrobeScreen } from '@/components/app/WardrobeScreen';
 import { ItemDetailsScreen } from '@/components/app/ItemDetailsScreen';
 import { ChatScreen } from '@/components/app/ChatScreen';
 import { BottomNavigation } from '@/components/app/BottomNavigation';
-import { ClothingItem, getWardrobe, uploadImage, getImageUrl } from '@/services/api';
+import { ClothingItem, getWardrobe, uploadImage, getImageUrl, deleteWardrobeItem } from '@/services/api';
 
 // Create context for sharing state
 interface AppContextType {
@@ -14,8 +14,17 @@ interface AppContextType {
   setSelectedItem: (item: ClothingItem | null) => void;
   userId: string;
   loadWardrobe: () => Promise<void>;
-  handleAddItem: (file: File) => Promise<void>;
-  handleDeleteItem: (id: string) => void;
+  handleAddItem: (file: File, addToWardrobe: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => Promise<void>;
+  handleDeleteItem: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -137,11 +146,28 @@ function normalizeColor(color: string): string {
   return 'White';
 }
 
+// Generate or retrieve unique user ID from localStorage
+function getOrCreateUserId(): string {
+  const STORAGE_KEY = 'styleme_user_id';
+  let userId = localStorage.getItem(STORAGE_KEY);
+  
+  if (!userId) {
+    // Generate a unique user ID using timestamp and random number
+    userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    localStorage.setItem(STORAGE_KEY, userId);
+    console.log('✅ Created new user wardrobe account:', userId);
+  } else {
+    console.log('📂 Using existing user wardrobe account:', userId);
+  }
+  
+  return userId;
+}
+
 export default function AppLayout() {
   const location = useLocation();
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
-  const [userId] = useState<string>('default_user');
+  const [userId] = useState<string>(getOrCreateUserId());
   const [loading, setLoading] = useState(false);
 
   // Load wardrobe on mount
@@ -153,6 +179,13 @@ export default function AppLayout() {
     try {
       setLoading(true);
       const response = await getWardrobe(userId);
+      
+      // Ensure response.items is an array
+      if (!response || !Array.isArray(response.items)) {
+        console.warn('Invalid wardrobe response:', response);
+        setItems([]);
+        return;
+      }
       
       // Get latest metadata if available (for newly uploaded items)
       const latestMetadataKey = `wardrobe_metadata_${userId}_latest`;
@@ -197,6 +230,7 @@ export default function AppLayout() {
           
           return {
             ...item,
+            filename: (item as any).filename,  // Preserve filename for deletion
             category: normalizedCategory,
             color: normalizedColor,
             style: latestMetadata.style || 'Casual',
@@ -249,6 +283,7 @@ export default function AppLayout() {
         );
         return {
           ...item,
+          filename: (item as any).filename,  // Preserve filename for deletion
           category: normalizedCategory,
           color: normalizedColor,
           style: (item as any).style || 'Casual',
@@ -262,7 +297,12 @@ export default function AppLayout() {
       setItems(formattedItems);
     } catch (error) {
       console.error('Failed to load wardrobe:', error);
+      // Set empty array on error to prevent undefined state
       setItems([]);
+      // Show user-friendly error message
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -276,18 +316,85 @@ export default function AppLayout() {
     setSelectedItem(item);
   };
   
-  const handleDeleteItem = (id: string) => {
-    setItems(items.filter(i => i.id !== id));
-    if (selectedItem?.id === id) {
-      setSelectedItem(null);
+  const handleDeleteItem = async (id: string) => {
+    try {
+      // Find the item to get its filename
+      const itemToDelete = items.find(i => i.id === id);
+      if (!itemToDelete) {
+        console.error('Item not found:', id);
+        alert('Item not found');
+        return;
+      }
+      
+      // Use filename from item if available, otherwise extract from image path
+      let filename = (itemToDelete as any).filename;
+      
+      if (!filename) {
+        // Fallback: Extract filename from image path
+        const imagePath = itemToDelete.image;
+        console.log('No filename in item, extracting from image path:', imagePath);
+        
+        if (imagePath.includes('/api/wardrobe/')) {
+          // Format: /api/wardrobe/{userId}/image/{filename}
+          const parts = imagePath.split('/');
+          const imageIndex = parts.indexOf('image');
+          if (imageIndex >= 0 && imageIndex < parts.length - 1) {
+            filename = parts[imageIndex + 1];
+          } else {
+            filename = parts[parts.length - 1];
+          }
+        } else if (imagePath.includes('/')) {
+          filename = imagePath.split('/').pop() || '';
+        } else {
+          filename = imagePath;
+        }
+        
+        // Remove query parameters if any
+        filename = filename.split('?')[0];
+      }
+      
+      if (!filename) {
+        console.error('Could not determine filename for item:', itemToDelete);
+        alert('Could not determine filename for item');
+        return;
+      }
+      
+      console.log('Deleting item:', { id, filename, imagePath: itemToDelete.image });
+      
+      // Call backend API to delete the item
+      await deleteWardrobeItem(userId, filename);
+      
+      // Remove from local state
+      setItems(items.filter(i => i.id !== id));
+      if (selectedItem?.id === id) {
+        setSelectedItem(null);
+      }
+      
+      // Reload wardrobe to ensure consistency
+      await loadWardrobe();
+      
+      console.log('✅ Item deleted successfully:', filename);
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete item. Please try again.';
+      alert(errorMessage);
     }
   };
 
-  const handleAddItem = async (file: File, addToWardrobe: boolean) => {
+  const handleAddItem = async (file: File, addToWardrobe: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => {
     if (!addToWardrobe) return; // Only add to wardrobe if user selected to
     try {
       setLoading(true);
-      await uploadImage(userId, file);
+      await uploadImage(userId, file, metadata);
       await loadWardrobe();
     } catch (error) {
       console.error('Failed to upload image:', error);
@@ -312,12 +419,17 @@ export default function AppLayout() {
   return (
     <AppContext.Provider value={contextValue}>
       <div className="min-h-screen bg-stone-50">
+        {loading && (
+          <div className="fixed inset-0 bg-stone-50/80 flex items-center justify-center z-50">
+            <div className="text-stone-600">Loading...</div>
+          </div>
+        )}
         <Routes>
           <Route
             path="home"
             element={
               <HomeScreen 
-                items={items} 
+                items={items || []} 
                 userId={userId}
                 onAddItem={handleAddItem}
                 onItemClick={handleSelectItem}
@@ -328,7 +440,7 @@ export default function AppLayout() {
             path="wardrobe"
             element={
               <WardrobeScreen 
-                items={items} 
+                items={items || []} 
                 onItemClick={handleSelectItem}
                 userId={userId}
                 onAddItem={handleAddItem}

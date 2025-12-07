@@ -19,7 +19,7 @@ interface ItemDetailsScreenProps {
   item: ClothingItem;
   onBack: () => void;
   onCompleteTheLook: (item: ClothingItem) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
 }
 
 // Fixed categories - simplified list
@@ -373,9 +373,9 @@ export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }:
     });
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirm('Are you sure you want to delete this item?')) {
-      onDelete(item.id);
+      await onDelete(item.id);
       navigate('/app/wardrobe');
     }
   };

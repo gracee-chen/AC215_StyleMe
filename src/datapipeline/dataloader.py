@@ -216,7 +216,7 @@ class FashionTripletDataset(Dataset):
             if item_id == exclude_id:
                 continue
             
-            # 1. Gender consistency check - 性别一致性检查
+            # 1. Gender consistency check
             item_gender = item.get('gender', 'unknown')
             if anchor_gender != 'unknown' and item_gender != 'unknown' and anchor_gender != item_gender:
                 continue
@@ -225,7 +225,7 @@ class FashionTripletDataset(Dataset):
             description = item.get('description', '').lower()
             categories = [cat.lower() for cat in item.get('categories', [])]
             
-            # 2. Category consistency check - 类别一致性检查（更严格）
+            # 2. Category consistency check (stricter)
             item_category = self._get_item_category(description)
             if target_category and item_category and target_category == item_category:
                 continue

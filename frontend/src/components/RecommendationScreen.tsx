@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ClothingItem, getRecommendations, fileToBase64 } from '../services/api';
+import { ClothingItem, getRecommendations, fileToBase64, getImageUrl } from '../services/api';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Button } from './ui/button';
 import { Save, Shirt, Loader2 } from 'lucide-react';
@@ -41,24 +41,25 @@ export function RecommendationScreen({ items, selectedItem, userId, onSelectItem
       // Convert image URL to file if needed, or use base64
       let imageData: string | File;
       
-      // If image is a URL (from API or external), we need to fetch it first
+      // If image is a URL (from API or external), fetch it and convert to File
       if (selectedItem.image.startsWith('http')) {
         try {
           const response = await fetch(selectedItem.image);
           if (!response.ok) throw new Error('Failed to fetch image');
           const blob = await response.blob();
-          imageData = new File([blob], 'query.jpg', { type: 'image/jpeg' });
+          imageData = new File([blob], 'query.jpg', { type: blob.type || 'image/jpeg' });
         } catch (fetchError) {
-          // If fetch fails, try using the URL directly as base64
-          // For API URLs, we'll pass them as-is and let the backend handle it
+          // If fetch fails (e.g., CORS issue), try using base64
+          // First try to convert URL to base64 by fetching
+          console.warn('Direct fetch failed, trying alternative method:', fetchError);
+          // For API URLs, pass the URL directly - backend can handle it
           imageData = selectedItem.image;
         }
       } else if (selectedItem.image.startsWith('data:')) {
         // Already base64
         imageData = selectedItem.image;
       } else {
-        // Assume it's a file path - we'll need to handle this differently
-        // For now, try to fetch it as a URL
+        // Relative path or local path - pass as-is, backend will handle
         imageData = selectedItem.image;
       }
       
@@ -68,10 +69,17 @@ export function RecommendationScreen({ items, selectedItem, userId, onSelectItem
         catalog_k: 3
       });
       
-      setRecommendations(result.items);
+      // Ensure all image URLs are properly formatted using getImageUrl helper
+      const formattedItems = result.items.map(item => ({
+        ...item,
+        image: getImageUrl(item.image)
+      }));
+      
+      setRecommendations(formattedItems);
     } catch (err) {
       console.error('Failed to get recommendations:', err);
-      setError(err instanceof Error ? err.message : 'Failed to get recommendations');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get recommendations';
+      setError(errorMessage);
       setRecommendations([]);
     } finally {
       setLoading(false);

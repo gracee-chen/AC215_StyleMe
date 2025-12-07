@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Sparkles, Upload, Wand2, Grid3x3, ArrowRight, Shirt, Heart, Zap, CheckCircle, Star, TrendingUp, Users, Shield, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import FeedbackBanner from '@/components/FeedbackBanner';
-import ImageWithFallback from '@/components/ui/ImageWithFallback';
+import { ImageWithFallback } from '@/components/ui/ImageWithFallback';
 
 // Brand item component with logo
 function BrandItem({ brand }: { brand: { name: string; logo: string } }) {

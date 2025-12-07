@@ -25,11 +25,14 @@ const normalizeCategoryForSelect = (aiCategory: string): string => {
   }
   
   // Direct mapping from AI categories to our fixed categories
+  // IMPORTANT: Check pants/bottoms BEFORE tops to avoid misclassification
+  if (lower === 'pants' || lower === 'pant' || lower === 'bottom' || lower === 'bottoms' ||
+      lower === 'jeans' || lower === 'jean' || lower === 'trousers' || lower === 'trouser' ||
+      lower === 'leggings' || lower === 'legging' || lower === 'shorts' || lower === 'short') {
+    return 'bottoms';
+  }
   if (lower === 'shirt' || lower === 'shirts' || lower === 'top' || lower === 'tops') {
     return 'tops';
-  }
-  if (lower === 'pants' || lower === 'pant' || lower === 'bottom' || lower === 'bottoms') {
-    return 'bottoms';
   }
   if (lower === 'dress' || lower === 'dresses') {
     return 'dresses';
@@ -62,8 +65,11 @@ const normalizeCategoryForSelect = (aiCategory: string): string => {
       lower.includes('tee') || lower.includes('tank') || lower.includes('shirt')) {
     return 'tops';
   }
+  // Check for pants/bottoms - prioritize this check
   if (lower.includes('jean') || lower.includes('trouser') || lower.includes('short') ||
-      lower.includes('pant') || lower.includes('bottom') || lower.includes('legging')) {
+      lower.includes('pant') || lower.includes('bottom') || lower.includes('legging') ||
+      lower.includes('denim') || lower.includes('chino') || lower.includes('cargo') ||
+      lower.includes('sweatpant') || lower.includes('jogger')) {
     return 'bottoms';
   }
   if (lower.includes('coat') || lower.includes('blazer') || lower.includes('cardigan') || 
@@ -196,7 +202,16 @@ const normalizeStyleForSelect = (aiStyle: string): string => {
 
 interface UploadScreenProps {
   userId: string;
-  onUpload: (file: File, addToWardrobe: boolean) => Promise<void>;
+  onUpload: (file: File, addToWardrobe: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => Promise<void>;
   onComplete?: (addToWardrobe: boolean) => void;
   mode?: 'recommendation' | 'wardrobe'; // Different modes for different pages
 }
@@ -226,11 +241,17 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           // Analyze the item with AI FIRST - always succeeds with fallback values
           let analysis;
           try {
+            console.log('🔄 Calling ChatGPT API to analyze item...');
             analysis = await analyzeClothingItem(file);
-            console.log('Item analysis:', analysis);
+            console.log('✅ Item analysis received:', analysis);
           } catch (analysisError) {
             // If analysis fails, use fallback values - never fail the upload
-            console.warn('Analysis failed, using fallback values:', analysisError);
+            console.error('❌ Analysis failed! Error:', analysisError);
+            console.error('❌ This means ChatGPT API is not working. Check:');
+            console.error('   1. Is VITE_OPENAI_API_KEY set in .env file?');
+            console.error('   2. Is the API key valid?');
+            console.error('   3. Check browser console for network errors');
+            console.warn('⚠️ Using fallback values (shirt, white, casual) - these are WRONG!');
             analysis = {
               category: 'shirt',
               color: 'white',
@@ -270,11 +291,7 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
             normalizedStyle: normalizedStyle
           });
           
-          // Upload the file
-          await onUpload(file, true);
-          
-          // After upload, save metadata with "latest" key for immediate matching
-          // The loadWardrobe will match this to the newest item
+          // Prepare metadata to send to backend
           const metadata = {
             category: normalizedCategory,
             color: normalizedColor,
@@ -284,12 +301,18 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
             season: analysis.season || '',
             occasion: analysis.occasion || '',
             description: analysis.description || '',
-            timestamp: Date.now(),
           };
           
-          // Save with "latest" key - will be matched to newest item in loadWardrobe
-          localStorage.setItem(`wardrobe_metadata_${userId}_latest`, JSON.stringify(metadata));
-          console.log('Saved metadata to latest key:', metadata);
+          // Upload the file with metadata (backend will save it)
+          await onUpload(file, true, metadata);
+          
+          // Also save to localStorage as backup (for immediate display before reload)
+          const metadataWithTimestamp = {
+            ...metadata,
+            timestamp: Date.now(),
+          };
+          localStorage.setItem(`wardrobe_metadata_${userId}_latest`, JSON.stringify(metadataWithTimestamp));
+          console.log('Saved metadata to backend and localStorage:', metadata);
           
           setUploadStep('success');
           setTimeout(() => {
@@ -301,7 +324,7 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           }, 2000);
         } catch (error) {
           console.error('Upload failed:', error);
-          const message = error instanceof Error ? error.message : '上传失败。请检查网络连接并重试。';
+          const message = error instanceof Error ? error.message : 'Upload failed. Please check your network connection and try again.';
           setErrorMessage(message);
           setUploadStep('error');
         }
