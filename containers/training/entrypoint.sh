@@ -55,31 +55,31 @@ test_mode = os.getenv('TEST_MODE', 'false').lower() == 'true'
 epochs = int(test_epochs) if test_epochs else (1 if test_mode else 30)
 
 TRAINING_CONFIG = {
-    'batch_size': 16,  # Batch size (reduced for better gradient updates, matching EXP_002)
+    'batch_size': 24,  # Increased batch size for more stable gradients
     'epochs': epochs,  # Number of training epochs (1 for test mode, 30 for production)
-    'learning_rate': 1e-5,  # Learning rate (keep same as successful EXP_002)
+    'learning_rate': 2e-5,  # Increased learning rate to escape plateau (was 1e-5)
     'num_workers': 2,  # Number of data loading worker processes
-    'patience': 8,  # Early stopping patience (increased to allow more training)
+    'patience': 12,  # Increased patience to allow model to escape plateau (was 8)
     'target_accuracy': 0.75,  # Target accuracy (matching successful EXP_002)
 }
 
 # Model configuration
 MODEL_CONFIG = {
     'model_name': 'openai/clip-vit-base-patch32',
-    'freeze_layers': 8,  # Number of frozen layers
+    'freeze_layers': 4,  # Reduced frozen layers for more fine-tuning capacity (was 8)
     'feature_dim': 512,  # Feature dimension
 }
 
-# Triplet Loss configuration - Optimized for better separation
+# Triplet Loss configuration - Optimized for better learning
 TRIPLET_CONFIG = {
-    'margin': 0.7,  # Triplet Loss margin (increased for better feature separation)
+    'margin': 0.3,  # Very tight margin to force better feature separation and escape plateau (was 0.5, originally 0.7)
     'distance_metric': 'euclidean',  # Distance metric
 }
 
 # Optimizer configuration - Optimized for better convergence
 OPTIMIZER_CONFIG = {
     'optimizer': 'AdamW',
-    'weight_decay': 0.005,  # Reduced weight decay for less regularization
+    'weight_decay': 0.01,  # Increased weight decay for better regularization (was 0.005)
     'scheduler': 'CosineAnnealingLR',
 }
 
