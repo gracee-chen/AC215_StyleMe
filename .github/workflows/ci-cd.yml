@@ -143,14 +143,15 @@ jobs:
 
       - name: Run integration tests
         run: |
+          # Integration tests: collect coverage but don't enforce threshold
+          # (many tests are skipped, coverage is checked in combined coverage job)
           pytest CI/tests/integration/ -m integration -v \
             --cov=src \
             --cov=containers \
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:CI/coverage-integration.xml \
-            --cov-fail-under=60 \
-            -c CI/config/pytest.ini \
+            --override-ini="addopts=-v --tb=short" \
             --tb=short
 
       - name: Upload integration test coverage
@@ -195,16 +196,15 @@ jobs:
 
       - name: Run E2E tests
         run: |
-          # E2E tests often have low coverage due to many skipped tests
-          # Don't enforce coverage threshold for E2E tests
+          # E2E tests: collect coverage but don't enforce threshold
+          # (many tests are skipped, coverage is checked in combined coverage job)
           pytest CI/tests/test_e2e.py -m e2e -v \
             --cov=src \
             --cov=containers \
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
-            -c CI/config/pytest.ini \
-            --tb=short \
-            --no-cov-on-fail
+            --override-ini="addopts=-v --tb=short" \
+            --tb=short
 
   # ============================================
   # JOB 5: Coverage Report (Combined)
