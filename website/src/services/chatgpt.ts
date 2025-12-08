@@ -45,10 +45,13 @@ export async function imageToBase64(file: File): Promise<string> {
  * Returns structured analysis of the item's features
  */
 export async function analyzeClothingItem(imageFile: File): Promise<ItemAnalysis> {
-  if (!OPENAI_API_KEY) {
+  if (!OPENAI_API_KEY || OPENAI_API_KEY.trim() === '') {
     console.error('❌ OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your .env file.');
+    console.error('❌ Without the API key, items will be tagged with default values (white, casual) which are incorrect!');
     throw new Error('OpenAI API key is not configured. Please set VITE_OPENAI_API_KEY in your .env file.');
   }
+  
+  console.log('🔑 OpenAI API key is configured, proceeding with analysis...');
 
   try {
     console.log('🔍 Starting ChatGPT analysis...');
@@ -56,7 +59,7 @@ export async function analyzeClothingItem(imageFile: File): Promise<ItemAnalysis
 
     const systemMessage = {
       role: 'system' as const,
-      content: `You are a professional fashion expert analyzing clothing items from images. Your task is to accurately identify the category, color, and style of each item.
+      content: `You are a professional fashion expert analyzing clothing items from images. Your task is to accurately identify the category, color, and style of each item by CAREFULLY EXAMINING THE ACTUAL IMAGE.
 
 OUTPUT FORMAT (JSON only):
 {
@@ -69,6 +72,13 @@ OUTPUT FORMAT (JSON only):
   "occasion": "suitable occasions (e.g., 'work', 'casual', 'party', 'formal')",
   "description": "brief description of the item"
 }
+
+═══════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: YOU MUST ACTUALLY LOOK AT THE IMAGE ⚠️
+═══════════════════════════════════════════════════════════════════
+
+DO NOT DEFAULT TO "white" OR "casual" WITHOUT EXAMINING THE IMAGE!
+You MUST identify the ACTUAL color and style visible in the image.
 
 ═══════════════════════════════════════════════════════════════════
 CATEGORY IDENTIFICATION - FOLLOW THESE RULES IN EXACT ORDER:
@@ -113,38 +123,97 @@ STEP 6: Check for ACCESSORIES
    ✓ Scarves, belts, jewelry, watches → 'accessories'
 
 ═══════════════════════════════════════════════════════════════════
-COLOR IDENTIFICATION - CRITICAL RULES:
+COLOR IDENTIFICATION - CRITICAL RULES (READ CAREFULLY):
 ═══════════════════════════════════════════════════════════════════
 
-1. IGNORE these colors (they are NOT the main color):
-   ✗ Background colors (white backgrounds, colored backgrounds)
-   ✗ Inner layers (white collars, undershirts, inner garments)
-   ✗ Small details (buttons, zippers, logos, labels)
-   ✗ Accessories worn with the item (belts, jewelry, bags)
+⚠️ YOU MUST IDENTIFY THE ACTUAL COLOR IN THE IMAGE - DO NOT DEFAULT TO "white" ⚠️
 
-2. FOCUS ONLY on the OUTERMOST, DOMINANT color of the MAIN garment:
-   ✓ Look at the largest visible area of the item
-   ✓ If someone is wearing a green sweater over a white shirt → color is 'green'
-   ✓ If someone is wearing a green dress → color is 'green' (NOT white from collar)
-   ✓ If you see brown/tan/beige shoes → color is 'brown' or 'beige' (NOT white from background)
+1. EXAMINE THE IMAGE CAREFULLY:
+   ✓ Look at the MAIN GARMENT - what is its dominant color?
+   ✓ Is it green? → 'green'
+   ✓ Is it brown/tan/beige? → 'brown' or 'beige'
+   ✓ Is it red/burgundy/maroon? → 'red'
+   ✓ Is it blue/navy? → 'blue' or 'navy'
+   ✓ Is it black? → 'black'
+   ✓ Is it actually white/cream? → 'white' or 'cream'
+   ✓ Is it pink, purple, yellow, orange, gray, khaki? → use that color
 
-3. Color mapping rules:
-   • Green shades: mint, olive, forest, sage, emerald, lime, teal, jade → 'green'
-   • Brown shades: tan, camel, taupe, chocolate, coffee, caramel, suede, leather → 'brown'
-   • Beige shades: nude, sand, cream (light brown tones) → 'beige'
-   • Red shades: maroon, burgundy, crimson, wine, cherry, dark red → 'red'
-   • Blue shades: navy, dark blue → 'navy'; light blue, sky blue → 'blue'
-   • Gray shades: grey, silver → 'gray'
-   • White shades: ivory, snow → 'white'
+2. IGNORE these (they are NOT the main color):
+   ✗ Background colors (white backgrounds, colored backgrounds, walls, floors)
+   ✗ Inner layers visible through outerwear (white collars, undershirts showing)
+   ✗ Small details (buttons, zippers, logos, labels, stitching)
+   ✗ Accessories worn with the item (belts, jewelry, bags, shoes)
+   ✗ The person's skin color
+   ✗ Other clothing items in the image
 
-4. Valid color names (use EXACTLY these):
+3. FOCUS ONLY on the OUTERMOST, DOMINANT color of the MAIN garment:
+   ✓ Look at the LARGEST VISIBLE AREA of the clothing item
+   ✓ If someone is wearing a DARK GREEN sweater → color is 'green' (NOT white!)
+   ✓ If someone is wearing a BURGUNDY/RED top → color is 'red' (NOT white!)
+   ✓ If someone is wearing a CREAM/BEIGE dress → color is 'beige' or 'cream' (NOT white!)
+   ✓ If someone is wearing OLIVE GREEN clothing → color is 'green' (NOT white!)
+   ✓ If the item is actually white/ivory → then use 'white' or 'cream'
+
+4. Color mapping rules (be specific):
+   • Green shades: olive, forest, sage, emerald, mint, lime, teal, jade, army green → 'green'
+   • Brown shades: tan, camel, taupe, chocolate, coffee, caramel, suede, leather, rust → 'brown'
+   • Beige shades: nude, sand, cream (light brown/beige tones), tan-beige → 'beige'
+   • Red shades: maroon, burgundy, crimson, wine, cherry, dark red, brick red → 'red'
+   • Blue shades: navy, dark blue, royal blue → 'navy'; light blue, sky blue, baby blue → 'blue'
+   • Gray shades: grey, silver, charcoal → 'gray'
+   • White shades: pure white, ivory, snow → 'white'
+   • Cream shades: off-white with yellow/beige tint → 'cream'
+
+5. Valid color names (use EXACTLY these - choose the BEST match):
    'black', 'white', 'blue', 'brown', 'green', 'red', 'pink', 'purple', 'yellow', 'orange', 'gray', 'beige', 'navy', 'cream', 'khaki'
 
+6. EXAMPLES OF CORRECT COLOR IDENTIFICATION:
+   • Dark olive green top → 'green' (NOT white, NOT red!)
+   • Burgundy/maroon shirt → 'red' (NOT white, NOT green!)
+   • Cream/beige dress → 'beige' or 'cream' (NOT white, NOT red!)
+   • Brown leather jacket → 'brown' (NOT white!)
+   • Navy blue blazer → 'navy' (NOT white!)
+   • Dark reddish-brown top → 'red' (NOT white!)
+   • Actually white shirt on white background → 'white' (only if truly white!)
+
+7. COLOR DETECTION PROCESS - DO THIS FOR EVERY IMAGE:
+   a) Look at the CENTER and LARGEST area of the clothing item
+   b) Identify the color you see: "I see a [color] garment"
+   c) If you see burgundy/maroon/dark red → 'red'
+   d) If you see olive/forest/sage/green → 'green'  
+   e) If you see brown/tan/beige → 'brown' or 'beige'
+   f) If you see navy/dark blue → 'navy'
+   g) If you see black → 'black'
+   h) ONLY if you see actual white/ivory → 'white'
+   i) DO NOT confuse the background color with the garment color
+   j) DO NOT confuse other clothing items in the image with the main garment
+
 ═══════════════════════════════════════════════════════════════════
-STYLE IDENTIFICATION:
+STYLE IDENTIFICATION - ANALYZE THE ACTUAL STYLE:
 ═══════════════════════════════════════════════════════════════════
 
-Choose the most appropriate style from: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic'
+⚠️ YOU MUST IDENTIFY THE ACTUAL STYLE - DO NOT DEFAULT TO "casual" ⚠️
+
+Look at the item and determine its style based on:
+✓ Formality: Is it formal (suit, blazer, dress shirt) or casual (t-shirt, jeans)?
+✓ Design: Is it elegant (flowing, refined), sporty (athletic, functional), or edgy (bold, unconventional)?
+✓ Aesthetic: Is it vintage (retro, classic), modern (contemporary, trendy), or classic (timeless)?
+✓ Gender expression: Is it feminine (delicate, soft) or masculine (structured, bold)?
+✓ Overall vibe: Is it minimalist (simple, clean), bohemian (free-spirited), or chic (stylish, sophisticated)?
+
+Valid styles: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic'
+
+EXAMPLES:
+• T-shirt and jeans → 'casual'
+• Business suit → 'formal'
+• Athletic wear → 'sporty'
+• Flowing evening dress → 'elegant'
+• Vintage 70s style → 'vintage'
+• Simple, clean lines → 'minimalist'
+• Bold, unconventional → 'edgy'
+• Delicate, soft fabrics → 'feminine'
+• Structured, tailored → 'masculine'
+• Stylish, sophisticated → 'chic'
 
 ═══════════════════════════════════════════════════════════════════
 FINAL REQUIREMENTS:
@@ -152,11 +221,13 @@ FINAL REQUIREMENTS:
 
 ✓ ALL THREE fields (category, color, style) MUST be present
 ✓ Category MUST be exactly one of: 'shirt', 'pants', 'dress', 'jacket', 'shoes', 'accessories'
-✓ Color MUST be one of the valid color names listed above
-✓ Style MUST be one of: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic'
+✓ Color MUST be one of the valid color names listed above - IDENTIFY THE ACTUAL COLOR IN THE IMAGE
+✓ Style MUST be one of: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic' - IDENTIFY THE ACTUAL STYLE
 ✓ NEVER use "miscellaneous", "unknown", "Unknown", "N/A", "n/a", "other", "Other", or any vague terms
-✓ Do NOT omit any required fields
-✓ If you cannot determine a value, use the most appropriate option from the valid lists above
+✓ Do NOT default to "white" or "casual" - you MUST examine the image and identify the actual color and style
+✓ If the item is green, say 'green' - NOT 'white'
+✓ If the item is red/burgundy, say 'red' - NOT 'white'
+✓ If the item is brown/beige, say 'brown' or 'beige' - NOT 'white'
 ✓ Analyze the image carefully and follow the priority order for category identification`,
     };
 
@@ -165,15 +236,46 @@ FINAL REQUIREMENTS:
       content: [
         {
           type: 'text',
-          text: `Analyze the clothing item in this image. 
+          text: `Analyze the clothing item in this image using this EXACT step-by-step process:
 
-IMPORTANT INSTRUCTIONS:
-1. Look carefully at the image - identify what type of clothing item this is
-2. Follow the category identification rules in EXACT order (shoes → dress → pants → jacket → shirt → accessories)
-3. Identify the PRIMARY/MAIN color of the OUTERMOST garment (ignore background, inner layers, small details)
-4. Determine the style based on the item's appearance
+STEP 1: DESCRIBE WHAT YOU SEE
+   First, describe the clothing item you see:
+   - What type of garment is it? (top, dress, pants, jacket, shoes, etc.)
+   - What is the MAIN COLOR of the garment? Describe it in detail (e.g., "dark burgundy red", "olive green", "navy blue", "beige/tan")
+   - What style does it appear to be? (formal, casual, elegant, etc.)
 
-Return your analysis in JSON format with all required fields.`,
+STEP 2: IDENTIFY THE DOMINANT COLOR
+   Look at the LARGEST VISIBLE AREA of the clothing item:
+   - If the garment is BURGUNDY, MAROON, or DARK RED → the color is 'red'
+   - If the garment is OLIVE, FOREST, SAGE, or any GREEN shade → the color is 'green'
+   - If the garment is BROWN, TAN, CAMEL, or BEIGE → the color is 'brown' or 'beige'
+   - If the garment is NAVY or DARK BLUE → the color is 'navy'
+   - If the garment is BLACK → the color is 'black'
+   - ONLY use 'white' if the garment is ACTUALLY white or ivory
+   - IGNORE: white backgrounds, white collars, white details - focus on the MAIN GARMENT COLOR
+
+STEP 3: CATEGORIZE
+   Follow this order: shoes → dress → pants → jacket → shirt → accessories
+   - If it's a one-piece garment from shoulders to hem → 'dress'
+   - If it's a top/shirt/blouse → 'shirt'
+   - If it's outerwear → 'jacket'
+   - If it's footwear → 'shoes'
+   - If it's pants/trousers → 'pants'
+
+STEP 4: DETERMINE STYLE
+   Look at the design and formality:
+   - Flowing, refined, sophisticated → 'elegant'
+   - Simple, everyday, relaxed → 'casual'
+   - Structured, business-like → 'formal'
+   - Athletic, functional → 'sporty'
+   - DO NOT default to "casual" - analyze the actual style
+
+CRITICAL: 
+- If you see a BURGUNDY/RED top, the color MUST be 'red' (NOT 'white'!)
+- If you see an OLIVE/GREEN dress, the color MUST be 'green' (NOT 'red' or 'white'!)
+- Describe what you see FIRST, then categorize based on that description
+
+Return your analysis in JSON format. The color and style MUST match what you actually see in the image.`,
         },
         {
           type: 'image_url',
@@ -194,7 +296,7 @@ Return your analysis in JSON format with all required fields.`,
         model: 'gpt-4o',
         messages: [systemMessage, userMessage],
         max_tokens: 500,
-        temperature: 0.3, // Lower temperature for more consistent analysis
+        temperature: 0.1, // Very low temperature for more accurate, consistent analysis
         response_format: { type: 'json_object' },
       }),
     });
@@ -209,6 +311,7 @@ Return your analysis in JSON format with all required fields.`,
     const data = await response.json();
     const analysisText = data.choices[0]?.message?.content || '{}';
     console.log('📥 ChatGPT raw response:', analysisText);
+    console.log('📥 Full API response:', JSON.stringify(data, null, 2));
     
     try {
       const analysis = JSON.parse(analysisText) as ItemAnalysis;
@@ -281,6 +384,15 @@ Return your analysis in JSON format with all required fields.`,
       }
       
       console.log('✅ Final analysis result:', analysis);
+      console.log('🔍 Verification - Color:', analysis.color, 'Style:', analysis.style, 'Category:', analysis.category);
+      
+      // Warn if we got default values that might be wrong
+      if (analysis.color?.toLowerCase() === 'white' || analysis.style?.toLowerCase() === 'casual') {
+        console.warn('⚠️ WARNING: Got "white" or "casual" - this might be incorrect!');
+        console.warn('⚠️ Please check the image to verify these values are correct.');
+        console.warn('⚠️ If the item is actually green/red/brown/etc., ChatGPT may not be analyzing correctly.');
+      }
+      
       return analysis;
     } catch (parseError) {
       // If JSON parsing fails, try to extract information from text

@@ -25,10 +25,17 @@ export interface ClothingItem {
 export interface RecommendationResponse {
   success: boolean;
   user_id: string;
-  used_wardrobe: boolean;
-  items: ClothingItem[];
+  used_wardrobe: boolean; // For backward compatibility
+  items: ClothingItem[]; // For backward compatibility
   num_results: number;
   threshold: number;
+  // New fields for separate wardrobe and catalog items
+  wardrobe_items?: ClothingItem[];
+  catalog_items?: ClothingItem[];
+  wardrobe_count?: number;
+  catalog_count?: number;
+  wardrobe_reason?: string; // "empty_wardrobe", "no_matches", "low_score", "wardrobe_disabled"
+  catalog_reason?: string; // "no_catalog_matches", "catalog_disabled"
 }
 
 export interface WardrobeResponse {
@@ -43,6 +50,13 @@ export interface UploadResponse {
   user_id: string;
   image_path: string;
   message: string;
+  metadata?: {
+    filename?: string;
+    category?: string;
+    color?: string;
+    style?: string;
+    [key: string]: any;
+  };
 }
 
 /**
@@ -123,8 +137,16 @@ export async function uploadImage(
     } else {
       formData.append('file', image);
       if (metadata) {
-        formData.append('metadata', JSON.stringify(metadata));
+        const metadataStr = JSON.stringify(metadata);
+        formData.append('metadata', metadataStr);
+        console.log('📤 Sending metadata to backend:', metadata);
+        console.log('📤 Metadata as JSON string:', metadataStr);
+      } else {
+        console.warn('⚠️  No metadata provided to uploadImage function!');
       }
+      
+      // Debug: Log all FormData keys
+      console.log('📤 FormData keys:', Array.from(formData.keys()));
       
       const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
@@ -163,6 +185,7 @@ export async function getRecommendations(
     wardrobe_k?: number;
     catalog_k?: number;
     gender?: 'men' | 'women';
+    query_category?: string;  // Category of the query item (e.g., "tops", "pants", "shoes")
   }
 ): Promise<RecommendationResponse> {
   const formData = new FormData();
@@ -182,6 +205,7 @@ export async function getRecommendations(
         wardrobe_k: options?.wardrobe_k || 5,
         catalog_k: options?.catalog_k || 3,
         gender: options?.gender,
+        query_category: options?.query_category,
       }),
     });
     
@@ -205,9 +229,16 @@ export async function getRecommendations(
     }
     
     const data = await response.json();
+    console.log('📦 Response data (base64):', {
+      success: data.success,
+      wardrobe_count: data.wardrobe_items?.length || 0,
+      catalog_count: data.catalog_items?.length || 0,
+      has_error: !!data.error
+    });
     
     // Check if response indicates an error even with 200 status
     if (data.error) {
+      console.error('❌ Response contains error:', data.error);
       throw new Error(data.error);
     }
     
@@ -219,11 +250,15 @@ export async function getRecommendations(
     if (options?.wardrobe_k) formData.append('wardrobe_k', options.wardrobe_k.toString());
     if (options?.catalog_k) formData.append('catalog_k', options.catalog_k.toString());
     if (options?.gender) formData.append('gender', options.gender);
+    if (options?.query_category) formData.append('query_category', options.query_category);
     
+    console.log('📤 Sending recommendation request to:', `${API_BASE_URL}/api/recommend`);
     const response = await fetch(`${API_BASE_URL}/api/recommend`, {
       method: 'POST',
       body: formData,
     });
+    
+    console.log('📥 Response status:', response.status, response.statusText);
     
     if (!response.ok) {
       let errorMessage = 'Failed to get recommendations';

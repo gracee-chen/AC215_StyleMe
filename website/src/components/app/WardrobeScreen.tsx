@@ -195,10 +195,20 @@ export function WardrobeScreen({ items, onItemClick, userId, onAddItem }: Wardro
 
   const totalItems = safeItems.length;
 
-  const handleUploadComplete = async (file: File, addToWardrobe: boolean) => {
+  const handleUploadComplete = async (file: File, addToWardrobe: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => {
     // In wardrobe page, always add to wardrobe (don't show recommendations)
     try {
-      await onAddItem(file, true);
+      console.log('📤 WardrobeScreen handleUploadComplete received metadata:', metadata);
+      await onAddItem(file, true, metadata);
       // Small delay to ensure metadata is saved before closing
       await new Promise(resolve => setTimeout(resolve, 100));
       setIsUploadDialogOpen(false);

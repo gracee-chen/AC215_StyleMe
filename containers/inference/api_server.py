@@ -7,6 +7,9 @@ import os
 import sys
 import json
 import base64
+import time
+import random
+import threading
 from pathlib import Path
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
@@ -14,6 +17,9 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import io
 from datetime import datetime
+
+# Force unbuffered output for logging
+sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
 # Add src to path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,6 +37,10 @@ CORS(app, resources={
         "allow_headers": ["Content-Type", "Authorization"]
     },
     r"/health": {
+        "origins": "*",
+        "methods": ["GET", "OPTIONS"]
+    },
+    r"/api/catalog/image/*": {
         "origins": "*",
         "methods": ["GET", "OPTIONS"]
     }
@@ -93,30 +103,53 @@ def resize_image(image: Image.Image, max_size: tuple = MAX_IMAGE_SIZE) -> Image.
 # Initialize inference service (singleton)
 inference_service = None
 inference_service_error = None
+_inference_service_lock = threading.Lock()
 
 def get_inference_service():
-    """Lazy initialization of inference service"""
+    """Lazy initialization of inference service with thread safety"""
     global inference_service, inference_service_error
-    if inference_service is None and inference_service_error is None:
+    
+    # Double-check locking pattern to prevent race conditions
+    if inference_service is not None:
+        return inference_service, None
+    
+    if inference_service_error is not None:
+        return None, inference_service_error
+    
+    # Acquire lock to prevent concurrent initialization
+    with _inference_service_lock:
+        # Check again after acquiring lock (another thread might have initialized it)
+        if inference_service is not None:
+            return inference_service, None
+        
+        if inference_service_error is not None:
+            return None, inference_service_error
+        
         # Skip filesystem check in Cloud Run - will use GCS client library
         # The InferenceService will handle GCS access automatically
         
         # Model exists, try to initialize service
         # Background removal is disabled by default
         try:
+            print("🔮 Initializing inference service...", flush=True)
             inference_service = InferenceService(
                 catalog_dir=str(CATALOG_DIR),
                 experiments_dir=str(EXPERIMENTS_DIR),
                 wardrobes_dir=str(WARDROBES_DIR),
                 bg_removal_enabled=False  # Background removal disabled
             )
+            print("✅ Inference service initialized successfully", flush=True)
         except FileNotFoundError as e:
             if "No trained model found" in str(e):
                 inference_service_error = "No trained model found. Please train a model first."
             else:
                 inference_service_error = str(e)
+            print(f"❌ Inference service initialization failed: {inference_service_error}", flush=True)
         except Exception as e:
             inference_service_error = f"Failed to initialize inference service: {str(e)}"
+            print(f"❌ Inference service initialization failed: {inference_service_error}", flush=True)
+            import traceback
+            traceback.print_exc()
     
     if inference_service_error:
         return None, inference_service_error
@@ -154,7 +187,7 @@ def generate_clothing_tags(image_path: Path) -> dict:
         image_data_url = f"data:{image_mime_type};base64,{image_base64}"
         
         # System prompt - only generate category, color, and style
-        system_message = """You are a professional fashion expert analyzing clothing items from images. Your task is to accurately identify ONLY the category, color, and style of each item.
+        system_message = """You are a professional fashion expert analyzing clothing items from images. Your task is to accurately identify ONLY the category, color, and style of each item by CAREFULLY EXAMINING THE ACTUAL IMAGE.
 
 OUTPUT FORMAT (JSON only):
 {
@@ -164,6 +197,13 @@ OUTPUT FORMAT (JSON only):
 }
 
 ONLY return these three fields. Do not include any other fields.
+
+═══════════════════════════════════════════════════════════════════
+⚠️ CRITICAL: YOU MUST ACTUALLY LOOK AT THE IMAGE ⚠️
+═══════════════════════════════════════════════════════════════════
+
+DO NOT DEFAULT TO "white" OR "casual" WITHOUT EXAMINING THE IMAGE!
+You MUST identify the ACTUAL color and style visible in the image.
 
 ═══════════════════════════════════════════════════════════════════
 CATEGORY IDENTIFICATION - FOLLOW THESE RULES IN EXACT ORDER:
@@ -208,38 +248,84 @@ STEP 6: Check for ACCESSORIES
    ✓ Scarves, belts, jewelry, watches → 'accessories'
 
 ═══════════════════════════════════════════════════════════════════
-COLOR IDENTIFICATION - CRITICAL RULES:
+COLOR IDENTIFICATION - CRITICAL RULES (READ CAREFULLY):
 ═══════════════════════════════════════════════════════════════════
 
-1. IGNORE these colors (they are NOT the main color):
-   ✗ Background colors (white backgrounds, colored backgrounds)
-   ✗ Inner layers (white collars, undershirts, inner garments)
-   ✗ Small details (buttons, zippers, logos, labels)
-   ✗ Accessories worn with the item (belts, jewelry, bags)
+⚠️ YOU MUST IDENTIFY THE ACTUAL COLOR IN THE IMAGE - DO NOT DEFAULT TO "white" ⚠️
 
-2. FOCUS ONLY on the OUTERMOST, DOMINANT color of the MAIN garment:
-   ✓ Look at the largest visible area of the item
-   ✓ If someone is wearing a green sweater over a white shirt → color is 'green'
-   ✓ If someone is wearing a green dress → color is 'green' (NOT white from collar)
-   ✓ If you see brown/tan/beige shoes → color is 'brown' or 'beige' (NOT white from background)
+1. EXAMINE THE IMAGE CAREFULLY:
+   ✓ Look at the MAIN GARMENT - what is its dominant color?
+   ✓ Is it green? → 'green'
+   ✓ Is it brown/tan/beige? → 'brown' or 'beige'
+   ✓ Is it red/burgundy/maroon? → 'red'
+   ✓ Is it blue/navy? → 'blue' or 'navy'
+   ✓ Is it black? → 'black'
+   ✓ Is it actually white/cream? → 'white' or 'cream'
+   ✓ Is it pink, purple, yellow, orange, gray, khaki? → use that color
 
-3. Color mapping rules:
-   • Green shades: mint, olive, forest, sage, emerald, lime, teal, jade → 'green'
-   • Brown shades: tan, camel, taupe, chocolate, coffee, caramel, suede, leather → 'brown'
-   • Beige shades: nude, sand, cream (light brown tones) → 'beige'
-   • Red shades: maroon, burgundy, crimson, wine, cherry, dark red → 'red'
-   • Blue shades: navy, dark blue → 'navy'; light blue, sky blue → 'blue'
-   • Gray shades: grey, silver → 'gray'
-   • White shades: ivory, snow → 'white'
+2. IGNORE these (they are NOT the main color):
+   ✗ Background colors (white backgrounds, colored backgrounds, walls, floors)
+   ✗ Inner layers visible through outerwear (white collars, undershirts showing)
+   ✗ Small details (buttons, zippers, logos, labels, stitching)
+   ✗ Accessories worn with the item (belts, jewelry, bags, shoes)
+   ✗ The person's skin color
+   ✗ Other clothing items in the image
 
-4. Valid color names (use EXACTLY these):
+3. FOCUS ONLY on the OUTERMOST, DOMINANT color of the MAIN garment:
+   ✓ Look at the LARGEST VISIBLE AREA of the clothing item
+   ✓ If someone is wearing a DARK GREEN sweater → color is 'green' (NOT white!)
+   ✓ If someone is wearing a BURGUNDY/RED top → color is 'red' (NOT white!)
+   ✓ If someone is wearing a CREAM/BEIGE dress → color is 'beige' or 'cream' (NOT white!)
+   ✓ If someone is wearing OLIVE GREEN clothing → color is 'green' (NOT white!)
+   ✓ If the item is actually white/ivory → then use 'white' or 'cream'
+
+4. Color mapping rules (be specific):
+   • Green shades: olive, forest, sage, emerald, mint, lime, teal, jade, army green → 'green'
+   • Brown shades: tan, camel, taupe, chocolate, coffee, caramel, suede, leather, rust → 'brown'
+   • Beige shades: nude, sand, cream (light brown/beige tones), tan-beige → 'beige'
+   • Red shades: maroon, burgundy, crimson, wine, cherry, dark red, brick red → 'red'
+   • Blue shades: navy, dark blue, royal blue → 'navy'; light blue, sky blue, baby blue → 'blue'
+   • Gray shades: grey, silver, charcoal → 'gray'
+   • White shades: pure white, ivory, snow → 'white'
+   • Cream shades: off-white with yellow/beige tint → 'cream'
+
+5. Valid color names (use EXACTLY these - choose the BEST match):
    'black', 'white', 'blue', 'brown', 'green', 'red', 'pink', 'purple', 'yellow', 'orange', 'gray', 'beige', 'navy', 'cream', 'khaki'
 
+6. EXAMPLES OF CORRECT COLOR IDENTIFICATION:
+   • Dark olive green top → 'green' (NOT white!)
+   • Burgundy/maroon shirt → 'red' (NOT white!)
+   • Cream/beige dress → 'beige' or 'cream' (NOT white!)
+   • Brown leather jacket → 'brown' (NOT white!)
+   • Navy blue blazer → 'navy' (NOT white!)
+   • Actually white shirt on white background → 'white' (only if truly white!)
+
 ═══════════════════════════════════════════════════════════════════
-STYLE IDENTIFICATION:
+STYLE IDENTIFICATION - ANALYZE THE ACTUAL STYLE:
 ═══════════════════════════════════════════════════════════════════
 
-Choose the most appropriate style from: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic'
+⚠️ YOU MUST IDENTIFY THE ACTUAL STYLE - DO NOT DEFAULT TO "casual" ⚠️
+
+Look at the item and determine its style based on:
+✓ Formality: Is it formal (suit, blazer, dress shirt) or casual (t-shirt, jeans)?
+✓ Design: Is it elegant (flowing, refined), sporty (athletic, functional), or edgy (bold, unconventional)?
+✓ Aesthetic: Is it vintage (retro, classic), modern (contemporary, trendy), or classic (timeless)?
+✓ Gender expression: Is it feminine (delicate, soft) or masculine (structured, bold)?
+✓ Overall vibe: Is it minimalist (simple, clean), bohemian (free-spirited), or chic (stylish, sophisticated)?
+
+Valid styles: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic'
+
+EXAMPLES:
+• T-shirt and jeans → 'casual'
+• Business suit → 'formal'
+• Athletic wear → 'sporty'
+• Flowing evening dress → 'elegant'
+• Vintage 70s style → 'vintage'
+• Simple, clean lines → 'minimalist'
+• Bold, unconventional → 'edgy'
+• Delicate, soft fabrics → 'feminine'
+• Structured, tailored → 'masculine'
+• Stylish, sophisticated → 'chic'
 
 ═══════════════════════════════════════════════════════════════════
 FINAL REQUIREMENTS:
@@ -247,11 +333,13 @@ FINAL REQUIREMENTS:
 
 ✓ ALL THREE fields (category, color, style) MUST be present
 ✓ Category MUST be exactly one of: 'shirt', 'pants', 'dress', 'jacket', 'shoes', 'accessories'
-✓ Color MUST be one of the valid color names listed above
-✓ Style MUST be one of: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic'
+✓ Color MUST be one of the valid color names listed above - IDENTIFY THE ACTUAL COLOR IN THE IMAGE
+✓ Style MUST be one of: 'casual', 'formal', 'sporty', 'elegant', 'bohemian', 'minimalist', 'vintage', 'modern', 'classic', 'edgy', 'feminine', 'masculine', 'chic' - IDENTIFY THE ACTUAL STYLE
 ✓ NEVER use "miscellaneous", "unknown", "Unknown", "N/A", "n/a", "other", "Other", or any vague terms
-✓ Do NOT omit any required fields
-✓ If you cannot determine a value, use the most appropriate option from the valid lists above
+✓ Do NOT default to "white" or "casual" - you MUST examine the image and identify the actual color and style
+✓ If the item is green, say 'green' - NOT 'white'
+✓ If the item is red/burgundy, say 'red' - NOT 'white'
+✓ If the item is brown/beige, say 'brown' or 'beige' - NOT 'white'
 ✓ Analyze the image carefully and follow the priority order for category identification"""
         
         user_message = {
@@ -261,13 +349,35 @@ FINAL REQUIREMENTS:
                     "type": "text",
                     "text": """Analyze the clothing item in this image and return ONLY category, color, and style.
 
-IMPORTANT INSTRUCTIONS:
-1. Look carefully at the image - identify what type of clothing item this is
-2. Follow the category identification rules in EXACT order (shoes → dress → pants → jacket → shirt → accessories)
-3. Identify the PRIMARY/MAIN color of the OUTERMOST garment (ignore background, inner layers, small details)
-4. Determine the style based on the item's appearance
+⚠️ CRITICAL INSTRUCTIONS - READ CAREFULLY:
 
-Return ONLY a JSON object with these three fields: category, color, style."""
+1. EXAMINE THE IMAGE: Look carefully at the actual clothing item visible in the image
+   - What is the DOMINANT COLOR of the main garment? (NOT the background, NOT inner layers)
+   - Is it green, red, brown, beige, blue, black, or actually white?
+   - DO NOT default to "white" - identify the ACTUAL color you see
+
+2. CATEGORY: Follow the identification rules in EXACT order:
+   - shoes → dress → pants → jacket → shirt → accessories
+   - Look at what part of the body the garment covers
+
+3. COLOR: Identify the PRIMARY/MAIN color of the OUTERMOST garment:
+   - Ignore: background colors, white backgrounds, inner layers (collars, undershirts), small details
+   - Focus: The largest visible area of the main clothing item
+   - If you see GREEN → return 'green' (NOT 'white'!)
+   - If you see RED/BURGUNDY → return 'red' (NOT 'white'!)
+   - If you see BROWN/BEIGE → return 'brown' or 'beige' (NOT 'white'!)
+   - Only use 'white' if the item is ACTUALLY white/ivory
+
+4. STYLE: Determine the style based on the item's ACTUAL appearance:
+   - Is it formal (suit, blazer)? → 'formal'
+   - Is it casual (t-shirt, jeans)? → 'casual'
+   - Is it elegant (flowing, refined)? → 'elegant'
+   - Is it sporty (athletic wear)? → 'sporty'
+   - Look at the design, formality, and aesthetic - DO NOT default to "casual"
+
+5. EXAMINE THE IMAGE CAREFULLY - Do not guess or default. Look at what is actually visible.
+
+Return ONLY a JSON object with these three fields: category, color, style. Make sure the color and style match what you ACTUALLY see in the image."""
                 },
                 {
                     "type": "image_url",
@@ -295,12 +405,30 @@ Return ONLY a JSON object with these three fields: category, color, style."""
         analysis = json.loads(analysis_text)
         
         # Ensure required fields exist (only category, color, style)
+        # IMPORTANT: Do NOT use 'white' or 'casual' as defaults - these are often wrong!
+        # If ChatGPT doesn't return a value, try to infer from the analysis text or use a safer default
+        category = analysis.get('category', '')
+        color = analysis.get('color', '')
+        style = analysis.get('style', '')
+        
+        # Only use defaults if absolutely necessary, and log a warning
+        if not category or category.lower() in ['unknown', 'n/a', '']:
+            print(f"⚠️  Warning: ChatGPT didn't return category, using 'shirt' as fallback")
+            category = 'shirt'
+        if not color or color.lower() in ['unknown', 'n/a', '']:
+            print(f"⚠️  Warning: ChatGPT didn't return color, using 'black' as safer fallback (NOT white!)")
+            color = 'black'  # Use 'black' instead of 'white' as it's less likely to be wrong
+        if not style or style.lower() in ['unknown', 'n/a', '']:
+            print(f"⚠️  Warning: ChatGPT didn't return style, using 'modern' as safer fallback (NOT casual!)")
+            style = 'modern'  # Use 'modern' instead of 'casual' as it's less likely to be wrong
+        
         result = {
-            'category': analysis.get('category', 'shirt'),
-            'color': analysis.get('color', 'white'),
-            'style': analysis.get('style', 'casual')
+            'category': category,
+            'color': color,
+            'style': style
         }
         
+        print(f"📊 Generated tags: category={category}, color={color}, style={style}")
         return result
         
     except ImportError:
@@ -397,6 +525,38 @@ def save_result_to_gcs(user_id: str, request_id: str, result_data: dict):
         print(f"⚠️  Failed to save results to GCS: {e}")
         raise
 
+def save_wardrobe_image_to_gcs(user_id: str, image_path: Path, metadata_path: Path = None):
+    """Save wardrobe image and metadata to GCS wardrobes/{user_id}/images/"""
+    from google.cloud import storage
+    
+    gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+    gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+    
+    try:
+        client = storage.Client(project=gcp_project_id)
+        bucket = client.bucket(gcp_bucket_name)
+        
+        # Upload image
+        image_filename = image_path.name
+        image_gcs_path = f"wardrobes/{user_id}/images/{image_filename}"
+        image_blob = bucket.blob(image_gcs_path)
+        image_blob.upload_from_filename(str(image_path))
+        print(f"✅ Saved wardrobe image to gs://{gcp_bucket_name}/{image_gcs_path}")
+        
+        # Upload metadata if provided
+        if metadata_path and metadata_path.exists():
+            metadata_filename = metadata_path.name
+            metadata_gcs_path = f"wardrobes/{user_id}/{metadata_filename}"
+            metadata_blob = bucket.blob(metadata_gcs_path)
+            metadata_blob.upload_from_filename(str(metadata_path))
+            print(f"✅ Saved wardrobe metadata to gs://{gcp_bucket_name}/{metadata_gcs_path}")
+        
+        return True
+    except Exception as e:
+        print(f"⚠️  Failed to save wardrobe image to GCS: {e}")
+        # Don't raise - allow local save to continue
+        return False
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -428,16 +588,64 @@ def upload_image():
         if not user_id:
             return jsonify({'error': 'user_id is required'}), 400
         
-        # Get metadata if provided
-        metadata = data.get('metadata') or {}
+        # Get metadata if provided - check BOTH JSON body and form data
+        metadata = {}
+        
+        # First, try to get from JSON body (if request is JSON)
+        if request.is_json and data.get('metadata'):
+            metadata = data.get('metadata', {})
+            print(f"📥 Received metadata from JSON body: {metadata}")
+        
+        # Then, try to get from form data (if request is multipart/form-data)
+        # This is the PRIMARY way frontend sends metadata (via FormData)
+        print(f"🔍 Checking request.form: {request.form}", flush=True)
+        print(f"🔍 Checking request.files: {list(request.files.keys()) if request.files else 'None'}", flush=True)
+        print(f"🔍 Content-Type: {request.content_type}", flush=True)
+        
         if request.form:
-            # Try to parse metadata from form data
             metadata_str = request.form.get('metadata')
+            print(f"🔍 metadata_str from form: {metadata_str}", flush=True)
+            print(f"🔍 metadata_str type: {type(metadata_str)}", flush=True)
             if metadata_str:
                 try:
-                    metadata = json.loads(metadata_str)
-                except:
-                    pass
+                    parsed_metadata = json.loads(metadata_str)
+                    # Merge form metadata (takes precedence if both exist)
+                    metadata.update(parsed_metadata)
+                    print(f"📥 Received metadata from form data: {parsed_metadata}", flush=True)
+                except json.JSONDecodeError as e:
+                    print(f"⚠️  Failed to parse metadata JSON from form: {e}")
+                    print(f"   Raw metadata string (first 500 chars): {metadata_str[:500] if metadata_str else 'None'}")
+                    # Try to extract manually if JSON parsing fails
+                    try:
+                        # Sometimes the string might have extra quotes or escaping
+                        if metadata_str.startswith('"') and metadata_str.endswith('"'):
+                            metadata_str = metadata_str[1:-1].replace('\\"', '"')
+                        parsed_metadata = json.loads(metadata_str)
+                        metadata.update(parsed_metadata)
+                        print(f"📥 Successfully parsed after cleanup: {parsed_metadata}")
+                    except:
+                        print(f"❌ Could not parse metadata even after cleanup")
+                except Exception as e:
+                    print(f"⚠️  Unexpected error parsing metadata: {e}")
+                    print(f"   Raw metadata string (first 500 chars): {metadata_str[:500] if metadata_str else 'None'}")
+        
+        # Log what metadata we have - DEBUG INFO
+        print(f"🔍 DEBUG: Checking metadata...", flush=True)
+        print(f"   request.is_json: {request.is_json}", flush=True)
+        print(f"   request.form keys: {list(request.form.keys()) if request.form else 'None'}", flush=True)
+        print(f"   data keys: {list(data.keys()) if data else 'None'}", flush=True)
+        print(f"   metadata dict: {metadata}", flush=True)
+        print(f"   metadata type: {type(metadata)}", flush=True)
+        print(f"   metadata.get('category'): {metadata.get('category')}", flush=True)
+        print(f"   metadata.get('color'): {metadata.get('color')}", flush=True)
+        print(f"   metadata.get('style'): {metadata.get('style')}", flush=True)
+        
+        if metadata and any(metadata.get(k) for k in ['category', 'color', 'style']):
+            print(f"📋 Final metadata to use: category={metadata.get('category')}, color={metadata.get('color')}, style={metadata.get('style')}", flush=True)
+        else:
+            print("⚠️  No valid metadata provided by frontend - will generate with ChatGPT", flush=True)
+            print(f"   This means frontend metadata was NOT received properly!", flush=True)
+            print(f"   ⚠️  WARNING: This will cause incorrect 'white'/'casual' defaults!", flush=True)
         
         # Create user wardrobe directory
         user_wardrobe_dir = WARDROBES_DIR / user_id / 'images'
@@ -474,9 +682,22 @@ def upload_image():
             # Get inference service (optional, for background removal if enabled)
             service, error = get_inference_service()
             
-            # Generate final image filename
-            image_filename = f"{user_id}_{len(list(user_wardrobe_dir.glob('*.jpg')))}.jpg"
+            # Generate final image filename with timestamp to ensure uniqueness
+            # Use timestamp + random suffix to prevent overwrites
+            timestamp = int(time.time() * 1000)  # milliseconds for uniqueness
+            random_suffix = random.randint(1000, 9999)  # 4-digit random number
+            image_filename = f"{user_id}_{timestamp}_{random_suffix}.jpg"
             final_image_path = user_wardrobe_dir / image_filename
+            
+            # Ensure filename doesn't already exist (very unlikely but check anyway)
+            counter = 0
+            while final_image_path.exists() and counter < 10:
+                random_suffix = random.randint(1000, 9999)
+                image_filename = f"{user_id}_{timestamp}_{random_suffix}.jpg"
+                final_image_path = user_wardrobe_dir / image_filename
+                counter += 1
+            
+            print(f"📁 Generated unique filename: {image_filename}")
             
             # Load original image
             processed_image = Image.open(temp_image_path).convert('RGB')
@@ -559,20 +780,29 @@ def upload_image():
         # If metadata_to_save is None (failed to load existing), generate new
         if metadata_to_save is None:
             # No existing metadata file - use provided metadata or generate
-            # Check only category, color, style (the three required tags)
-            if metadata and any(metadata.get(k) and metadata.get(k) != 'Unknown' and metadata.get(k) != '' 
-                               for k in ['category', 'color', 'style']):
-                # User provided metadata - use it
+            # Check if we have valid metadata from frontend (frontend already called ChatGPT)
+            # Be more lenient - if ANY of the three fields exist and are not empty/Unknown, use it
+            has_category = metadata.get('category') and str(metadata.get('category')).strip() not in ['', 'Unknown', 'unknown']
+            has_color = metadata.get('color') and str(metadata.get('color')).strip() not in ['', 'Unknown', 'unknown']
+            has_style = metadata.get('style') and str(metadata.get('style')).strip() not in ['', 'Unknown', 'unknown']
+            
+            has_valid_metadata = metadata and (has_category or has_color or has_style)
+            
+            if has_valid_metadata:
+                # User provided metadata - use it (frontend already analyzed with ChatGPT)
                 print(f"✅ Using user-provided metadata for {final_image_path.name}")
+                print(f"   Category: {metadata.get('category')}, Color: {metadata.get('color')}, Style: {metadata.get('style')}")
+                # Use provided values, with safe fallbacks only if completely missing
                 metadata_to_save = {
                     'filename': final_image_path.name,
-                    'category': metadata.get('category', 'Unknown'),
-                    'color': metadata.get('color', 'Unknown'),
-                    'style': metadata.get('style', 'Casual'),
+                    'category': metadata.get('category') if has_category else 'shirt',
+                    'color': metadata.get('color') if has_color else 'black',  # Use 'black' not 'white' as safer default
+                    'style': metadata.get('style') if has_style else 'modern',  # Use 'modern' not 'casual' as safer default
                     'timestamp': datetime.now().isoformat(),
                     'tagged_at': datetime.now().isoformat(),
                     'source': 'user_provided'
                 }
+                print(f"✅ Saved metadata with source: user_provided")
             else:
                 # No metadata provided - generate with ChatGPT API
                 print(f"🔄 No metadata provided, generating tags with ChatGPT API for {final_image_path.name}...")
@@ -630,6 +860,28 @@ def upload_image():
             json.dump(metadata_to_save, f, indent=2)
         print(f"✅ Saved metadata for {final_image_path.name} (source: {metadata_to_save.get('source', 'unknown')})")
         
+        # Upload to GCS if local save succeeded
+        try:
+            save_wardrobe_image_to_gcs(user_id, final_image_path, metadata_path)
+        except Exception as gcs_error:
+            print(f"⚠️  Warning: Failed to upload to GCS, but local save succeeded: {gcs_error}")
+            # Continue - local save is still valid
+        
+        # Invalidate wardrobe index so it gets rebuilt on next search
+        # This ensures new items are included in recommendations
+        try:
+            wardrobe_index_path = WARDROBES_DIR / user_id / "wardrobe.index.faiss"
+            if wardrobe_index_path.exists():
+                print(f"🗑️  Removing stale wardrobe index to trigger rebuild on next search")
+                # Remove index files so they get rebuilt
+                for index_file in ['wardrobe.index.faiss', 'wardrobe.parquet', 'idmap.npy', 'wardrobe.vecs.npy']:
+                    index_path = WARDROBES_DIR / user_id / index_file
+                    if index_path.exists():
+                        index_path.unlink()
+        except Exception as index_error:
+            print(f"⚠️  Warning: Failed to invalidate wardrobe index: {index_error}")
+            # Continue - index will be rebuilt on next search anyway
+        
         # Return success with image info and metadata
         return jsonify({
             'success': True,
@@ -668,6 +920,7 @@ def get_recommendations():
         wardrobe_k = int(data.get('wardrobe_k', 5))
         catalog_k = int(data.get('catalog_k', 3))
         gender = data.get('gender')
+        query_category = data.get('query_category') or request.form.get('query_category')  # Category of query item (e.g., "Tops", "Pants")
         
         # Handle image upload
         query_image_path = None
@@ -779,7 +1032,8 @@ def get_recommendations():
             threshold=threshold,
             wardrobe_k=wardrobe_k,
             catalog_k=catalog_k,
-            gender=gender
+            gender=gender,
+            query_category=query_category  # Pass query category to filter out same-category items
         )
         
         # Add metadata to result
@@ -787,34 +1041,31 @@ def get_recommendations():
         result['query_image_path'] = str(query_saved_path) if query_saved_path else str(query_image_path)
         result['timestamp'] = datetime.now().isoformat()
         
-        # Format response for frontend
-        formatted_items = []
-        for item in result.get('items', []):
+        # Helper function to format items
+        def format_item(item, is_wardrobe=False):
             # Handle image path - convert local paths to API URLs
             # Catalog items have image_path like "{product_id}_index1.jpg"
-            # Wardrobe items have full paths like "/path/to/wardrobes/user/images/file.jpg"
-            image_path = item.get('image_path') or item.get('image_url') or item.get('url', '')
+            # Wardrobe items have img_path (from parquet) or image_path
+            image_path = item.get('image_path') or item.get('img_path') or item.get('image_url') or item.get('url', '')
             
             # Convert to API URL if needed
             if image_path and not image_path.startswith('http') and not image_path.startswith('/api/'):
-                # Check if it's a wardrobe image (has full path with 'wardrobes' or '/wardrobe/')
-                if 'wardrobes' in str(image_path) or '/wardrobe/' in str(image_path):
+                # Check if it's a wardrobe image (has full path with 'wardrobes' or '/wardrobe/' or is_wardrobe flag)
+                if 'wardrobes' in str(image_path) or '/wardrobe/' in str(image_path) or is_wardrobe:
                     # Extract filename from path
+                    # img_path might be like "wardrobes/user/images/file.jpg" or just "file.jpg"
                     filename = Path(image_path).name
                     image_path = f"/api/wardrobe/{user_id}/image/{filename}"
-                elif image_path.endswith('.jpg') or image_path.endswith('.png'):
+                elif image_path.endswith('.jpg') or image_path.endswith('.png') or image_path.endswith('.jpeg'):
                     # Catalog image - format: "{product_id}_index1.jpg"
-                    # These are stored in GCS or local catalog directory
-                    # For now, we'll try to construct a URL or use the product URL
-                    # If we have a product URL, we could use that as fallback
-                    product_url = item.get('url') or item.get('product_url', '')
-                    if product_url and product_url.startswith('http'):
-                        # Use product URL as image source (many e-commerce sites have image URLs in product pages)
-                        # For now, keep image_path as-is and let frontend handle it
-                        # Or we could try to extract image from product URL
-                        pass
-                    # Catalog images might need to be served via a catalog image endpoint
-                    # For now, return the image_path and let frontend construct the URL if needed
+                    # These are stored in gs://styleme-data-bucket/images/
+                    # Serve via API endpoint
+                    filename = Path(image_path).name
+                    image_path = f"/api/catalog/image/{filename}"
+            elif is_wardrobe and not image_path:
+                # Fallback: try to get filename from item_id or filename field
+                filename = item.get('filename') or f"{item.get('item_id', 'unknown')}.jpg"
+                image_path = f"/api/wardrobe/{user_id}/image/{filename}"
             
             # Extract category from category string if needed
             category_str = item.get('category', '')
@@ -825,12 +1076,50 @@ def get_recommendations():
             else:
                 category = category_str or 'Unknown'
             
-            formatted_item = {
+            # Format price - normalize inconsistent formats
+            price_raw = item.get('price', '')
+            price_formatted = ''
+            if price_raw:
+                price_str = str(price_raw).strip()
+                # Handle different price formats:
+                # - "R$ 3.916" -> "R$ 3,916" (Brazilian Real: period = thousand separator)
+                # - "$230" -> "$230" (US Dollar)
+                # - "£150" -> "£150" (British Pound)
+                # - "3.916" -> "3,916" (number with period as thousand separator)
+                
+                # Extract currency symbol if present
+                currency_symbol = ''
+                number_part = price_str
+                for symbol in ['R$', '$', '£', '€', '¥', '₹']:
+                    if price_str.startswith(symbol):
+                        currency_symbol = symbol
+                        number_part = price_str[len(symbol):].strip()
+                        break
+                
+                # Check if number part has period as thousand separator
+                if '.' in number_part:
+                    parts = number_part.split('.')
+                    if len(parts) == 2:
+                        decimal_part = parts[1].strip()
+                        # If decimal part is exactly 3 digits, it's likely a thousand separator
+                        # (e.g., "3.916" = 3916, not "3.91" = 3.91)
+                        if len(decimal_part) == 3 and decimal_part.isdigit():
+                            # Convert period to comma for thousand separator
+                            number_part = number_part.replace('.', ',')
+                        # Otherwise keep as decimal (e.g., "3.50")
+                
+                # Reconstruct price with currency symbol
+                if currency_symbol:
+                    price_formatted = f"{currency_symbol} {number_part}".strip()
+                else:
+                    price_formatted = number_part
+            
+            return {
                 'id': item.get('item_id') or item.get('id', ''),
                 'image': image_path or '',
                 'title': item.get('title') or item.get('name', 'Unknown'),
                 'brand': item.get('brand', ''),
-                'price': str(item.get('price', '')) if item.get('price') else '',
+                'price': '',  # Remove price display - no longer shown in UI
                 'url': item.get('url') or item.get('product_url', ''),
                 'category': category,
                 'color': item.get('color', 'Unknown'),
@@ -838,17 +1127,33 @@ def get_recommendations():
                 'similarity': item.get('similarity', 0.0),
                 'rank': item.get('rank', 0)
             }
-            formatted_items.append(formatted_item)
         
-        # Prepare response
+        # Format wardrobe items
+        formatted_wardrobe_items = []
+        for item in result.get('wardrobe_items', []):
+            formatted_wardrobe_items.append(format_item(item, is_wardrobe=True))
+        
+        # Format catalog items
+        formatted_catalog_items = []
+        for item in result.get('catalog_items', []):
+            formatted_catalog_items.append(format_item(item, is_wardrobe=False))
+        
+        # Prepare response with BOTH arrays
         response_data = {
             'success': True,
             'user_id': result.get('user_id'),
             'request_id': request_id,
+            'threshold': threshold,
+            'wardrobe_items': formatted_wardrobe_items,
+            'catalog_items': formatted_catalog_items,
+            'wardrobe_count': len(formatted_wardrobe_items),
+            'catalog_count': len(formatted_catalog_items),
+            'wardrobe_reason': result.get('wardrobe_reason'),
+            'catalog_reason': result.get('catalog_reason'),
+            # For backward compatibility
             'used_wardrobe': result.get('used_wardrobe', False),
-            'items': formatted_items,
-            'num_results': len(formatted_items),
-            'threshold': threshold
+            'items': formatted_wardrobe_items if len(formatted_wardrobe_items) > 0 else formatted_catalog_items,
+            'num_results': len(formatted_wardrobe_items) + len(formatted_catalog_items)
         }
         
         # Save results to GCS
@@ -876,51 +1181,143 @@ def get_wardrobe(user_id):
     """
     Get user's wardrobe items
     GET /api/wardrobe/<user_id>
+    Reads from local filesystem first, falls back to GCS if local files don't exist
     """
     try:
         user_wardrobe_dir = WARDROBES_DIR / user_id
         images_dir = user_wardrobe_dir / 'images'
         
-        if not images_dir.exists():
-            return jsonify({'items': [], 'user_id': user_id}), 200
-        
-        # Get all images (only files that actually exist)
-        image_files = []
-        for ext in ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']:
-            image_files.extend(images_dir.glob(ext))
-        
-        # Filter to only existing files
-        image_files = [f for f in image_files if f.exists() and f.is_file()]
-        
         items = []
-        for idx, img_path in enumerate(image_files):
-            # Try to load metadata from JSON file
-            metadata_filename = img_path.stem + '_metadata.json'
-            metadata_path = user_wardrobe_dir / metadata_filename
+        
+        # Try local filesystem first
+        if images_dir.exists():
+            # Get all images (only files that actually exist)
+            image_files = []
+            for ext in ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']:
+                image_files.extend(images_dir.glob(ext))
             
-            category = 'Unknown'
-            color = 'Unknown'
-            style = 'Casual'
+            # Filter to only existing files
+            image_files = [f for f in image_files if f.exists() and f.is_file()]
             
-            if metadata_path.exists():
-                try:
-                    with open(metadata_path, 'r') as f:
-                        metadata = json.load(f)
-                        category = metadata.get('category', 'Unknown')
-                        color = metadata.get('color', 'Unknown')
-                        style = metadata.get('style', 'Casual')
-                except Exception as e:
-                    print(f"⚠️  Failed to load metadata for {img_path.name}: {e}")
+            if image_files:
+                # Sort by modification time (newest first) to ensure consistent ordering
+                image_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                
+                print(f"📂 Found {len(image_files)} images locally for user {user_id}")
+                
+                for idx, img_path in enumerate(image_files):
+                    # Try to load metadata from JSON file
+                    metadata_filename = img_path.stem + '_metadata.json'
+                    metadata_path = user_wardrobe_dir / metadata_filename
+                    
+                    category = 'Unknown'
+                    color = 'Unknown'
+                    style = 'Casual'
+                    
+                    if metadata_path.exists():
+                        try:
+                            with open(metadata_path, 'r') as f:
+                                metadata = json.load(f)
+                                category = metadata.get('category', 'Unknown')
+                                color = metadata.get('color', 'Unknown')
+                                style = metadata.get('style', 'Casual')
+                        except Exception as e:
+                            print(f"⚠️  Failed to load metadata for {img_path.name}: {e}")
+                    
+                    items.append({
+                        'id': f"{user_id}_{idx}",
+                        'image': f"/api/wardrobe/{user_id}/image/{img_path.name}",
+                        'filename': img_path.name,  # Store filename for easy deletion
+                        'category': category,
+                        'color': color,
+                        'style': style,
+                        'dateAdded': img_path.stat().st_mtime
+                    })
+        
+        # Always check GCS to merge with local items (local might be incomplete after container restart)
+        # This ensures we get ALL items from GCS, not just local ones
+        print(f"📂 Checking GCS for user {user_id} to merge with local items...")
+        try:
+            from google.cloud import storage
             
-            items.append({
-                'id': f"{user_id}_{idx}",
-                'image': f"/api/wardrobe/{user_id}/image/{img_path.name}",
-                'filename': img_path.name,  # Store filename for easy deletion
-                'category': category,
-                'color': color,
-                'style': style,
-                'dateAdded': img_path.stat().st_mtime
-            })
+            gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+            gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+            
+            client = storage.Client(project=gcp_project_id)
+            bucket = client.bucket(gcp_bucket_name)
+            
+            # List images in GCS
+            prefix = f"wardrobes/{user_id}/images/"
+            image_blobs = list(bucket.list_blobs(prefix=prefix))
+            
+            # Filter to image files only
+            image_extensions = {'.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG'}
+            image_blobs = [b for b in image_blobs if any(b.name.lower().endswith(ext) for ext in image_extensions)]
+            
+            # Track filenames we already have from local filesystem
+            local_filenames = {item.get('filename', '') for item in items}
+            
+            if image_blobs:
+                print(f"📂 Found {len(image_blobs)} images in GCS for user {user_id}")
+                
+                # Sort by time created (newest first)
+                image_blobs.sort(key=lambda b: b.time_created, reverse=True)
+                
+                gcs_items_added = 0
+                for blob in image_blobs:
+                    filename = blob.name.split('/')[-1]
+                    
+                    # Skip if we already have this file from local filesystem
+                    if filename in local_filenames:
+                        continue
+                    
+                    # Try to load metadata from GCS
+                    metadata_filename = Path(filename).stem + '_metadata.json'
+                    metadata_blob_path = f"wardrobes/{user_id}/{metadata_filename}"
+                    metadata_blob = bucket.blob(metadata_blob_path)
+                    
+                    category = 'Unknown'
+                    color = 'Unknown'
+                    style = 'Casual'
+                    
+                    if metadata_blob.exists():
+                        try:
+                            metadata_json = metadata_blob.download_as_text()
+                            metadata = json.loads(metadata_json)
+                            category = metadata.get('category', 'Unknown')
+                            color = metadata.get('color', 'Unknown')
+                            style = metadata.get('style', 'Casual')
+                        except Exception as e:
+                            print(f"⚠️  Failed to load metadata from GCS for {filename}: {e}")
+                    
+                    # Use blob time_created as dateAdded (convert to timestamp)
+                    date_added = blob.time_created.timestamp() if blob.time_created else 0
+                    
+                    items.append({
+                        'id': f"{user_id}_{len(items)}",  # Use current length as index
+                        'image': f"/api/wardrobe/{user_id}/image/{filename}",
+                        'filename': filename,
+                        'category': category,
+                        'color': color,
+                        'style': style,
+                        'dateAdded': date_added
+                    })
+                    gcs_items_added += 1
+                
+                if gcs_items_added > 0:
+                    print(f"✅ Added {gcs_items_added} items from GCS (total: {len(items)} items)")
+            else:
+                print(f"📂 No images found in GCS for user {user_id}")
+        except Exception as gcs_error:
+            print(f"⚠️  Failed to load wardrobe from GCS: {gcs_error}")
+            # Continue with local items if GCS fails
+        
+        # Sort all items by dateAdded (newest first) after merging local and GCS
+        items.sort(key=lambda x: x.get('dateAdded', 0), reverse=True)
+        
+        # Reassign IDs after sorting to ensure consistent ordering
+        for idx, item in enumerate(items):
+            item['id'] = f"{user_id}_{idx}"
         
         return jsonify({
             'success': True,
@@ -932,14 +1329,73 @@ def get_wardrobe(user_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/catalog/image/<filename>', methods=['GET'])
+def get_catalog_image(filename):
+    """Serve catalog image from GCS bucket styleme-data-bucket/images/"""
+    try:
+        # Secure filename to prevent path traversal
+        filename = secure_filename(filename)
+        
+        # Images are stored in gs://styleme-data-bucket/images/{filename}
+        gcp_bucket_name = os.getenv('GCP_BUCKET_NAME', 'styleme-data-bucket')
+        gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+        
+        try:
+            from google.cloud import storage
+            client = storage.Client(project=gcp_project_id)
+            bucket = client.bucket(gcp_bucket_name)
+            
+            # Try index1 first, then index2, then without index
+            possible_filenames = [filename]
+            if '_index1.' in filename:
+                possible_filenames.append(filename.replace('_index1.', '_index2.'))
+                possible_filenames.append(filename.replace('_index1.', '.'))
+            elif '_index2.' in filename:
+                possible_filenames.append(filename.replace('_index2.', '_index1.'))
+                possible_filenames.append(filename.replace('_index2.', '.'))
+            
+            image_blob = None
+            for possible_filename in possible_filenames:
+                blob_path = f"images/{possible_filename}"
+                blob = bucket.blob(blob_path)
+                if blob.exists():
+                    image_blob = blob
+                    break
+            
+            if image_blob:
+                # Download image to memory
+                image_data = image_blob.download_as_bytes()
+                
+                # Determine mimetype from extension
+                ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
+                mimetype_map = {
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'gif': 'image/gif',
+                    'webp': 'image/webp'
+                }
+                mimetype = mimetype_map.get(ext, 'image/jpeg')
+                
+                return send_file(io.BytesIO(image_data), mimetype=mimetype)
+            else:
+                return jsonify({'error': f'Image not found in GCS: {filename}'}), 404
+        except Exception as gcs_error:
+            print(f"⚠️  Error loading image from GCS: {gcs_error}")
+            return jsonify({'error': f'Failed to load image from GCS: {str(gcs_error)}'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/wardrobe/<user_id>/image/<filename>', methods=['GET'])
 def get_wardrobe_image(user_id, filename):
-    """Serve wardrobe image"""
+    """Serve wardrobe image - tries local first, then GCS"""
     try:
         # Secure filename to prevent path traversal
         filename = secure_filename(filename)
         image_path = WARDROBES_DIR / user_id / 'images' / filename
         
+        # Try local filesystem first
         if image_path.exists() and image_path.is_file():
             # Determine mimetype from extension
             ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
@@ -952,7 +1408,49 @@ def get_wardrobe_image(user_id, filename):
             }
             mimetype = mimetype_map.get(ext, 'image/jpeg')
             return send_file(str(image_path), mimetype=mimetype)
-        return jsonify({'error': 'Image not found'}), 404
+        
+        # If not found locally, try GCS
+        print(f"📂 Image not found locally, checking GCS for {filename}...")
+        try:
+            from google.cloud import storage
+            import tempfile
+            
+            gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+            gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+            
+            client = storage.Client(project=gcp_project_id)
+            bucket = client.bucket(gcp_bucket_name)
+            
+            # Try to get image from GCS
+            blob_path = f"wardrobes/{user_id}/images/{filename}"
+            blob = bucket.blob(blob_path)
+            
+            if blob.exists():
+                # Download to temp file and serve
+                temp_dir = Path(tempfile.gettempdir()) / "styleme_wardrobe_images"
+                temp_dir.mkdir(exist_ok=True)
+                temp_path = temp_dir / filename
+                
+                blob.download_to_filename(str(temp_path))
+                
+                # Determine mimetype
+                ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
+                mimetype_map = {
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'gif': 'image/gif',
+                    'webp': 'image/webp'
+                }
+                mimetype = mimetype_map.get(ext, 'image/jpeg')
+                
+                return send_file(str(temp_path), mimetype=mimetype)
+            else:
+                return jsonify({'error': 'Image not found in GCS'}), 404
+        except Exception as gcs_error:
+            print(f"⚠️  Failed to load image from GCS: {gcs_error}")
+            return jsonify({'error': 'Image not found'}), 404
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -983,9 +1481,8 @@ def delete_wardrobe_item(user_id, filename):
         user_wardrobe_dir = WARDROBES_DIR / user_id
         images_dir = user_wardrobe_dir / 'images'
         
-        if not images_dir.exists():
-            print(f"⚠️  Images directory does not exist: {images_dir}")
-            return jsonify({'error': 'Wardrobe directory not found'}), 404
+        # Note: Local directory might not exist if using GCS-only storage
+        # We'll still try to delete from local if it exists, and always try GCS
         
         # Image file path
         image_path = images_dir / filename
@@ -998,12 +1495,13 @@ def delete_wardrobe_item(user_id, filename):
             for ext in ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']:
                 possible_paths.append(images_dir / f"{base_name}{ext}")
         
-        # Find the actual file
+        # Find the actual file (only if local directory exists)
         actual_image_path = None
-        for path in possible_paths:
-            if path.exists() and path.is_file():
-                actual_image_path = path
-                break
+        if images_dir.exists():
+            for path in possible_paths:
+                if path.exists() and path.is_file():
+                    actual_image_path = path
+                    break
         
         # Metadata file path
         metadata_filename = Path(filename).stem + '_metadata.json'
@@ -1011,38 +1509,88 @@ def delete_wardrobe_item(user_id, filename):
         
         deleted_files = []
         
-        # Delete image file
+        # Delete image file from local storage (if exists)
         if actual_image_path:
             try:
                 actual_image_path.unlink()
-                deleted_files.append(f"image: {actual_image_path.name}")
-                print(f"✅ Deleted image: {actual_image_path}")
+                deleted_files.append(f"local image: {actual_image_path.name}")
+                print(f"✅ Deleted local image: {actual_image_path}")
             except Exception as e:
-                print(f"⚠️  Failed to delete image {actual_image_path}: {e}")
-                return jsonify({'error': f'Failed to delete image: {str(e)}'}), 500
-        else:
-            print(f"⚠️  Image file not found: {image_path}")
+                print(f"⚠️  Failed to delete local image {actual_image_path}: {e}")
+                # Continue - will try GCS deletion
+        elif images_dir.exists():
+            print(f"⚠️  Local image file not found: {image_path}")
             # List available files for debugging
             available_files = list(images_dir.glob('*'))
             print(f"   Available files in directory: {[f.name for f in available_files[:10]]}")
+        else:
+            print(f"ℹ️  Local wardrobe directory does not exist (using GCS-only storage)")
         
-        # Delete metadata file
+        # Delete metadata file from local storage (if exists)
         if metadata_path.exists() and metadata_path.is_file():
             try:
                 metadata_path.unlink()
-                deleted_files.append(f"metadata: {metadata_filename}")
-                print(f"✅ Deleted metadata: {metadata_path}")
+                deleted_files.append(f"local metadata: {metadata_filename}")
+                print(f"✅ Deleted local metadata: {metadata_path}")
             except Exception as e:
-                print(f"⚠️  Warning: Failed to delete metadata {metadata_path}: {e}")
-                # Don't fail if metadata deletion fails, image is already deleted
+                print(f"⚠️  Warning: Failed to delete local metadata {metadata_path}: {e}")
+                # Don't fail if metadata deletion fails
         
+        # Also delete from GCS
+        try:
+            from google.cloud import storage
+            
+            gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+            gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+            
+            client = storage.Client(project=gcp_project_id)
+            bucket = client.bucket(gcp_bucket_name)
+            
+            # Delete image from GCS
+            image_gcs_path = f"wardrobes/{user_id}/images/{filename}"
+            image_blob = bucket.blob(image_gcs_path)
+            if image_blob.exists():
+                image_blob.delete()
+                deleted_files.append(f"GCS image: {image_gcs_path}")
+                print(f"✅ Deleted image from GCS: {image_gcs_path}")
+            else:
+                print(f"⚠️  Image not found in GCS: {image_gcs_path}")
+            
+            # Delete metadata from GCS
+            metadata_gcs_path = f"wardrobes/{user_id}/{metadata_filename}"
+            metadata_blob = bucket.blob(metadata_gcs_path)
+            if metadata_blob.exists():
+                metadata_blob.delete()
+                deleted_files.append(f"GCS metadata: {metadata_gcs_path}")
+                print(f"✅ Deleted metadata from GCS: {metadata_gcs_path}")
+            
+            # Invalidate wardrobe index so it gets rebuilt on next search
+            # This ensures deleted items are removed from recommendations
+            try:
+                index_files = ['wardrobe.index.faiss', 'wardrobe.parquet', 'idmap.npy', 'wardrobe.vecs.npy']
+                for index_file in index_files:
+                    index_gcs_path = f"wardrobes/{user_id}/{index_file}"
+                    index_blob = bucket.blob(index_gcs_path)
+                    if index_blob.exists():
+                        index_blob.delete()
+                        print(f"🗑️  Deleted wardrobe index file from GCS: {index_file} (will be rebuilt on next search)")
+            except Exception as index_error:
+                print(f"⚠️  Warning: Failed to invalidate wardrobe index in GCS: {index_error}")
+                # Continue - index will be rebuilt on next search anyway
+                
+        except Exception as gcs_error:
+            print(f"⚠️  Warning: Failed to delete from GCS: {gcs_error}")
+            # Don't fail the request if GCS deletion fails - local deletion succeeded
+            # But log it so we know there's a sync issue
+        
+        # If nothing was deleted (neither local nor GCS), return 404
         if not deleted_files:
             return jsonify({
                 'error': 'Item not found',
                 'details': {
                     'requested_filename': filename,
-                    'searched_path': str(image_path),
-                    'images_dir': str(images_dir)
+                    'searched_path': str(image_path) if images_dir.exists() else 'N/A (GCS-only)',
+                    'images_dir': str(images_dir) if images_dir.exists() else 'N/A (GCS-only)'
                 }
             }), 404
         

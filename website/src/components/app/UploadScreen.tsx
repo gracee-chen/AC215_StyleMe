@@ -304,9 +304,14 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           };
           
           // Upload the file with metadata (backend will save it)
+          console.log('📤 About to call onUpload with metadata:', metadata);
+          console.log('📤 Metadata keys:', Object.keys(metadata));
           await onUpload(file, true, metadata);
+          console.log('✅ onUpload completed');
           
           // Also save to localStorage as backup (for immediate display before reload)
+          // Note: We'll get the filename from the upload response, but for now save without it
+          // The backend will return the filename in the response, and we can match it then
           const metadataWithTimestamp = {
             ...metadata,
             timestamp: Date.now(),

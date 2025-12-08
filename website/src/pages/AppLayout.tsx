@@ -190,11 +190,15 @@ export default function AppLayout() {
       // Get latest metadata if available (for newly uploaded items)
       const latestMetadataKey = `wardrobe_metadata_${userId}_latest`;
       let latestMetadata = null;
+      let latestFilename = null;
       try {
         const latestStr = localStorage.getItem(latestMetadataKey);
         if (latestStr) {
-          latestMetadata = JSON.parse(latestStr);
-          console.log('Found latest metadata:', latestMetadata);
+          const parsed = JSON.parse(latestStr);
+          latestMetadata = parsed;
+          // Get the filename from the metadata if stored
+          latestFilename = parsed.filename || null;
+          console.log('Found latest metadata:', latestMetadata, 'for filename:', latestFilename);
         }
       } catch (e) {
         console.warn('Failed to parse latest metadata:', e);
@@ -205,8 +209,14 @@ export default function AppLayout() {
         const imagePath = item.image;
         const filename = imagePath.split('/').pop() || '';
         
-        // If this is the newest item (last in array) and we have latest metadata, apply it
-        if (latestMetadata && index === response.items.length - 1) {
+        // Match metadata to item by filename (not by array position!)
+        // Backend returns items sorted by modification time (newest first), so we can't rely on index
+        const shouldApplyLatestMetadata = latestMetadata && (
+          latestFilename === filename ||  // Exact filename match
+          (!latestFilename && index === 0)  // Fallback: if no filename stored, assume newest (index 0)
+        );
+        
+        if (shouldApplyLatestMetadata) {
           // Normalize category and color to ensure they match our fixed categories/colors
           const normalizedCategory = normalizeCategory(latestMetadata.category || item.category || 'tops');
           const normalizedColor = normalizeColor(latestMetadata.color || item.color || 'White');
@@ -394,7 +404,31 @@ export default function AppLayout() {
     if (!addToWardrobe) return; // Only add to wardrobe if user selected to
     try {
       setLoading(true);
-      await uploadImage(userId, file, metadata);
+      console.log('📤 handleAddItem received metadata:', metadata);
+      console.log('📤 Calling uploadImage with metadata:', metadata);
+      const uploadResponse = await uploadImage(userId, file, metadata);
+      console.log('📤 Upload response:', uploadResponse);
+      
+      // Extract filename from upload response to match metadata correctly
+      let uploadedFilename = null;
+      if (uploadResponse.image_path) {
+        uploadedFilename = uploadResponse.image_path.split('/').pop() || null;
+      } else if (uploadResponse.metadata && uploadResponse.metadata.filename) {
+        uploadedFilename = uploadResponse.metadata.filename;
+      }
+      
+      // Store filename with latest metadata for matching
+      if (uploadedFilename && metadata) {
+        const latestMetadataKey = `wardrobe_metadata_${userId}_latest`;
+        const metadataWithFilename = {
+          ...metadata,
+          filename: uploadedFilename,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(latestMetadataKey, JSON.stringify(metadataWithFilename));
+        console.log('📤 Stored metadata with filename for matching:', uploadedFilename);
+      }
+      
       await loadWardrobe();
     } catch (error) {
       console.error('Failed to upload image:', error);

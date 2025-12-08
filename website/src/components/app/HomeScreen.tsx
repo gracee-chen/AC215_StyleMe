@@ -17,7 +17,16 @@ import {
 interface HomeScreenProps {
   items: ClothingItem[];
   userId: string;
-  onAddItem: (file: File, addToWardrobe?: boolean) => Promise<void>;
+  onAddItem: (file: File, addToWardrobe?: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => Promise<void>;
   onItemClick: (item: ClothingItem) => void;
 }
 
@@ -26,6 +35,12 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
   const location = useLocation();
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
   const [uploadedItem, setUploadedItem] = useState<ClothingItem | null>(null);
+  // Separate state for wardrobe and catalog recommendations
+  const [wardrobeRecommendations, setWardrobeRecommendations] = useState<ClothingItem[]>([]);
+  const [catalogRecommendations, setCatalogRecommendations] = useState<ClothingItem[]>([]);
+  const [wardrobeReason, setWardrobeReason] = useState<string | undefined>(undefined);
+  const [catalogReason, setCatalogReason] = useState<string | undefined>(undefined);
+  // Keep old state for backward compatibility during transition
   const [recommendations, setRecommendations] = useState<ClothingItem[]>([]);
   const [recommendationType, setRecommendationType] = useState<'wardrobe' | 'catalog'>('wardrobe');
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
@@ -72,17 +87,43 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
           
           setUploadedItem(uploadedItemData);
           
-          // Get recommendations based on current selection
-          // For wardrobe: try wardrobe first, fallback to catalog if no results
-          // For catalog: only search catalog
+          // Normalize category from frontend format to backend format
+          // Frontend: "tops", "bottoms", "layers", "shoes", "dresses", "accessories"
+          // Backend: "Tops", "Pants", "Jackets", "Shoes", "Dresses", "Accessories"
+          const normalizeCategoryForBackend = (cat: string): string | undefined => {
+            if (!cat) return undefined;
+            const lower = cat.toLowerCase();
+            const mapping: Record<string, string> = {
+              'tops': 'Tops',
+              'bottoms': 'Pants',
+              'layers': 'Jackets',
+              'shoes': 'Shoes',
+              'dresses': 'Dresses',
+              'accessories': 'Accessories'
+            };
+            return mapping[lower] || undefined;
+          };
+          
+          // Always get BOTH wardrobe and catalog recommendations
+          console.log('🔍 Fetching recommendations...');
+          const queryCategory = normalizeCategoryForBackend(item.category);
+          console.log('📋 Query category:', queryCategory, 'from item.category:', item.category);
           const result = await getRecommendations(userId, file, {
             threshold: 0.7,
-            wardrobe_k: recommendationType === 'wardrobe' ? 5 : 0,
-            catalog_k: recommendationType === 'wardrobe' ? 3 : 5  // Fallback for wardrobe, primary for catalog
+            wardrobe_k: 5,  // Always search wardrobe
+            catalog_k: 5,   // Always search catalog
+            query_category: queryCategory
           });
           
-          // Format recommendations
-          const formattedRecs = result.items.map(recItem => ({
+          console.log('✅ Recommendations received:', {
+            wardrobe_count: result.wardrobe_items?.length || 0,
+            catalog_count: result.catalog_items?.length || 0,
+            wardrobe_reason: result.wardrobe_reason,
+            catalog_reason: result.catalog_reason
+          });
+          
+          // Format wardrobe recommendations
+          const formattedWardrobeRecs = (result.wardrobe_items || []).map(recItem => ({
             ...recItem,
             image: getImageUrl(recItem.image),
             dateAdded: typeof recItem.dateAdded === 'number' 
@@ -90,7 +131,25 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
               : new Date(recItem.dateAdded),
           }));
           
-          setRecommendations(formattedRecs);
+          // Format catalog recommendations
+          const formattedCatalogRecs = (result.catalog_items || []).map(recItem => ({
+            ...recItem,
+            image: getImageUrl(recItem.image),
+            dateAdded: typeof recItem.dateAdded === 'number' 
+              ? new Date(recItem.dateAdded * 1000) 
+              : new Date(recItem.dateAdded),
+          }));
+          
+          // Store both separately
+          setWardrobeRecommendations(formattedWardrobeRecs);
+          setCatalogRecommendations(formattedCatalogRecs);
+          
+          // Also store reasons for empty results
+          setWardrobeReason(result.wardrobe_reason);
+          setCatalogReason(result.catalog_reason);
+          
+          // Clear loading state
+          setLoadingRecommendations(false);
           
           // Clear the state to prevent re-triggering
           navigate(location.pathname, { replace: true, state: {} });
@@ -122,12 +181,22 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
   };
 
   // When an item is uploaded, automatically get recommendations
-  const handleUploadComplete = async (file: File, addToWardrobe: boolean) => {
+  const handleUploadComplete = async (file: File, addToWardrobe: boolean, metadata?: {
+    category?: string;
+    color?: string;
+    style?: string;
+    material?: string;
+    pattern?: string;
+    season?: string;
+    occasion?: string;
+    description?: string;
+  }) => {
     try {
       // Upload the item to wardrobe only if user selected to add it
       if (addToWardrobe) {
         try {
-          await onAddItem(file);
+          console.log('📤 HomeScreen handleUploadComplete received metadata:', metadata);
+          await onAddItem(file, true, metadata);
         } catch (uploadError) {
           // If upload fails, don't close dialog and let UploadScreen handle the error
           console.error('Upload failed:', uploadError);
@@ -202,6 +271,10 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
     if (!open) {
       // Reset state when dialog closes
       setUploadedItem(null);
+      setWardrobeRecommendations([]);
+      setCatalogRecommendations([]);
+      setWardrobeReason(undefined);
+      setCatalogReason(undefined);
       setRecommendations([]);
       setError(null);
     }
@@ -266,7 +339,7 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
             <div className="flex-1">
               <p className="text-sm font-medium text-yellow-900">API Server Unavailable</p>
               <p className="text-xs text-yellow-700 mt-1">
-                Cannot connect to the backend server. Please make sure the API server is running on port 5000.
+                Cannot connect to the backend server. Please make sure the API server is running.
               </p>
             </div>
           </div>
@@ -380,6 +453,10 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
               <button
                 onClick={() => {
                   setUploadedItem(null);
+                  setWardrobeRecommendations([]);
+                  setCatalogRecommendations([]);
+                  setWardrobeReason(undefined);
+                  setCatalogReason(undefined);
                   setRecommendations([]);
                   setError(null);
                 }}
@@ -390,81 +467,103 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
             )}
           </div>
           
-          {/* Recommendation type selector - always show */}
-          <div className="flex gap-2 px-1">
-            <button
-              onClick={() => uploadedItem ? handleRecommendationTypeChange('wardrobe') : undefined}
-              disabled={!uploadedItem}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                !uploadedItem
-                  ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed'
-                  : recommendationType === 'wardrobe'
-                  ? 'bg-stone-900 text-white'
-                  : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-50'
-              }`}
-            >
-              <Shirt className="w-4 h-4" />
-              From Your Wardrobe
-            </button>
-            <button
-              onClick={() => uploadedItem ? handleRecommendationTypeChange('catalog') : undefined}
-              disabled={!uploadedItem}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                !uploadedItem
-                  ? 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed'
-                  : recommendationType === 'catalog'
-                  ? 'bg-stone-900 text-white'
-                  : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-50'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              Shop Recommendations
-            </button>
-          </div>
-          
-          {/* Single recommendation box */}
-          <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm">
-            {loadingRecommendations && uploadedItem ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-stone-600 mb-2" />
-                <p className="text-sm text-stone-500">Finding matches...</p>
+          {/* Both recommendation sections - always show both */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* From Your Wardrobe Section */}
+            <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Shirt className="w-5 h-5 text-stone-700" />
+                <h3 className="text-base font-semibold text-stone-900">From Your Wardrobe</h3>
               </div>
-            ) : error && uploadedItem ? (
-              <div className="text-center py-8 text-red-500">
-                <p className="text-sm">{error}</p>
+              
+              {loadingRecommendations && uploadedItem ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-stone-600 mb-2" />
+                  <p className="text-sm text-stone-500">Finding matches...</p>
+                </div>
+              ) : error && uploadedItem ? (
+                <div className="text-center py-8 text-red-500">
+                  <p className="text-sm">{error}</p>
+                </div>
+              ) : uploadedItem && wardrobeRecommendations.length > 0 ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {wardrobeRecommendations.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleItemClick(item)}
+                      className="group relative aspect-square rounded-lg overflow-hidden bg-stone-50 border border-stone-200 hover:shadow-md transition-all"
+                    >
+                      <ImageWithFallback 
+                        src={item.image}
+                        alt={item.title || item.category}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : uploadedItem ? (
+                <div className="text-center py-8 text-stone-500">
+                  <p className="text-sm">
+                    {wardrobeReason === 'empty_wardrobe' 
+                      ? 'Currently no available clothes in wardrobe'
+                      : wardrobeReason === 'no_matches' || wardrobeReason === 'low_score'
+                      ? 'Currently no matching recommendation from wardrobe. Please see shopping recommendations'
+                      : 'No matches in your wardrobe'}
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-stone-400">
+                  <p className="text-sm">Upload an item to see recommendations</p>
+                </div>
+              )}
+            </div>
+
+            {/* Shop Recommendations Section */}
+            <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="w-5 h-5 text-stone-700" />
+                <h3 className="text-base font-semibold text-stone-900">Shop Recommendations</h3>
               </div>
-            ) : uploadedItem && recommendations.length > 0 ? (
-              <div className="grid grid-cols-4 gap-2">
-                {recommendations.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleItemClick(item)}
-                    className="group relative aspect-square rounded-lg overflow-hidden bg-stone-50 border border-stone-200 hover:shadow-md transition-all"
-                  >
-                    <ImageWithFallback 
-                      src={item.image}
-                      alt={item.title || item.category}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    {item.price && recommendationType === 'catalog' && (
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                        <p className="text-white text-xs font-medium">{item.price}</p>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 text-stone-500">
-                <p className="text-sm">
-                  {uploadedItem 
-                    ? (recommendationType === 'wardrobe' 
-                        ? 'No matches in your wardrobe' 
-                        : 'No catalog recommendations')
-                    : 'Upload an item to see recommendations'}
-                </p>
-              </div>
-            )}
+              
+              {loadingRecommendations && uploadedItem ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-stone-600 mb-2" />
+                  <p className="text-sm text-stone-500">Finding matches...</p>
+                </div>
+              ) : error && uploadedItem ? (
+                <div className="text-center py-8 text-red-500">
+                  <p className="text-sm">{error}</p>
+                </div>
+              ) : uploadedItem && catalogRecommendations.length > 0 ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {catalogRecommendations.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleItemClick(item)}
+                      className="group relative aspect-square rounded-lg overflow-hidden bg-stone-50 border border-stone-200 hover:shadow-md transition-all"
+                    >
+                      <ImageWithFallback 
+                        src={item.image}
+                        alt={item.title || item.category}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : uploadedItem ? (
+                <div className="text-center py-8 text-stone-500">
+                  <p className="text-sm">
+                    {catalogReason === 'no_catalog_matches'
+                      ? 'No matching items found in catalog'
+                      : 'No catalog recommendations'}
+                  </p>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-stone-400">
+                  <p className="text-sm">Upload an item to see recommendations</p>
+                </div>
+              )}
+            </div>
           </div>
           
         </div>

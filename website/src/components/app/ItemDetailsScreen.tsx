@@ -1,4 +1,4 @@
-import { ArrowLeft, Trash2, RefreshCw, Save, Check, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Trash2, RefreshCw, Save, Check, MessageCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -505,11 +505,36 @@ export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }:
                     <p className="text-stone-900 font-medium">{item.brand}</p>
                   </div>
                 )}
+                {item.url && (
+                  <div>
+                    <Label className="text-stone-600 font-normal text-sm mb-2 block">Shopping Link</Label>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-stone-900 hover:text-stone-700 underline font-medium"
+                    >
+                      View Product
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Actions */}
             <div className="space-y-3">
+              {/* Shopping Link - Show prominently for catalog items */}
+              {item.url && (
+                <Button 
+                  onClick={() => window.open(item.url, '_blank', 'noopener,noreferrer')}
+                  className="w-full py-5 text-sm font-semibold bg-stone-900 hover:bg-stone-800 text-white rounded-lg shadow-md"
+                >
+                  <ExternalLink size={18} className="mr-2" />
+                  Shop Now - View Product Details
+                </Button>
+              )}
+              
               {/* Primary Actions - Main CTAs in one row */}
               <div className="flex gap-2">
                 <Button 

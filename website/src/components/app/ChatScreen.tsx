@@ -97,53 +97,70 @@ export function ChatScreen() {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    // Don't add user message yet - we'll add it after converting image to base64
+    // This ensures the message in history has the base64 image for future conversations
     setInputValue('');
     setIsLoading(true);
 
-    // Prepare messages for API
-    const chatMessages: ChatMessage[] = messages
-      .filter((msg) => msg.type === 'stylist' || msg.content)
-      .map((msg) => ({
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content,
-        imageUrl: msg.imageUrl,
-      }));
-
-    // Add current user message
-    chatMessages.push({
-      role: 'user',
-      content: userMessage.content,
-      imageUrl: userMessage.imageUrl,
-    });
-
     try {
-      // Convert image to base64 if present (using saved values)
+      // Convert current image to base64 if present (using saved values)
+      // This ensures we have base64 for the current message and can store it in history
       let imageBase64: string | undefined;
       if (currentSelectedImage) {
         // If we have a File object, convert it to base64
         imageBase64 = await imageToBase64(currentSelectedImage);
-        // Update the last message with base64 image
-        chatMessages[chatMessages.length - 1].imageUrl = imageBase64;
       } else if (currentImagePreview && !currentImagePreview.startsWith('data:')) {
         // If imagePreview is a URL (not base64), convert it to base64
         try {
           const response = await fetch(currentImagePreview);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+          }
           const blob = await response.blob();
           const file = new File([blob], 'image.jpg', { type: blob.type });
           imageBase64 = await imageToBase64(file);
-          chatMessages[chatMessages.length - 1].imageUrl = imageBase64;
         } catch (error) {
           console.error('Failed to convert URL to base64:', error);
-          // If conversion fails, use the URL as-is (it might already be a data URL)
-          chatMessages[chatMessages.length - 1].imageUrl = currentImagePreview;
+          // If conversion fails, we'll continue without the image
+          imageBase64 = undefined;
         }
-      } else if (currentImagePreview) {
+      } else if (currentImagePreview && currentImagePreview.startsWith('data:')) {
         // imagePreview is already a base64 data URL
-        chatMessages[chatMessages.length - 1].imageUrl = currentImagePreview;
+        imageBase64 = currentImagePreview;
       }
 
-      const response = await sendChatMessage(chatMessages, currentSelectedImage || undefined);
+      // Update user message with base64 image (if available)
+      if (imageBase64) {
+        userMessage.imageUrl = imageBase64;
+      }
+
+      // Prepare messages for API - include images from history (they should already be base64)
+      // Previous messages with images will have base64 data URLs, which work fine
+      const chatMessages: ChatMessage[] = messages
+        .filter((msg) => msg.type === 'stylist' || msg.content)
+        .map((msg) => ({
+          role: msg.type === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+          // Include imageUrl from previous messages - they should be base64 data URLs
+          // If it's a localhost URL, we'll skip it (it wasn't converted properly)
+          imageUrl: msg.imageUrl && msg.imageUrl.startsWith('data:') ? msg.imageUrl : undefined,
+        }));
+
+      // Add current user message with base64 image
+      chatMessages.push({
+        role: 'user',
+        content: userMessage.content,
+        imageUrl: userMessage.imageUrl, // This is now base64 if available
+      });
+
+      // Add user message to state with base64 image (for display and future conversations)
+      setMessages((prev) => [...prev, userMessage]);
+      
+      // Only pass imageFile if we have a File object (not a URL)
+      // This prevents issues with localhost URLs in follow-up messages
+      const imageFileForAPI = currentSelectedImage || undefined;
+      
+      const response = await sendChatMessage(chatMessages, imageFileForAPI);
 
       if (response.error) {
         // Show user-friendly error message
@@ -154,6 +171,9 @@ export function ChatScreen() {
           errorContent = "Sorry, I'm having trouble connecting right now. " + response.error + " For more information, please visit https://platform.openai.com/account/billing";
         } else if (response.error.includes('rate limit')) {
           errorContent = "I'm receiving too many requests right now. Please wait a moment and try again.";
+        } else if (response.error.includes('downloading') || response.error.includes('fetch')) {
+          // If it's an image download error, provide a more helpful message
+          errorContent = "Sorry, I couldn't load the image. Please try uploading the image again or continue with a text message.";
         } else {
           errorContent = `Sorry, I'm having trouble connecting right now. ${response.error}`;
         }
