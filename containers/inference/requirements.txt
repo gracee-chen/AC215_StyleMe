@@ -26,3 +26,6 @@ google-cloud-storage>=2.10.0
 # OpenAI API for automatic tagging
 openai>=1.0.0
 
+# Python 3.9 compatibility: ensure importlib.metadata has packages_distributions
+importlib-metadata>=6.8.0
+
