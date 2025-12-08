@@ -24,7 +24,7 @@ env:
   PROJECT_ID: styleme-475201
   REGION: us-central1
   REPO_NAME: styleme-repo
-  REGISTRY: us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}
+  REGISTRY: us-central1-docker.pkg.dev/styleme-475201/styleme-repo
   CLUSTER_NAME: styleme-cluster
   CLUSTER_ZONE: us-central1-b
   PYTHON_VERSION: '3.10'
