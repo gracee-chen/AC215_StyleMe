@@ -99,7 +99,13 @@ class TestEndToEndPipeline:
     def test_model_configuration_workflow(self):
         """Test that model configuration can be loaded and used"""
         try:
-            from src.models.train.config import (
+            import sys
+            import os
+            # Add src directory to path
+            src_path = os.path.join(os.path.dirname(__file__), '..', '..', 'src')
+            if src_path not in sys.path:
+                sys.path.insert(0, src_path)
+            from models.train.config import (
                 TRAINING_CONFIG,
                 MODEL_CONFIG,
                 DATA_CONFIG,
