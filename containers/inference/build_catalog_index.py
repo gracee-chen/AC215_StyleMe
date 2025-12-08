@@ -34,27 +34,135 @@ class CatalogIndexBuilder:
         self.transform = self._get_transform()
     
     def _load_model(self):
-        """Load trained FashionCLIP model"""
+        """Load trained FashionCLIP model - supports both local and GCS paths"""
         print("\n📦 Loading trained model...")
         
-        # Find best model
+        # Use same logic as InferenceService for GCS support
+        experiments_path = str(self.experiments_dir)
+        use_gcs_client = False
+        local_experiments_dir = None
+        
+        # Check if using GCS path
+        if experiments_path.startswith('/gcs/'):
+            if os.path.exists(experiments_path) and os.listdir(experiments_path):
+                print(f"   Using GCS mount at {experiments_path}")
+                local_experiments_dir = Path(experiments_path)
+            else:
+                use_gcs_client = True
+                print(f"   GCS mount not available, using GCS client library")
+        elif 'gs://' in experiments_path or 'styleme-production' in experiments_path:
+            use_gcs_client = True
+            print(f"   Using GCS client library for {experiments_path}")
+        else:
+            local_experiments_dir = Path(experiments_path)
+        
         model_path = None
-        for exp_dir in sorted(self.experiments_dir.glob("exp_*"), reverse=True):
-            best_model = exp_dir / "best_model.pth"
-            if best_model.exists():
-                model_path = best_model
-                break
+        
+        if use_gcs_client:
+            # Find and download model from GCS (same logic as InferenceService)
+            try:
+                from google.cloud import storage
+                from google.auth.exceptions import DefaultCredentialsError
+                
+                # Check for credentials - prefer service account key file, fall back to gcloud default credentials
+                creds_path = '/app/gcs-credentials.json'
+                if os.path.exists(creds_path):
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
+                    print(f"   Using service account key from {creds_path}")
+                else:
+                    # Will use Application Default Credentials (from gcloud auth application-default login)
+                    print(f"   Using Application Default Credentials (gcloud)")
+                
+                gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+                gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+                
+                print(f"   Attempting to connect to GCS bucket {gcp_bucket_name}...")
+                client = storage.Client(project=gcp_project_id)
+                bucket = client.bucket(gcp_bucket_name)
+                
+                # Extract prefix
+                if experiments_path.startswith('/gcs/'):
+                    prefix = experiments_path.replace('/gcs/', '').replace(gcp_bucket_name, '').lstrip('/')
+                else:
+                    prefix = 'experiments/'
+                
+                if not prefix.endswith('/'):
+                    prefix += '/'
+                
+                print(f"   Searching GCS bucket {gcp_bucket_name} with prefix {prefix}")
+                
+                # List experiment directories
+                exp_dirs = set()
+                for blob in bucket.list_blobs(prefix=prefix):
+                    path_parts = blob.name.replace(prefix, '').split('/')
+                    if path_parts and path_parts[0].startswith('exp_'):
+                        exp_dirs.add(path_parts[0])
+                
+                print(f"   Found experiment directories: {sorted(exp_dirs)}")
+                
+                # Sort by number (highest first)
+                exp_numbers = []
+                for exp_dir in exp_dirs:
+                    try:
+                        num = int(exp_dir.replace('exp_', ''))
+                        exp_numbers.append((num, exp_dir))
+                    except ValueError:
+                        continue
+                
+                exp_numbers.sort(reverse=True)
+                print(f"   Sorted experiments (highest first): {[exp_dir for _, exp_dir in exp_numbers]}")
+                
+                # Find first experiment with best_model.pth
+                for exp_num, exp_dir in exp_numbers:
+                    model_blob_path = f"{prefix}{exp_dir}/best_model.pth"
+                    blob = bucket.blob(model_blob_path)
+                    if blob.exists():
+                        import tempfile
+                        temp_dir = Path(tempfile.gettempdir()) / "styleme_models"
+                        temp_dir.mkdir(exist_ok=True)
+                        local_model_path = temp_dir / f"{exp_dir}_best_model.pth"
+                        
+                        print(f"   Downloading {model_blob_path} to {local_model_path}...")
+                        blob.download_to_filename(str(local_model_path))
+                        model_path = local_model_path
+                        print(f"   ✅ Downloaded model: {local_model_path}")
+                        break
+            except DefaultCredentialsError as e:
+                print(f"   ❌ GCS credentials not found: {e}")
+                raise FileNotFoundError("No trained model found - GCS credentials not configured")
+            except Exception as e:
+                print(f"   ❌ Error accessing GCS: {e}")
+                raise
+        else:
+            # Use filesystem access (local or mounted)
+            for exp_dir in sorted(local_experiments_dir.glob("exp_*"), reverse=True):
+                best_model = exp_dir / "best_model.pth"
+                if best_model.exists():
+                    model_path = best_model
+                    break
         
         if model_path is None:
             raise FileNotFoundError("No trained model found in experiments directory")
         
-        print(f"   Model: {model_path}")
+        print(f"   Loading model from: {model_path}")
         
         # Load model
         model = FashionCLIPModel()
-        checkpoint = torch.load(model_path, map_location=self.device)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.to(self.device)
+        # Load checkpoint to CPU first to avoid meta tensor issues
+        checkpoint = torch.load(str(model_path), map_location='cpu')
+        
+        # Create model and move to device before loading state dict
+        model = model.to(self.device)
+        
+        # Load state dict with strict=False to handle any mismatches
+        try:
+            model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        except Exception as e:
+            print(f"   ⚠️  Warning: State dict loading had issues: {e}")
+            # Try loading with map_location to device
+            checkpoint_device = torch.load(str(model_path), map_location=self.device)
+            model.load_state_dict(checkpoint_device['model_state_dict'], strict=False)
+        
         model.eval()
         
         print("   ✅ Model loaded successfully")

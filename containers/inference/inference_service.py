@@ -25,7 +25,7 @@ sys.path.insert(0, project_root)
 
 class InferenceService:
     def __init__(self, catalog_dir, experiments_dir, wardrobes_dir, device=None,
-                 bg_removal_enabled=True, bg_removal_model="briaai/RMBG-1.4"):
+                 bg_removal_enabled=False, bg_removal_model="briaai/RMBG-1.4"):
         self.catalog_dir = Path(catalog_dir)
         self.experiments_dir = Path(experiments_dir)
         self.wardrobes_dir = Path(wardrobes_dir)
@@ -38,7 +38,7 @@ class InferenceService:
         print(f"🔧 Initializing Inference Service")
         print(f"   Device: {self.device}")
         
-        # Initialize background remover
+        # Initialize background remover (optional, disabled by default)
         if bg_removal_enabled:
             print("🎨 Initializing background remover...")
             try:
@@ -50,14 +50,14 @@ class InferenceService:
                 self.bg_removal_enabled = True
                 print("   ✅ Background remover ready")
             except Exception as e:
-                print(f"   ⚠️  Failed to initialize background remover: {e}")
+                print(f"   ⚠️  Failed to initialize background remover: {str(e)}")
                 print("   ⚠️  Continuing without background removal")
                 self.bg_remover = None
                 self.bg_removal_enabled = False
         else:
             self.bg_remover = None
             self.bg_removal_enabled = False
-            print("   ⚠️  Background removal disabled")
+            print("   ℹ️  Background removal disabled (default)")
         
         # Load model
         self.model = self._load_model()
@@ -99,59 +99,92 @@ class InferenceService:
         
         if use_gcs_client:
             # Find and download model from GCS
-            from google.cloud import storage
-            gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
-            gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
-            
-            client = storage.Client(project=gcp_project_id)
-            bucket = client.bucket(gcp_bucket_name)
-            
-            # Extract prefix from experiments_dir path
-            if experiments_path.startswith('/gcs/'):
-                prefix = experiments_path.replace('/gcs/', '').replace(gcp_bucket_name, '').lstrip('/')
-            else:
-                prefix = 'experiments/'
-            
-            if not prefix.endswith('/'):
-                prefix += '/'
-            
-            print(f"   Searching GCS bucket {gcp_bucket_name} with prefix {prefix}")
-            
-            # List experiment directories
-            exp_dirs = set()
-            for blob in bucket.list_blobs(prefix=prefix):
-                # Extract exp_XXX from path
-                path_parts = blob.name.replace(prefix, '').split('/')
-                if path_parts and path_parts[0].startswith('exp_'):
-                    exp_dirs.add(path_parts[0])
-            
-            # Sort experiment directories (highest number first)
-            exp_numbers = []
-            for exp_dir in exp_dirs:
+            try:
+                from google.cloud import storage
+                from google.auth.exceptions import DefaultCredentialsError
+                
+                # Check for credentials - prefer service account key file, fall back to gcloud default credentials
+                creds_path = '/app/gcs-credentials.json'
+                if os.path.exists(creds_path):
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = creds_path
+                    print(f"   Using service account key from {creds_path}")
+                else:
+                    # Will use Application Default Credentials (from gcloud auth application-default login)
+                    print(f"   Using Application Default Credentials (gcloud)")
+                
+                gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+                gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+                
+                print(f"   Attempting to connect to GCS bucket {gcp_bucket_name}...")
+                client = storage.Client(project=gcp_project_id)
+                bucket = client.bucket(gcp_bucket_name)
+                
+                # Extract prefix from experiments_dir path
+                if experiments_path.startswith('/gcs/'):
+                    prefix = experiments_path.replace('/gcs/', '').replace(gcp_bucket_name, '').lstrip('/')
+                else:
+                    prefix = 'experiments/'
+                
+                if not prefix.endswith('/'):
+                    prefix += '/'
+                
+                print(f"   Searching GCS bucket {gcp_bucket_name} with prefix {prefix}")
+                
+                # List experiment directories
+                exp_dirs = set()
                 try:
-                    num = int(exp_dir.replace('exp_', ''))
-                    exp_numbers.append((num, exp_dir))
-                except ValueError:
-                    continue
-            
-            exp_numbers.sort(reverse=True)
-            
-            # Find first experiment with best_model.pth
-            for exp_num, exp_dir in exp_numbers:
-                model_blob_path = f"{prefix}{exp_dir}/best_model.pth"
-                blob = bucket.blob(model_blob_path)
-                if blob.exists():
-                    # Download to local temp file
-                    import tempfile
-                    temp_dir = Path(tempfile.gettempdir()) / "styleme_models"
-                    temp_dir.mkdir(exist_ok=True)
-                    local_model_path = temp_dir / f"{exp_dir}_best_model.pth"
-                    
-                    print(f"   Downloading {model_blob_path} to {local_model_path}...")
-                    blob.download_to_filename(str(local_model_path))
-                    model_path = local_model_path
-                    print(f"   ✅ Downloaded model: {local_model_path}")
-                    break
+                    for blob in bucket.list_blobs(prefix=prefix):
+                        # Extract exp_XXX from path
+                        path_parts = blob.name.replace(prefix, '').split('/')
+                        if path_parts and path_parts[0].startswith('exp_'):
+                            exp_dirs.add(path_parts[0])
+                except Exception as e:
+                    print(f"   ⚠️  Error listing blobs from GCS: {e}")
+                    raise
+                
+                print(f"   Found experiment directories: {sorted(exp_dirs)}")
+                
+                # Sort experiment directories (highest number first)
+                exp_numbers = []
+                for exp_dir in exp_dirs:
+                    try:
+                        num = int(exp_dir.replace('exp_', ''))
+                        exp_numbers.append((num, exp_dir))
+                    except ValueError:
+                        continue
+                
+                exp_numbers.sort(reverse=True)
+                print(f"   Sorted experiments (highest first): {[exp_dir for _, exp_dir in exp_numbers]}")
+                
+                # Find first experiment with best_model.pth
+                for exp_num, exp_dir in exp_numbers:
+                    model_blob_path = f"{prefix}{exp_dir}/best_model.pth"
+                    blob = bucket.blob(model_blob_path)
+                    if blob.exists():
+                        # Download to local temp file (ephemeral)
+                        import tempfile
+                        temp_dir = Path(tempfile.gettempdir()) / "styleme_models"
+                        temp_dir.mkdir(exist_ok=True)
+                        local_model_path = temp_dir / f"{exp_dir}_best_model.pth"
+                        
+                        # Check if already downloaded
+                        if local_model_path.exists():
+                            print(f"   ✅ Model already cached: {local_model_path}")
+                        else:
+                            print(f"   Downloading {model_blob_path} to {local_model_path}...")
+                            blob.download_to_filename(str(local_model_path))
+                        model_path = local_model_path
+                        print(f"   ✅ Using model: {local_model_path}")
+                        break
+                    else:
+                        print(f"   ⚠️  Model not found at {model_blob_path}")
+            except DefaultCredentialsError as e:
+                print(f"   ❌ GCS credentials not found: {e}")
+                print(f"   ⚠️  Cannot access GCS bucket. Please configure GCP credentials.")
+                raise FileNotFoundError("No trained model found - GCS credentials not configured")
+            except Exception as e:
+                print(f"   ❌ Error accessing GCS: {e}")
+                raise
         else:
             # Use filesystem access (local or mounted)
             for exp_dir in sorted(local_experiments_dir.glob("exp_*"), reverse=True):
@@ -165,11 +198,57 @@ class InferenceService:
         
         print(f"   Loading model from: {model_path}")
         
+        # Verify file exists and is readable
+        if not Path(model_path).exists():
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        
+        file_size = Path(model_path).stat().st_size
+        print(f"   Model file size: {file_size / (1024**3):.2f} GB")
+        
+        if file_size < 1024 * 1024:  # Less than 1MB is suspicious
+            raise ValueError(f"Model file seems too small: {file_size} bytes")
+        
+        # Load checkpoint with retry logic for network/IO issues
+        max_retries = 3
+        checkpoint = None
+        for attempt in range(max_retries):
+            try:
+                checkpoint = torch.load(str(model_path), map_location='cpu')  # Load to CPU first to avoid meta tensor issues
+                break
+            except (EOFError, OSError, RuntimeError) as e:
+                if attempt < max_retries - 1:
+                    print(f"   ⚠️  Attempt {attempt + 1} failed to load model: {e}")
+                    print(f"   Retrying in 2 seconds...")
+                    import time
+                    time.sleep(2)
+                else:
+                    raise RuntimeError(f"Failed to load model after {max_retries} attempts: {e}")
+        
+        if checkpoint is None:
+            raise RuntimeError("Failed to load checkpoint")
+        
+        # Verify checkpoint structure
+        if 'model_state_dict' not in checkpoint:
+            raise ValueError("Checkpoint missing 'model_state_dict' key")
+        
+        # Create model and move to device before loading state dict
         model = FashionCLIPModel()
-        checkpoint = torch.load(str(model_path), map_location=self.device)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.to(self.device)
+        model = model.to(self.device)
+        
+        # Load state dict with strict=False to handle any mismatches
+        try:
+            model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        except Exception as e:
+            print(f"   ⚠️  Warning: State dict loading had issues: {e}")
+            # Try loading with map_location to device as fallback
+            try:
+                checkpoint_device = torch.load(str(model_path), map_location=self.device)
+                model.load_state_dict(checkpoint_device['model_state_dict'], strict=False)
+            except Exception as e2:
+                raise RuntimeError(f"Failed to load state dict with both methods: {e}, {e2}")
+        
         model.eval()
+        print(f"   ✅ Model loaded successfully")
         
         return model
     
@@ -242,7 +321,7 @@ class InferenceService:
             catalog_version_name = sorted(catalog_versions)[-1]
             print(f"   Version: {catalog_version_name}")
             
-            # Download to temp directory
+            # Download to temp directory (ephemeral, will be re-downloaded if needed)
             temp_catalog_dir = Path(tempfile.gettempdir()) / "styleme_catalog" / catalog_version_name
             temp_catalog_dir.mkdir(parents=True, exist_ok=True)
             
@@ -299,27 +378,23 @@ class InferenceService:
             # Step 1: Load image
             image = Image.open(image_path).convert('RGB')
             
-            # Step 2: Remove background (if enabled)
+            # Step 2: Remove background (REQUIRED if enabled)
+            # Background removal is mandatory for all images when enabled
             if self.bg_removal_enabled and self.bg_remover:
-                try:
-                    # Remove background (returns PIL Image with transparent bg)
-                    image = self.bg_remover.remove_background(image)
-                    
-                    # Convert RGBA to RGB with white background
-                    if image.mode == 'RGBA':
-                        background = Image.new('RGB', image.size, (255, 255, 255))
-                        if len(image.split()) == 4:  # Has alpha channel
-                            background.paste(image, mask=image.split()[3])
-                        else:
-                            background.paste(image)
-                        image = background
-                    elif image.mode != 'RGB':
-                        image = image.convert('RGB')
-                        
-                except Exception as e:
-                    print(f"⚠️  Background removal failed: {e}, using original image")
-                    # Fallback: reload original image
-                    image = Image.open(image_path).convert('RGB')
+                # Remove background (returns PIL Image with transparent bg)
+                # This is REQUIRED - no fallback to original image
+                image = self.bg_remover.remove_background(image)
+                
+                # Convert RGBA to RGB with white background
+                if image.mode == 'RGBA':
+                    background = Image.new('RGB', image.size, (255, 255, 255))
+                    if len(image.split()) == 4:  # Has alpha channel
+                        background.paste(image, mask=image.split()[3])
+                    else:
+                        background.paste(image)
+                    image = background
+                elif image.mode != 'RGB':
+                    image = image.convert('RGB')
             
             # Step 3: Transform and embed
             image_tensor = self.transform(image).unsqueeze(0).to(self.device)
@@ -332,19 +407,264 @@ class InferenceService:
             
             return embedding.cpu().numpy().astype('float32')
     
-    def search_wardrobe(self, user_id: str, query_embedding: np.ndarray, k: int = 5) -> Tuple[Optional[List[Dict]], float]:
+    def search_wardrobe(self, user_id: str, query_embedding: np.ndarray, k: int = 5, query_category: str = None, exclude_image_path: str = None) -> Tuple[Optional[List[Dict]], float]:
         """Search user's wardrobe FAISS index"""
         wardrobe_path = self.wardrobes_dir / user_id
+        use_gcs_client = False
+        local_wardrobe_path = None
         
-        # Check if wardrobe exists
-        if not wardrobe_path.exists():
-            return None, 0.0
+        # Check if using GCS path
+        wardrobe_path_str = str(wardrobe_path)
+        if wardrobe_path_str.startswith('/gcs/'):
+            if wardrobe_path.exists() and list(wardrobe_path.glob("*")):
+                print(f"   Using GCS mount at {wardrobe_path}")
+                local_wardrobe_path = wardrobe_path
+            else:
+                use_gcs_client = True
+                print(f"   GCS mount not available, checking GCS for wardrobe...")
+        elif 'gs://' in wardrobe_path_str or 'styleme-production' in wardrobe_path_str:
+            use_gcs_client = True
+        else:
+            local_wardrobe_path = wardrobe_path
         
-        index_path = wardrobe_path / "wardrobe.index.faiss"
+        # If local path doesn't exist, try GCS
+        if not local_wardrobe_path or not local_wardrobe_path.exists():
+            if use_gcs_client or wardrobe_path_str.startswith('/gcs/'):
+                # Check GCS for wardrobe
+                try:
+                    from google.cloud import storage
+                    import tempfile
+                    
+                    gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+                    gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+                    
+                    client = storage.Client(project=gcp_project_id)
+                    bucket = client.bucket(gcp_bucket_name)
+                    
+                    # Check if images exist in GCS
+                    images_prefix = f"wardrobes/{user_id}/images/"
+                    image_blobs = list(bucket.list_blobs(prefix=images_prefix))
+                    image_files = [b for b in image_blobs if b.name.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                    
+                    if not image_files:
+                        print(f"   ⚠️  No wardrobe images found in GCS for {user_id}")
+                        return None, 0.0
+                    
+                    print(f"   📂 Found {len(image_files)} images in GCS for {user_id}")
+                    
+                    # Check if index exists in GCS
+                    index_blob_path = f"wardrobes/{user_id}/wardrobe.index.faiss"
+                    index_blob = bucket.blob(index_blob_path)
+                    
+                    # Check if index is stale (older than newest image) OR if it doesn't have category field
+                    index_is_stale = False
+                    if index_blob.exists():
+                        index_updated = index_blob.updated
+                        # Check if any image is newer than the index
+                        if index_updated:
+                            for img_blob in image_files:
+                                if img_blob.updated and img_blob.updated > index_updated:
+                                    index_is_stale = True
+                                    print(f"   ⚠️  Wardrobe index is stale (newer images found)")
+                                    break
+                        
+                        # Also check if index has category field (newer builds include it)
+                        # Download parquet temporarily to check
+                        try:
+                            temp_check_dir = Path(tempfile.gettempdir()) / "styleme_wardrobe_check" / user_id
+                            temp_check_dir.mkdir(parents=True, exist_ok=True)
+                            parquet_blob = bucket.blob(f"wardrobes/{user_id}/wardrobe.parquet")
+                            if parquet_blob.exists():
+                                temp_parquet = temp_check_dir / "wardrobe.parquet"
+                                parquet_blob.download_to_filename(str(temp_parquet))
+                                check_meta = pd.read_parquet(temp_parquet)
+                                if 'category' not in check_meta.columns:
+                                    index_is_stale = True
+                                    print(f"   ⚠️  Wardrobe index missing 'category' field - needs rebuild")
+                                elif check_meta['category'].isna().all() or (check_meta['category'] == '').all():
+                                    # Category field exists but all values are None/empty - needs rebuild
+                                    index_is_stale = True
+                                    print(f"   ⚠️  Wardrobe index has 'category' field but all values are empty - needs rebuild")
+                        except Exception as check_error:
+                            print(f"   ⚠️  Could not check index for category field: {check_error}")
+                    
+                    if not index_blob.exists() or index_is_stale:
+                        # Need to build/rebuild index - download images first, then build
+                        if index_is_stale:
+                            print(f"   🔨 Rebuilding wardrobe index for {user_id} (index is stale)...")
+                        else:
+                            print(f"   🔨 Building wardrobe index for {user_id} (images found in GCS)...")
+                        # Create temp directory for building index
+                        temp_wardrobe_dir = Path(tempfile.gettempdir()) / "styleme_wardrobes" / user_id
+                        temp_wardrobe_dir.mkdir(parents=True, exist_ok=True)
+                        temp_images_dir = temp_wardrobe_dir / "images"
+                        temp_images_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Download images AND metadata files to temp directory
+                        metadata_downloaded = 0
+                        for blob in image_files[:50]:  # Limit to 50 images for building
+                            filename = blob.name.split('/')[-1]
+                            local_img_path = temp_images_dir / filename
+                            blob.download_to_filename(str(local_img_path))
+                            
+                            # Also download corresponding metadata JSON file if it exists
+                            metadata_filename = Path(filename).stem + '_metadata.json'
+                            metadata_blob_path = f"wardrobes/{user_id}/{metadata_filename}"
+                            metadata_blob = bucket.blob(metadata_blob_path)
+                            if metadata_blob.exists():
+                                local_metadata_path = temp_wardrobe_dir / metadata_filename
+                                metadata_blob.download_to_filename(str(local_metadata_path))
+                                metadata_downloaded += 1
+                                print(f"   📄 Downloaded metadata: {metadata_filename}")
+                            else:
+                                print(f"   ⚠️  Metadata file not found in GCS: {metadata_blob_path}")
+                        
+                        print(f"   ✅ Downloaded {len(image_files[:50])} images and {metadata_downloaded} metadata files")
+                        
+                        # Build index in temp directory
+                        try:
+                            result = subprocess.run([
+                                sys.executable,
+                                "/app/build_user_wardrobe.py",
+                                "--user-id", user_id,
+                                "--wardrobe-dir", str(temp_wardrobe_dir),
+                                "--experiments-dir", str(self.experiments_dir),
+                                "--wardrobes-base-dir", str(temp_wardrobe_dir.parent)
+                            ], capture_output=True, text=True, check=True, timeout=600)
+                            print(f"   ✅ Wardrobe index built for {user_id}")
+                            
+                            # Upload index files back to GCS
+                            index_files = ['wardrobe.index.faiss', 'wardrobe.parquet', 'idmap.npy']
+                            for filename in index_files:
+                                local_file = temp_wardrobe_dir / filename
+                                if local_file.exists():
+                                    gcs_file_path = f"wardrobes/{user_id}/{filename}"
+                                    gcs_blob = bucket.blob(gcs_file_path)
+                                    gcs_blob.upload_from_filename(str(local_file))
+                            
+                            local_wardrobe_path = temp_wardrobe_dir
+                        except subprocess.CalledProcessError as e:
+                            print(f"   ❌ Failed to build wardrobe index: {e.stderr}")
+                            return None, 0.0
+                        except subprocess.TimeoutExpired:
+                            print(f"   ❌ Wardrobe index build timed out")
+                            return None, 0.0
+                    else:
+                        # Index exists in GCS - download to temp and verify
+                        print(f"   📥 Downloading wardrobe index from GCS...")
+                        temp_wardrobe_dir = Path(tempfile.gettempdir()) / "styleme_wardrobes" / user_id
+                        temp_wardrobe_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        # Download index files
+                        index_files = {
+                            'wardrobe.index.faiss': f"wardrobes/{user_id}/wardrobe.index.faiss",
+                            'wardrobe.parquet': f"wardrobes/{user_id}/wardrobe.parquet",
+                            'idmap.npy': f"wardrobes/{user_id}/idmap.npy"
+                        }
+                        
+                        all_files_downloaded = True
+                        for filename, gcs_path in index_files.items():
+                            blob = bucket.blob(gcs_path)
+                            if blob.exists():
+                                local_path = temp_wardrobe_dir / filename
+                                blob.download_to_filename(str(local_path))
+                                # Verify parquet file is valid
+                                if filename == 'wardrobe.parquet':
+                                    try:
+                                        test_meta = pd.read_parquet(local_path)
+                                        if test_meta.empty:
+                                            print(f"   ⚠️  Parquet file is empty, will rebuild")
+                                            all_files_downloaded = False
+                                            break
+                                    except Exception as parquet_error:
+                                        print(f"   ⚠️  Parquet file corrupted: {parquet_error}")
+                                        print(f"   🔨 Will rebuild wardrobe index...")
+                                        all_files_downloaded = False
+                                        # Delete corrupted files
+                                        for f in index_files.keys():
+                                            (temp_wardrobe_dir / f).unlink(missing_ok=True)
+                                        break
+                            else:
+                                print(f"   ⚠️  Index file {filename} not found in GCS")
+                                all_files_downloaded = False
+                                break
+                        
+                        # If download failed or files are corrupted, rebuild
+                        if not all_files_downloaded:
+                            print(f"   🔨 Rebuilding wardrobe index for {user_id} (corrupted or missing files)...")
+                            temp_images_dir = temp_wardrobe_dir / "images"
+                            temp_images_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            # Clean up any existing corrupted files first
+                            for f in index_files.keys():
+                                (temp_wardrobe_dir / f).unlink(missing_ok=True)
+                            
+                            # Download images to temp directory
+                            for blob in image_files[:50]:  # Limit to 50 images for building
+                                filename = blob.name.split('/')[-1]
+                                local_img_path = temp_images_dir / filename
+                                blob.download_to_filename(str(local_img_path))
+                            
+                            # Build index in temp directory
+                            try:
+                                result = subprocess.run([
+                                    sys.executable,
+                                    "/app/build_user_wardrobe.py",
+                                    "--user-id", user_id,
+                                    "--wardrobe-dir", str(temp_wardrobe_dir),
+                                    "--experiments-dir", str(self.experiments_dir),
+                                    "--wardrobes-base-dir", str(temp_wardrobe_dir.parent)
+                                ], capture_output=True, text=True, check=True, timeout=600)
+                                print(f"   ✅ Wardrobe index rebuilt for {user_id}")
+                                
+                                # Verify the rebuilt parquet file is valid before using it
+                                rebuilt_parquet = temp_wardrobe_dir / "wardrobe.parquet"
+                                if rebuilt_parquet.exists():
+                                    try:
+                                        test_meta = pd.read_parquet(rebuilt_parquet)
+                                        if test_meta.empty:
+                                            print(f"   ⚠️  Rebuilt parquet file is empty")
+                                            return None, 0.0
+                                        print(f"   ✅ Verified rebuilt parquet file is valid ({len(test_meta)} items)")
+                                    except Exception as verify_error:
+                                        print(f"   ❌ Rebuilt parquet file is still corrupted: {verify_error}")
+                                        return None, 0.0
+                                else:
+                                    print(f"   ❌ Rebuilt parquet file not found")
+                                    return None, 0.0
+                                
+                                # Upload index files back to GCS (overwrite corrupted ones)
+                                for filename in index_files.keys():
+                                    local_file = temp_wardrobe_dir / filename
+                                    if local_file.exists():
+                                        gcs_file_path = f"wardrobes/{user_id}/{filename}"
+                                        gcs_blob = bucket.blob(gcs_file_path)
+                                        gcs_blob.upload_from_filename(str(local_file))
+                                        print(f"   ✅ Uploaded {filename} to GCS")
+                                
+                                # Use the newly built files (not the corrupted downloaded ones)
+                                local_wardrobe_path = temp_wardrobe_dir
+                            except subprocess.CalledProcessError as e:
+                                print(f"   ❌ Failed to rebuild wardrobe index: {e.stderr}")
+                                return None, 0.0
+                            except subprocess.TimeoutExpired:
+                                print(f"   ❌ Wardrobe index rebuild timed out")
+                                return None, 0.0
+                        else:
+                            # Files downloaded successfully and verified - use them
+                            local_wardrobe_path = temp_wardrobe_dir
+                except Exception as gcs_error:
+                    print(f"   ⚠️  Failed to access wardrobe from GCS: {gcs_error}")
+                    return None, 0.0
+            else:
+                # Local path doesn't exist and not using GCS
+                return None, 0.0
         
-        # Auto-build wardrobe index if images exist but index doesn't
-        if not index_path.exists():
-            images_dir = wardrobe_path / "images"
+        index_path = local_wardrobe_path / "wardrobe.index.faiss"
+        
+        # Auto-build wardrobe index if images exist but index doesn't (local only)
+        if not index_path.exists() and not use_gcs_client:
+            images_dir = local_wardrobe_path / "images"
             if images_dir.exists() and list(images_dir.glob("*.jpg")):
                 print(f"   🔨 Building wardrobe index for {user_id}...")
                 try:
@@ -353,7 +673,7 @@ class InferenceService:
                         sys.executable,
                         "/app/build_user_wardrobe.py",
                         "--user-id", user_id,
-                        "--wardrobe-dir", str(wardrobe_path),
+                        "--wardrobe-dir", str(local_wardrobe_path),
                         "--experiments-dir", str(self.experiments_dir),
                         "--wardrobes-base-dir", str(self.wardrobes_dir)
                     ], capture_output=True, text=True, check=True)
@@ -371,12 +691,68 @@ class InferenceService:
             # Load wardrobe index
             index = faiss.read_index(str(index_path))
             
-            # Load metadata
-            meta_path = wardrobe_path / "wardrobe.parquet"
-            meta = pd.read_parquet(meta_path)
+            # Check if index is empty (wardrobe exists but has no items)
+            if index.ntotal == 0:
+                print(f"   ⚠️  Wardrobe index exists but is empty (0 items)")
+                return [], 0.0
+            
+            # Load metadata with error handling for corrupted files
+            meta_path = local_wardrobe_path / "wardrobe.parquet"
+            try:
+                meta = pd.read_parquet(meta_path)
+            except Exception as parquet_error:
+                print(f"   ⚠️  Error reading parquet file: {parquet_error}")
+                # If corrupted and we're using GCS, try to rebuild
+                if use_gcs_client:
+                    print(f"   🔨 Attempting to rebuild corrupted wardrobe index...")
+                    try:
+                        from google.cloud import storage
+                        import tempfile
+                        
+                        gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+                        gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+                        client = storage.Client(project=gcp_project_id)
+                        bucket = client.bucket(gcp_bucket_name)
+                        
+                        # Download images again
+                        images_prefix = f"wardrobes/{user_id}/images/"
+                        image_blobs = list(bucket.list_blobs(prefix=images_prefix))
+                        image_files = [b for b in image_blobs if b.name.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                        
+                        if image_files:
+                            temp_images_dir = local_wardrobe_path / "images"
+                            temp_images_dir.mkdir(parents=True, exist_ok=True)
+                            
+                            # Download images
+                            for blob in image_files[:50]:
+                                filename = blob.name.split('/')[-1]
+                                local_img_path = temp_images_dir / filename
+                                blob.download_to_filename(str(local_img_path))
+                            
+                            # Rebuild index
+                            result = subprocess.run([
+                                sys.executable,
+                                "/app/build_user_wardrobe.py",
+                                "--user-id", user_id,
+                                "--wardrobe-dir", str(local_wardrobe_path),
+                                "--experiments-dir", str(self.experiments_dir),
+                                "--wardrobes-base-dir", str(local_wardrobe_path.parent)
+                            ], capture_output=True, text=True, check=True, timeout=600)
+                            
+                            # Reload parquet
+                            meta = pd.read_parquet(meta_path)
+                            print(f"   ✅ Successfully rebuilt wardrobe index")
+                        else:
+                            raise Exception("No images found to rebuild index")
+                    except Exception as rebuild_error:
+                        print(f"   ❌ Failed to rebuild index: {rebuild_error}")
+                        return None, 0.0
+                else:
+                    # Not using GCS, can't rebuild
+                    raise parquet_error
             
             # Load ID map
-            idmap_path = wardrobe_path / "idmap.npy"
+            idmap_path = local_wardrobe_path / "idmap.npy"
             idmap = np.load(idmap_path, allow_pickle=True)
             
             # Search more items initially for diversity
@@ -396,13 +772,75 @@ class InferenceService:
                     
                     if not item_row.empty:
                         item = item_row.iloc[0].to_dict()
+                        
+                        # Exclude the query image itself if provided
+                        if exclude_image_path:
+                            item_img_path = item.get('img_path', '') or item.get('image_path', '') or item.get('filename', '')
+                            query_filename = Path(exclude_image_path).name
+                            if item_img_path and (query_filename in item_img_path or item_img_path.endswith(query_filename)):
+                                print(f"   🚫 Excluding wardrobe item (same as query image: {item_img_path})")
+                                continue
+                        
+                        # Exclude items with very high similarity (>0.99) which likely means it's the same image
+                        if similarity > 0.99:
+                            print(f"   🚫 Excluding wardrobe item (too similar, likely same image: similarity={similarity:.3f})")
+                            continue
+                        
+                        # Filter out items of the same category as query
+                        # Normalize both for comparison
+                        if query_category:
+                            item_category_raw = item.get('category', '')
+                            if item_category_raw:
+                                item_category = str(item_category_raw).lower().strip()
+                                # Normalize query_category for comparison (it might be "Jackets" but item is "layers")
+                                query_cat_lower = query_category.lower().strip()
+                                # Map query category to wardrobe category format
+                                query_to_wardrobe = {
+                                    'jackets': ['layers', 'jacket', 'coat', 'blazer'],
+                                    'pants': ['bottoms', 'pants', 'jeans', 'trousers'],
+                                    'shoes': ['shoes', 'boots', 'sneakers'],
+                                    'tops': ['tops', 'shirt', 'sweater'],
+                                    'accessories': ['accessories', 'bag', 'hat'],
+                                    'dresses': ['dresses'],
+                                    'skirts': ['skirts'],
+                                    'shorts': ['shorts']
+                                }
+                                # Check if item category matches query category
+                                if query_cat_lower in query_to_wardrobe:
+                                    if item_category in query_to_wardrobe[query_cat_lower]:
+                                        print(f"   🚫 Excluding wardrobe item (same category: {item_category} matches {query_category})")
+                                        continue
+                                elif item_category == query_cat_lower:
+                                    print(f"   🚫 Excluding wardrobe item (same category: {item_category})")
+                                    continue
+                        
                         item['similarity'] = float(similarity)
                         item['rank'] = idx + 1
                         items.append(item)
             
-            # Apply category diversity
+            print(f"   📊 Found {len(items)} wardrobe items after filtering (requested k={k})")
+            
+            # Log categories of found items for debugging
+            if items:
+                item_categories = {}
+                for item in items:
+                    raw_category = item.get('category', '')
+                    # Use category directly (normalized to lowercase for grouping)
+                    cat = str(raw_category).lower().strip() if raw_category and not pd.isna(raw_category) else 'other'
+                    if cat not in item_categories:
+                        item_categories[cat] = []
+                    item_categories[cat].append(raw_category if raw_category else 'None')
+                print(f"   📋 Items by category: {[(k, len(v)) for k, v in item_categories.items()]}")
+                # Also log the raw category values to see what's in the parquet
+                print(f"   🔍 Raw categories from items: {[item.get('category', 'None') for item in items[:3]]}")
+            
+            # Apply category diversity - 1 item per category (for categories different from query)
+            # This ensures we get diverse recommendations (e.g., 1 shoe + 1 pant + 1 top = 3 items)
+            # But only 1 item per category to avoid showing multiple similar items
             diverse_items = self._diversify_by_category(items, max_per_category=1)
-            diverse_items = diverse_items[:k]  # Return top k after diversity
+            diverse_items = diverse_items[:k]  # Return top k after diversity (up to k different categories)
+            
+            print(f"   ✅ Returning {len(diverse_items)} diverse wardrobe items (1 per category)")
             
             best_score = float(diverse_items[0]['similarity']) if len(diverse_items) > 0 else 0.0
             
@@ -413,37 +851,89 @@ class InferenceService:
             return None, 0.0
     
     def _extract_category(self, category_str: str) -> str:
-        """Extract main category from category string"""
+        """Normalize category string to standard category names"""
         if not category_str or pd.isna(category_str):
             return "Other"
         
-        # Category string format: "Men, Shoes, Sneakers, Low-Tops"
-        # Extract the main category (second level)
-        parts = [p.strip() for p in category_str.split(',')]
+        # Normalize to lowercase for matching
+        category_lower = str(category_str).lower().strip()
         
-        if len(parts) >= 2:
-            main_cat = parts[1].lower()
-            full_cat = ','.join([p.strip().lower() for p in parts[2:]]) if len(parts) > 2 else ""
-            
-            # Map to standard categories with more granular detection
-            if 'dress' in main_cat or 'dress' in full_cat:
-                return "Dresses"
-            elif 'skirt' in main_cat or 'skirt' in full_cat:
-                return "Skirts"
-            elif 'short' in main_cat or 'short' in full_cat:
-                return "Shorts"
-            elif 'pant' in main_cat or 'jean' in main_cat or 'trouser' in main_cat or 'pant' in full_cat:
-                return "Pants"
-            elif 'shoe' in main_cat or 'sneaker' in main_cat or 'boot' in main_cat or 'sandal' in main_cat or 'heel' in main_cat:
-                return "Shoes"
-            elif 'bag' in main_cat or 'backpack' in main_cat or 'handbag' in main_cat or 'tote' in main_cat:
-                return "Bags"
-            elif 'shirt' in main_cat or 'top' in main_cat or 'tee' in main_cat or 't-shirt' in main_cat or 'blouse' in main_cat or 'sweater' in main_cat:
-                return "Tops"
-            elif 'jacket' in main_cat or 'coat' in main_cat or 'blazer' in main_cat or 'cardigan' in main_cat:
-                return "Jackets"
-            elif 'accessori' in main_cat or 'hat' in main_cat or 'scarf' in main_cat or 'jewelry' in main_cat:
-                return "Accessories"
+        # Direct mapping from GPT-tagged categories (wardrobe items) to standard categories
+        # GPT uses: "bottoms", "shoes", "accessories", "tops", "layers", "dresses"
+        category_mapping = {
+            'bottoms': 'Pants',
+            'bottom': 'Pants',
+            'pants': 'Pants',
+            'pant': 'Pants',
+            'jeans': 'Pants',
+            'jean': 'Pants',
+            'trousers': 'Pants',
+            'trouser': 'Pants',
+            'shoes': 'Shoes',
+            'shoe': 'Shoes',
+            'sneakers': 'Shoes',
+            'sneaker': 'Shoes',
+            'boots': 'Shoes',
+            'boot': 'Shoes',
+            'sandals': 'Shoes',
+            'sandal': 'Shoes',
+            'heels': 'Shoes',
+            'heel': 'Shoes',
+            'accessories': 'Accessories',
+            'accessory': 'Accessories',
+            'bags': 'Bags',
+            'bag': 'Bags',
+            'backpack': 'Bags',
+            'handbag': 'Bags',
+            'tote': 'Bags',
+            'tops': 'Tops',
+            'top': 'Tops',
+            'shirts': 'Tops',
+            'shirt': 'Tops',
+            't-shirt': 'Tops',
+            'tshirt': 'Tops',
+            'tee': 'Tops',
+            'blouse': 'Tops',
+            'sweater': 'Tops',
+            'sweaters': 'Tops',
+            'layers': 'Jackets',
+            'layer': 'Jackets',
+            'jackets': 'Jackets',
+            'jacket': 'Jackets',
+            'coats': 'Jackets',
+            'coat': 'Jackets',
+            'blazers': 'Jackets',
+            'blazer': 'Jackets',
+            'cardigan': 'Jackets',
+            'cardigans': 'Jackets',
+            'dresses': 'Dresses',
+            'dress': 'Dresses',
+            'skirts': 'Skirts',
+            'skirt': 'Skirts',
+            'shorts': 'Shorts',
+            'short': 'Shorts',
+        }
+        
+        # Check direct mapping first (for GPT-tagged wardrobe items)
+        if category_lower in category_mapping:
+            return category_mapping[category_lower]
+        
+        # Handle comma-separated format (catalog items): "Men, Shoes, Sneakers, Low-Tops"
+        if ',' in category_str:
+            parts = [p.strip().lower() for p in category_str.split(',')]
+            # Check each part for category matches
+            for part in parts:
+                if part in category_mapping:
+                    return category_mapping[part]
+                # Also check for partial matches
+                for key, value in category_mapping.items():
+                    if key in part:
+                        return value
+        
+        # Fallback: check for partial matches in the category string
+        for key, value in category_mapping.items():
+            if key in category_lower:
+                return value
         
         return "Other"
     
@@ -534,48 +1024,43 @@ class InferenceService:
     def _diversify_by_category(self, items: List[Dict], max_per_category: int = 1, min_categories: int = None) -> List[Dict]:
         """
         Ensure outfit diversity by limiting items per category
-        Ensures at least one item per category when possible
+        Uses category directly from metadata (GPT-tagged), no extraction needed
         """
+        if not items:
+            return []
+        
         category_counts = {}
         diverse_items = []
         category_to_items = {}  # Track items by category
         
-        # First pass: Group items by category
+        # First pass: Group items by category (use category directly from metadata)
         for item in items:
-            category = self._extract_category(item.get('category', ''))
+            # Use category directly from metadata - GPT tags are consistent
+            category = item.get('category', '')
+            if not category or pd.isna(category) or category == '' or category == 'Unknown':
+                category = 'Other'  # Fallback for items without category
+            else:
+                # Normalize to lowercase for consistent grouping
+                category = str(category).lower().strip()
+            
             if category not in category_to_items:
                 category_to_items[category] = []
             category_to_items[category].append(item)
         
-        # Second pass: Select items ensuring diversity
-        # Prioritize getting at least one item from each category
-        categories_seen = set()
+        print(f"   🔍 Diversity: Found {len(category_to_items)} unique categories: {list(category_to_items.keys())}")
         
-        # First, get one item from each category (if we want minimum categories)
-        if min_categories:
-            for category in sorted(category_to_items.keys(), key=lambda c: len(category_to_items[c]), reverse=True):
-                if len(diverse_items) >= min_categories:
-                    break
-                if category_to_items[category]:
-                    best_item = max(category_to_items[category], key=lambda x: x.get('similarity', 0))
-                    diverse_items.append(best_item)
-                    category_counts[category] = 1
-                    categories_seen.add(category)
-                    category_to_items[category].remove(best_item)
+        # ALWAYS prioritize getting one item from each category first
+        # This ensures we get diverse recommendations across categories
+        for category in sorted(category_to_items.keys(), key=lambda c: len(category_to_items[c]), reverse=True):
+            if category_to_items[category]:
+                # Get the best item (highest similarity) from this category
+                best_item = max(category_to_items[category], key=lambda x: x.get('similarity', 0))
+                diverse_items.append(best_item)
+                category_counts[category] = 1
+                print(f"   ✅ Added best item from '{category}' (similarity: {best_item.get('similarity', 0):.3f})")
         
-        # Then, continue with standard diversity (max per category)
-        for item in items:
-            category = self._extract_category(item.get('category', ''))
-            
-            # Skip if already added in first pass
-            if category in categories_seen and category_counts.get(category, 0) >= max_per_category:
-                continue
-            
-            # Add item if we haven't reached the limit for this category
-            if category_counts.get(category, 0) < max_per_category:
-                diverse_items.append(item)
-                category_counts[category] = category_counts.get(category, 0) + 1
-                categories_seen.add(category)
+        # Sort diverse_items by similarity (best first) to maintain quality
+        diverse_items.sort(key=lambda x: x.get('similarity', 0), reverse=True)
         
         # Re-rank after filtering
         for idx, item in enumerate(diverse_items):
@@ -583,7 +1068,7 @@ class InferenceService:
         
         return diverse_items
     
-    def search_catalog(self, query_embedding: np.ndarray, k: int = 3, gender: str = None) -> List[Dict]:
+    def search_catalog(self, query_embedding: np.ndarray, k: int = 3, gender: str = None, query_category: str = None) -> List[Dict]:
         """
         Search global catalog FAISS index - find highest match from each category
         Returns best matching item from each complementary category for complete outfit
@@ -596,41 +1081,51 @@ class InferenceService:
         similarities = 1.0 / (1.0 + distances[0])
         
         # Step 1: Infer query category from top N matches, weighted by similarity
-        # Earlier matches (more similar) have higher weight
-        query_category = None
-        category_scores = {}
-        
-        # Look at top 10 matches, weighted by similarity (first match counts most)
-        for i in range(min(10, len(indices[0]))):
-            if indices[0][i] < len(self.catalog_idmap):
-                product_id = self.catalog_idmap[indices[0][i]]
-                item_row = self.catalog_meta[self.catalog_meta['id'] == product_id]
-                
-                if not item_row.empty:
-                    item = item_row.iloc[0].to_dict()
-                    item_category = self._extract_category(item.get('category', ''))
+        # Only if query_category not provided (fallback detection)
+        detected_query_category = None
+        if not query_category:
+            category_scores = {}
+            
+            # Look at top 10 matches, weighted by similarity (first match counts most)
+            for i in range(min(10, len(indices[0]))):
+                if indices[0][i] < len(self.catalog_idmap):
+                    product_id = self.catalog_idmap[indices[0][i]]
+                    item_row = self.catalog_meta[self.catalog_meta['id'] == product_id]
                     
-                    # Weight by similarity and position: first match (i=0) gets highest weight
-                    # Weight = similarity_score * position_weight (10 for first, 9 for second, etc.)
-                    position_weight = (10 - i)
-                    weighted_score = similarities[i] * position_weight
-                    
-                    category_scores[item_category] = category_scores.get(item_category, 0) + weighted_score
+                    if not item_row.empty:
+                        item = item_row.iloc[0].to_dict()
+                        item_category = self._extract_category(item.get('category', ''))
+                        
+                        # Weight by similarity and position: first match (i=0) gets highest weight
+                        # Weight = similarity_score * position_weight (10 for first, 9 for second, etc.)
+                        position_weight = (10 - i)
+                        weighted_score = similarities[i] * position_weight
+                        
+                        category_scores[item_category] = category_scores.get(item_category, 0) + weighted_score
+            
+            # Get highest scoring category (most similar items)
+            if category_scores:
+                detected_query_category = max(category_scores, key=category_scores.get)
+                sorted_scores = dict(sorted(category_scores.items(), key=lambda x: x[1], reverse=True)[:3])
+                print(f"   🔍 Inferred query category (weighted top 10): {detected_query_category} (top scores: {sorted_scores})")
+                query_category = detected_query_category
         
-        # Get highest scoring category (most similar items)
-        if category_scores:
-            query_category = max(category_scores, key=category_scores.get)
-            sorted_scores = dict(sorted(category_scores.items(), key=lambda x: x[1], reverse=True)[:3])
-            print(f"   🔍 Inferred query category (weighted top 10): {query_category} (top scores: {sorted_scores})")
-        
-        # Step 2: Determine which categories to exclude
+        # Step 2: Determine which categories to exclude and prioritize
         categories_to_exclude = set()
+        categories_to_prioritize = set()
+        
         if query_category:
+            # Use provided query_category directly (already normalized from frontend)
             categories_to_exclude.add(query_category)
+            
+            # Get complementary categories for this query
+            complementary = self._get_complementary_categories(query_category)
+            categories_to_prioritize = set(complementary)
             
             # Smart exclusion rules:
             # - If query is Tops, also exclude Dresses (dresses include tops)
             # - If query is Dresses, also exclude Tops and Pants (dresses are complete outfits)
+            # - If query is Jackets, also exclude Tops (jackets are outerwear worn over tops)
             if query_category == "Tops":
                 categories_to_exclude.add("Dresses")
             elif query_category == "Dresses":
@@ -640,11 +1135,19 @@ class InferenceService:
                 categories_to_exclude.add("Shorts")
             elif query_category == "Pants":
                 categories_to_exclude.add("Dresses")  # Don't mix pants with dresses
+            elif query_category == "Jackets":
+                # Jackets are outerwear - recommend bottoms, bags, shoes, but NOT other tops or jackets
+                categories_to_exclude.add("Tops")  # Don't recommend tops when query is a jacket
+                # Prioritize: bottoms (Pants/Skirts/Shorts), Shoes, Bags
+                # These are already in complementary categories
         
         print(f"   🚫 Excluding categories: {sorted(categories_to_exclude)}")
+        if categories_to_prioritize:
+            print(f"   ⭐ Prioritizing categories: {sorted(categories_to_prioritize)}")
         
         # Step 3: Group all items by category, excluding unwanted categories
         items_by_category = {}
+        prioritized_items_by_category = {}  # Separate dict for prioritized categories
         
         for idx, (faiss_idx, similarity) in enumerate(zip(indices[0], similarities)):
             if faiss_idx < len(self.catalog_idmap):
@@ -668,14 +1171,31 @@ class InferenceService:
                     
                     item['similarity'] = float(similarity)
                     
-                    # Group by category
-                    if item_category not in items_by_category:
-                        items_by_category[item_category] = []
-                    items_by_category[item_category].append(item)
+                    # Separate prioritized vs non-prioritized categories
+                    if categories_to_prioritize and item_category in categories_to_prioritize:
+                        if item_category not in prioritized_items_by_category:
+                            prioritized_items_by_category[item_category] = []
+                        prioritized_items_by_category[item_category].append(item)
+                    else:
+                        # Group by category
+                        if item_category not in items_by_category:
+                            items_by_category[item_category] = []
+                        items_by_category[item_category].append(item)
         
-        # Step 4: Find highest match from each category
+        # Step 4: Find highest match from each category, prioritizing complementary categories
         outfit_items = []
+        
+        # First, add best items from prioritized (complementary) categories
+        for category in sorted(categories_to_prioritize):
+            if category in prioritized_items_by_category and prioritized_items_by_category[category]:
+                best_item = max(prioritized_items_by_category[category], key=lambda x: x['similarity'])
+                outfit_items.append(best_item)
+                print(f"   ⭐ Best match from {category} (prioritized): {best_item.get('title', 'Unknown')[:50]} (similarity: {best_item['similarity']:.3f})")
+        
+        # Then, add best items from other categories (if we haven't reached k yet)
         for category, category_items in items_by_category.items():
+            if len(outfit_items) >= k:
+                break
             if category_items:
                 # Get best matching item from this category
                 best_item = max(category_items, key=lambda x: x['similarity'])
@@ -693,7 +1213,8 @@ class InferenceService:
         return outfit_items[:k]
     
     def inference(self, user_id: str, query_image_path: str, 
-                  threshold: float = 0.7, wardrobe_k: int = 5, catalog_k: int = 3, gender: str = None) -> Dict:
+                  threshold: float = 0.7, wardrobe_k: int = 5, catalog_k: int = 3, gender: str = None,
+                  query_category: str = None) -> Dict:
         """
         Main inference flow
         
@@ -710,57 +1231,105 @@ class InferenceService:
         """
         print(f"\n🔮 Running inference for user: {user_id}")
         print(f"   Query: {query_image_path}")
+        if query_category:
+            print(f"   📋 Query category: {query_category} (will exclude same-category items)")
         
         # Step 1: Generate query embedding
         print("   📊 Generating query embedding...")
         query_embedding = self.embed_image(query_image_path)
         
-        # Step 2: Search wardrobe first
-        print("   👔 Searching user wardrobe...")
-        wardrobe_items, best_wardrobe_score = self.search_wardrobe(user_id, query_embedding, k=wardrobe_k)
+        # Step 2: Search wardrobe (always if wardrobe_k > 0)
+        wardrobe_items = []
+        best_wardrobe_score = 0.0
+        wardrobe_reason = None
         
-        # Step 3: Decide source
-        used_wardrobe = False
-        items = []
-        reason = None
-        
-        if wardrobe_items is None:
-            reason = "empty_wardrobe"
-            print(f"   ⚠️  No wardrobe found, falling back to catalog")
-        elif best_wardrobe_score < threshold:
-            reason = "low_score"
-            print(f"   ⚠️  Best wardrobe score ({best_wardrobe_score:.3f}) < threshold ({threshold}), falling back to catalog")
+        if wardrobe_k > 0:
+            print("   👔 Searching user wardrobe...")
+            wardrobe_result, best_wardrobe_score = self.search_wardrobe(
+                user_id, query_embedding, k=wardrobe_k, 
+                query_category=query_category, 
+                exclude_image_path=query_image_path
+            )
+            
+            # Check wardrobe results
+            if wardrobe_result is None:
+                wardrobe_reason = "empty_wardrobe"
+                print(f"   ⚠️  No wardrobe found for user")
+            elif len(wardrobe_result) == 0:
+                # Wardrobe exists but no matches (could be due to category filtering or all items below threshold)
+                wardrobe_reason = "no_matches"
+                if query_category:
+                    print(f"   ⚠️  No wardrobe matches found (all items filtered out - same category as query: {query_category})")
+                else:
+                    print(f"   ⚠️  No wardrobe matches found (all items below threshold or filtered)")
+            elif best_wardrobe_score < threshold:
+                wardrobe_reason = "low_score"
+                print(f"   ⚠️  Best wardrobe score ({best_wardrobe_score:.3f}) < threshold ({threshold})")
+            else:
+                # Filter items that meet threshold
+                wardrobe_items = [item for item in wardrobe_result if item.get('similarity', 0) >= threshold]
+                if len(wardrobe_items) > 0:
+                    print(f"   ✅ Found {len(wardrobe_items)} wardrobe items (best score: {best_wardrobe_score:.3f})")
+                else:
+                    wardrobe_reason = "low_score"
+                    print(f"   ⚠️  No wardrobe items meet threshold ({threshold})")
         else:
-            used_wardrobe = True
-            items = wardrobe_items
-            print(f"   ✅ Using wardrobe results (best score: {best_wardrobe_score:.3f})")
+            print("   ⏭️  Skipping wardrobe search (wardrobe_k=0)")
+            wardrobe_reason = "wardrobe_disabled"
         
-        # Step 4: Fallback to catalog if needed
-        if not used_wardrobe:
+        # Step 3: Search catalog (always if catalog_k > 0)
+        catalog_items = []
+        catalog_reason = None
+        
+        if catalog_k > 0:
             print("   🛍️  Searching global catalog...")
             if gender:
                 print(f"   🔍 Filtering by gender: {gender}")
-            items = self.search_catalog(query_embedding, k=catalog_k, gender=gender)
-            print(f"   ✅ Found {len(items)} catalog items")
+            catalog_items = self.search_catalog(query_embedding, k=catalog_k, gender=gender, query_category=query_category)
+            if len(catalog_items) > 0:
+                print(f"   ✅ Found {len(catalog_items)} catalog items")
+            else:
+                catalog_reason = "no_catalog_matches"
+                print(f"   ⚠️  No catalog matches found")
+        else:
+            print("   ⏭️  Skipping catalog search (catalog_k=0)")
+            catalog_reason = "catalog_disabled"
         
-        # Step 5: Build result
+        # Step 4: Build result with BOTH wardrobe and catalog items separately
         result = {
             'user_id': user_id,
             'query_image': str(query_image_path),
             'timestamp': datetime.now().isoformat(),
-            'used_wardrobe': used_wardrobe,
             'threshold': threshold,
-            'items': items,
-            'num_results': len(items)
+            'wardrobe_items': wardrobe_items,
+            'catalog_items': catalog_items,
+            'wardrobe_count': len(wardrobe_items),
+            'catalog_count': len(catalog_items),
+            'num_results': len(wardrobe_items) + len(catalog_items)
         }
         
-        if reason:
-            result['fallback_reason'] = reason
+        # Add reasons for empty results
+        if wardrobe_reason:
+            result['wardrobe_reason'] = wardrobe_reason
+        if catalog_reason:
+            result['catalog_reason'] = catalog_reason
         
-        if used_wardrobe:
+        # Keep best_wardrobe_score for reference
+        if best_wardrobe_score > 0:
             result['best_wardrobe_score'] = best_wardrobe_score
         
-        print(f"\n   🎉 Inference complete: {len(items)} recommendations")
+        # For backward compatibility, also include 'items' and 'used_wardrobe'
+        # 'items' will contain wardrobe items if available, otherwise catalog items
+        if len(wardrobe_items) > 0:
+            result['items'] = wardrobe_items
+            result['used_wardrobe'] = True
+        else:
+            result['items'] = catalog_items
+            result['used_wardrobe'] = False
+            if wardrobe_reason:
+                result['fallback_reason'] = wardrobe_reason
+        
+        print(f"\n   🎉 Inference complete: {len(wardrobe_items)} wardrobe + {len(catalog_items)} catalog = {result['num_results']} total recommendations")
         return result
 
 

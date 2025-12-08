@@ -87,16 +87,21 @@ services:
       - ./queries:/app/queries
       - ./results:/app/results
       - ./logs:/app/logs
+      # Mount gcloud credentials for GCS access (uses your user credentials)
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+      # Alternative: Mount service account key file if you prefer (uncomment and place gcs-credentials.json in project root)
+      # - ./gcs-credentials.json:/app/gcs-credentials.json:ro
     environment:
       - GCP_BUCKET_NAME=styleme-data-bucket
       - GCP_PROJECT_ID=styleme-475201
+      - GCS_BUCKET=styleme-production
       - DATA_PREFIX=json
       - IMAGES_PREFIX=images
-      - EXPERIMENTS_DIR=/app/experiments
-      - CATALOG_DIR=/app/catalog
-      - WARDROBES_DIR=/app/wardrobes
-      - QUERIES_DIR=/app/queries
-      - RESULTS_DIR=/app/results
+      - EXPERIMENTS_DIR=/gcs/styleme-production/experiments
+      - CATALOG_DIR=/gcs/styleme-production/catalog
+      - WARDROBES_DIR=/gcs/styleme-production/wardrobes
+      - QUERIES_DIR=/gcs/styleme-production/queries
+      - RESULTS_DIR=/gcs/styleme-production/results
       - LOGS_DIR=/app/logs
       - LOG_LEVEL=INFO
       - RUN_API_SERVER=true

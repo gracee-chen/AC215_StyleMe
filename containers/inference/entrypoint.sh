@@ -65,7 +65,8 @@ if [ -z "$K_SERVICE" ] && [ -z "$CLOUD_RUN" ]; then
         
         if [ $? -ne 0 ]; then
             echo "❌ Failed to build catalog index"
-            exit 1
+            echo "⚠️  Continuing anyway - catalog will be loaded from GCS on first use"
+            # Don't exit - allow API server to start even if catalog build fails
         fi
         
         echo ""

@@ -61,3 +61,8 @@ data/json/
 # Temporary files
 *.tmp
 *.temp
+
+# GCS Credentials (DO NOT COMMIT!)
+gcs-credentials.json
+*.json.key
+*credentials*.json
