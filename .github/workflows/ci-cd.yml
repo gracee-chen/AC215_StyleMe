@@ -272,6 +272,15 @@ jobs:
     needs: [coverage]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/k8s-pulumi'
     steps:
+      - name: Clean up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+      
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -297,6 +306,11 @@ jobs:
           # Clean up
           rm /tmp/gcp-key.json
 
+      - name: Prune Docker system
+        run: |
+          docker system prune -af --volumes || true
+          df -h
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -319,6 +333,8 @@ jobs:
             -t ${{ env.REGISTRY }}/styleme-ingestion:${{ steps.image-tags.outputs.LATEST_TAG }} \
             --push \
             .
+          docker system prune -f || true
+          df -h
 
       - name: Build and push preprocessing image
         run: |
@@ -329,9 +345,14 @@ jobs:
             -t ${{ env.REGISTRY }}/styleme-preprocessing:${{ steps.image-tags.outputs.LATEST_TAG }} \
             --push \
             .
+          docker system prune -f || true
+          df -h
 
       - name: Build and push training image
         run: |
+          # Training image is large (PyTorch), clean up before building
+          docker system prune -af || true
+          df -h
           docker buildx build \
             --platform linux/amd64 \
             -f containers/training/Dockerfile \
@@ -339,6 +360,8 @@ jobs:
             -t ${{ env.REGISTRY }}/styleme-training:${{ steps.image-tags.outputs.LATEST_TAG }} \
             --push \
             .
+          docker system prune -f || true
+          df -h
 
       - name: Build and push inference image
         run: |
@@ -349,6 +372,8 @@ jobs:
             -t ${{ env.REGISTRY }}/styleme-inference:${{ steps.image-tags.outputs.LATEST_TAG }} \
             --push \
             .
+          docker system prune -f || true
+          df -h
 
       - name: Output image information
         run: |

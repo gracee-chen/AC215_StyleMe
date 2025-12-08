@@ -24,7 +24,9 @@ RUN export GCSFUSE_REPO=gcsfuse-$(lsb_release -c -s) && \
 
 # Copy requirements and install Python dependencies
 COPY containers/inference/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip cache purge && \
+    rm -rf /root/.cache/pip
 
 # Pre-download CLIP model to cache (prevents Hugging Face rate limiting at runtime)
 # Set cache directory and download CLIP model during build
