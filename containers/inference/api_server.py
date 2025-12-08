@@ -18,6 +18,16 @@ from PIL import Image
 import io
 from datetime import datetime
 
+# Ensure importlib.metadata has packages_distributions on Python <3.10
+try:
+    import importlib.metadata as _imd
+    if not hasattr(_imd, "packages_distributions"):
+        import importlib_metadata as _imdm
+        _imd.packages_distributions = _imdm.packages_distributions
+except Exception:
+    # If anything fails, continue without patch; downstream will log errors
+    pass
+
 # Force unbuffered output for logging
 sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
 
@@ -439,18 +449,26 @@ Return ONLY a JSON object with these three fields: category, color, style. Make 
         return {}
 
 def save_image_from_base64(base64_string, output_path):
-    """Save base64 encoded image to file"""
+    """Save base64 encoded image to file. Returns (success: bool, error: str | None)."""
     try:
         # Remove data URL prefix if present
         if ',' in base64_string:
             base64_string = base64_string.split(',')[1]
         
-        image_data = base64.b64decode(base64_string)
+        if not base64_string or len(base64_string) < 32:
+            return False, "Invalid or empty image payload"
         
-        # Load image and verify it's complete
-        image = Image.open(io.BytesIO(image_data))
-        # Verify image is complete by loading it fully
-        image.load()
+        try:
+            image_data = base64.b64decode(base64_string)
+        except Exception as e:
+            return False, f"Invalid base64 image data: {e}"
+        
+        try:
+            # Load image and verify it's complete
+            image = Image.open(io.BytesIO(image_data))
+            image.load()  # force decode to catch truncated images
+        except (OSError, ValueError) as e:
+            return False, f"Invalid or corrupted image: {e}"
         
         # Save with explicit format and quality to prevent truncation
         if output_path.suffix.lower() in ['.jpg', '.jpeg']:
@@ -464,16 +482,14 @@ def save_image_from_base64(base64_string, output_path):
             image.save(output_path, 'JPEG', quality=95, optimize=False)
         
         # Verify file was saved correctly
-        if not output_path.exists() or output_path.stat().st_size == 0:
-            print(f"⚠️  Warning: Saved image file is empty or doesn't exist")
-            return False
+        if not output_path.exists() or not output_path.stat().st_size:
+            return False, "Saved image file is empty"
         
-        return True
+        return True, None
     except Exception as e:
-        print(f"Error saving image: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return False, f"Unexpected error saving image: {e}"
 
 def save_query_to_gcs(user_id: str, request_id: str, query_image_path: Path) -> str:
     """Save query image to GCS queries/{user_id}/{request_id}/query.jpg"""
@@ -662,8 +678,9 @@ def upload_image():
         if 'image' in data:
             temp_filename = f"temp_{user_id}_{os.getpid()}.jpg"
             temp_image_path = Path(UPLOAD_FOLDER) / temp_filename
-            if not save_image_from_base64(data['image'], temp_image_path):
-                return jsonify({'error': 'Failed to save image'}), 400
+            success, err = save_image_from_base64(data['image'], temp_image_path)
+            if not success:
+                return jsonify({'error': err or 'Failed to save image'}), 400
         
         # Try multipart form data
         elif 'file' in request.files:
@@ -929,8 +946,9 @@ def get_recommendations():
         if 'image' in data:
             temp_filename = f"query_{user_id}_{os.getpid()}.jpg"
             query_image_path = Path(UPLOAD_FOLDER) / temp_filename
-            if not save_image_from_base64(data['image'], query_image_path):
-                return jsonify({'error': 'Failed to process image'}), 400
+            success, err = save_image_from_base64(data['image'], query_image_path)
+            if not success:
+                return jsonify({'error': err or 'Failed to process image'}), 400
         
         # Try multipart form data
         elif 'file' in request.files:
