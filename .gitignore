@@ -60,4 +60,4 @@ data/json/
 
 # Temporary files
 *.tmp
-*.temp
+*.tempgithub-actions-key.json

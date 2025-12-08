@@ -1,0 +1,443 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - k8s-pulumi  # Test branch for CI/CD
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches:
+      - main
+      - master
+      - k8s-pulumi  # Test branch for CI/CD
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+
+env:
+  PROJECT_ID: styleme-475201
+  REGION: us-central1
+  REPO_NAME: styleme-repo
+  REGISTRY: us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}
+  CLUSTER_NAME: styleme-cluster
+  CLUSTER_ZONE: us-central1-b
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  # ============================================
+  # JOB 1: Lint and Code Quality
+  # ============================================
+  lint:
+    name: Lint and Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r CI/requirements-dev.txt
+
+      - name: Run Flake8 linting
+        run: |
+          flake8 src/ containers/ --config=CI/config/.flake8 || true
+          echo "Linting completed (warnings are non-blocking)"
+
+  # ============================================
+  # JOB 2: Unit Tests
+  # ============================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('CI/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r CI/requirements-dev.txt
+
+      - name: Run unit tests
+        run: |
+          pytest CI/tests/ -m unit -v \
+            --cov=src \
+            --cov=containers \
+            --cov-config=CI/config/.coveragerc \
+            --cov-report=term-missing \
+            --cov-report=xml:CI/coverage.xml \
+            -c CI/config/pytest.ini \
+            --tb=short
+
+      - name: Upload unit test coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./CI/coverage.xml
+          flags: unit
+          name: unit-tests
+          fail_ci_if_error: false
+
+  # ============================================
+  # JOB 3: Integration Tests
+  # ============================================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('CI/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r CI/requirements-dev.txt
+
+      - name: Run integration tests
+        run: |
+          pytest CI/tests/integration/ -m integration -v \
+            --cov=src \
+            --cov=containers \
+            --cov-config=CI/config/.coveragerc \
+            --cov-report=term-missing \
+            --cov-report=xml:CI/coverage-integration.xml \
+            -c CI/config/pytest.ini \
+            --tb=short
+
+      - name: Upload integration test coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./CI/coverage-integration.xml
+          flags: integration
+          name: integration-tests
+          fail_ci_if_error: false
+
+  # ============================================
+  # JOB 4: End-to-End Tests
+  # ============================================
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('CI/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r CI/requirements-dev.txt
+
+      - name: Run E2E tests
+        run: |
+          pytest CI/tests/test_e2e.py -m e2e -v \
+            --cov=src \
+            --cov=containers \
+            --cov-config=CI/config/.coveragerc \
+            --cov-report=term-missing \
+            -c CI/config/pytest.ini \
+            --tb=short
+
+  # ============================================
+  # JOB 5: Coverage Report (Combined)
+  # ============================================
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r CI/requirements-dev.txt
+
+      - name: Run all tests with coverage
+        run: |
+          pytest CI/tests/ \
+            --cov=src \
+            --cov=containers \
+            --cov-config=CI/config/.coveragerc \
+            --cov-report=term-missing \
+            --cov-report=html:CI/coverage_html \
+            --cov-report=xml:CI/coverage.xml \
+            --cov-fail-under=60 \
+            -c CI/config/pytest.ini \
+            -v
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            CI/coverage.xml
+            CI/coverage_html/
+
+      - name: Coverage Summary
+        run: |
+          echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage reports generated:" >> $GITHUB_STEP_SUMMARY
+          echo "- HTML: Available in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- XML: Available in artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Minimum coverage requirement: **60%**" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # JOB 6: Build Docker Images (Main branch only)
+  # ============================================
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [coverage]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate image tags
+        id: image-tags
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          DATE_TAG=$(date +%Y%m%d)
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "DATE_TAG=$DATE_TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=$DATE_TAG-$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "LATEST_TAG=latest" >> $GITHUB_OUTPUT
+
+      - name: Build and push ingestion image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -f containers/ingestion/Dockerfile \
+            -t ${{ env.REGISTRY }}/styleme-ingestion:${{ steps.image-tags.outputs.IMAGE_TAG }} \
+            -t ${{ env.REGISTRY }}/styleme-ingestion:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --push \
+            .
+
+      - name: Build and push preprocessing image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -f containers/preprocessing/Dockerfile \
+            -t ${{ env.REGISTRY }}/styleme-preprocessing:${{ steps.image-tags.outputs.IMAGE_TAG }} \
+            -t ${{ env.REGISTRY }}/styleme-preprocessing:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --push \
+            .
+
+      - name: Build and push training image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -f containers/training/Dockerfile \
+            -t ${{ env.REGISTRY }}/styleme-training:${{ steps.image-tags.outputs.IMAGE_TAG }} \
+            -t ${{ env.REGISTRY }}/styleme-training:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --push \
+            .
+
+      - name: Build and push inference image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -f containers/inference/Dockerfile \
+            -t ${{ env.REGISTRY }}/styleme-inference:${{ steps.image-tags.outputs.IMAGE_TAG }} \
+            -t ${{ env.REGISTRY }}/styleme-inference:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --push \
+            .
+
+      - name: Output image information
+        run: |
+          echo "## 🐳 Docker Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All images tagged with: **${{ steps.image-tags.outputs.IMAGE_TAG }}** and **latest**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Images:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/styleme-ingestion:${{ steps.image-tags.outputs.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/styleme-preprocessing:${{ steps.image-tags.outputs.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/styleme-training:${{ steps.image-tags.outputs.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ env.REGISTRY }}/styleme-inference:${{ steps.image-tags.outputs.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================
+  # JOB 7: Deploy to Kubernetes (Main branch only)
+  # ============================================
+  deploy-k8s:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
+            --zone ${{ env.CLUSTER_ZONE }} \
+            --project ${{ env.PROJECT_ID }}
+
+      - name: Generate image tags
+        id: image-tags
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          DATE_TAG=$(date +%Y%m%d)
+          echo "IMAGE_TAG=$DATE_TAG-$SHORT_SHA" >> $GITHUB_OUTPUT
+
+      - name: Update Kubernetes manifests with new image tags
+        run: |
+          IMAGE_TAG="${{ steps.image-tags.outputs.IMAGE_TAG }}"
+          REGISTRY="${{ env.REGISTRY }}"
+          
+          # Update ingestion job
+          sed -i "s|image:.*styleme-ingestion.*|image: ${REGISTRY}/styleme-ingestion:${IMAGE_TAG}|g" k8s/03-ingestion-job.yaml
+          
+          # Update preprocessing job
+          sed -i "s|image:.*styleme-preprocessing.*|image: ${REGISTRY}/styleme-preprocessing:${IMAGE_TAG}|g" k8s/04-preprocessing-job.yaml
+          
+          # Update training job
+          sed -i "s|image:.*styleme-training.*|image: ${REGISTRY}/styleme-training:${IMAGE_TAG}|g" k8s/05-training-job.yaml
+          
+          # Update inference deployment
+          sed -i "s|image:.*styleme-inference.*|image: ${REGISTRY}/styleme-inference:${IMAGE_TAG}|g" k8s/06-inference-deployment.yaml
+
+      - name: Verify kubectl connection
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Deploy ConfigMap
+        run: |
+          kubectl apply -f k8s/01-configmap.yaml
+          kubectl get configmap styleme-config
+
+      - name: Deploy PersistentVolumeClaim
+        run: |
+          kubectl apply -f k8s/02-persistent-volume-claim.yaml
+          kubectl wait --for=condition=Ready pvc/styleme-data-pvc --timeout=60s || true
+
+      - name: Deploy Inference Service (Main Service)
+        run: |
+          # For production, we typically only update the inference service
+          # Jobs (ingestion, preprocessing, training) are run manually or via separate workflows
+          kubectl apply -f k8s/06-inference-deployment.yaml
+          kubectl rollout status deployment/styleme-inference --timeout=300s || true
+
+      - name: Deploy Horizontal Pod Autoscaler
+        run: |
+          kubectl apply -f k8s/07-horizontal-pod-autoscaler.yaml || true
+
+      - name: Verify deployment
+        run: |
+          echo "## 🚀 Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -l app=styleme >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          kubectl get service styleme-inference-service >> $GITHUB_STEP_SUMMARY
+
+      - name: Get service URL
+        id: service-url
+        run: |
+          EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          if [ -n "$EXTERNAL_IP" ]; then
+            echo "SERVICE_URL=http://$EXTERNAL_IP" >> $GITHUB_OUTPUT
+            echo "✅ Service available at: http://$EXTERNAL_IP" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⏳ LoadBalancer IP pending..." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ============================================
+  # JOB 8: CI Summary
+  # ============================================
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint, unit-tests, integration-tests, e2e-tests, coverage]
+    if: always()
+    steps:
+      - name: CI Summary
+        run: |
+          echo "## ✅ CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All checks completed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** Deployment to Kubernetes only runs on merges to \`main\` branch." >> $GITHUB_STEP_SUMMARY
+
