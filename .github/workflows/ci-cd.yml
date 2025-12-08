@@ -5,7 +5,7 @@ on:
     branches:
       - main
       - master
-      - k8s-pulumi  # Test branch for CI/CD
+      - k8s-pulumi
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -14,7 +14,7 @@ on:
     branches:
       - main
       - master
-      - k8s-pulumi  # Test branch for CI/CD
+      - k8s-pulumi
     paths-ignore:
       - '**.md'
       - 'docs/**'
