@@ -151,9 +151,8 @@ jobs:
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:CI/coverage-integration.xml \
-            --override-ini="addopts=-v --tb=short" \
-            --tb=short \
-            --no-cov-on-fail || true
+            --cov-fail-under=0 \
+            --tb=short || true
 
       - name: Upload integration test coverage
         uses: codecov/codecov-action@v4
@@ -204,9 +203,8 @@ jobs:
             --cov=containers \
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
-            --override-ini="addopts=-v --tb=short" \
-            --tb=short \
-            --no-cov-on-fail || true
+            --cov-fail-under=0 \
+            --tb=short || true
 
   # ============================================
   # JOB 5: Coverage Report (Combined)
