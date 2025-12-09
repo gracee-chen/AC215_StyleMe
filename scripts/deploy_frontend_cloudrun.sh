@@ -33,31 +33,19 @@ fi
 
 cd "${WEBSITE_DIR}"
 
-# Get OpenAI API key from root .env file if available
-OPENAI_API_KEY=""
-if [ -f "${PROJECT_ROOT}/.env" ]; then
-    OPENAI_API_KEY=$(grep "^OPENAI_API_KEY=" "${PROJECT_ROOT}/.env" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || echo "")
-fi
-
 # Create or update .env.production
+# Note: OpenAI API key is now configured on the backend, not in frontend
 echo "📝 Creating/updating .env.production file..."
 cat > .env.production << EOF
 # Production environment variables
 # This file is used when building for production deployment
 VITE_API_URL=${API_URL}
+# Note: OpenAI API key is configured on the backend server, not in frontend
 EOF
-
-# Add OpenAI API key if available
-if [ -n "$OPENAI_API_KEY" ]; then
-    echo "VITE_OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env.production
-    echo "✅ Added OPENAI_API_KEY to .env.production"
-else
-    echo "# VITE_OPENAI_API_KEY=your_openai_api_key_here" >> .env.production
-    echo "⚠️  OPENAI_API_KEY not found in root .env file"
-fi
 
 echo "✅ .env.production configured"
 echo "   VITE_API_URL=${API_URL}"
+echo "   (OpenAI API key is configured on backend, not needed in frontend)"
 echo ""
 
 # Install dependencies if needed

@@ -4,7 +4,17 @@ import { MessageCircle, Send, Image as ImageIcon, Loader2, X, Sparkles, User } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ImageWithFallback } from '@/components/ui/ImageWithFallback';
-import { sendChatMessage, imageToBase64, ChatMessage, analyzeClothingItem, ItemAnalysis } from '@/services/chatgpt';
+import { sendChatMessage, ChatMessage, ItemAnalysis } from '@/services/api';
+
+// Utility function to convert image file to base64
+async function imageToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 interface Message {
   id: string;
@@ -156,9 +166,18 @@ export function ChatScreen() {
       // Add user message to state with base64 image (for display and future conversations)
       setMessages((prev) => [...prev, userMessage]);
       
-      // Only pass imageFile if we have a File object (not a URL)
-      // This prevents issues with localhost URLs in follow-up messages
-      const imageFileForAPI = currentSelectedImage || undefined;
+      // Convert image to File if we have base64 from URL, otherwise use the File object
+      let imageFileForAPI: File | undefined = currentSelectedImage;
+      if (!imageFileForAPI && imageBase64 && imageBase64.startsWith('data:')) {
+        // Convert base64 data URL to File object for the API call
+        try {
+          const response = await fetch(imageBase64);
+          const blob = await response.blob();
+          imageFileForAPI = new File([blob], 'image.jpg', { type: blob.type });
+        } catch (error) {
+          console.warn('Could not convert base64 to File, continuing without image:', error);
+        }
+      }
       
       const response = await sendChatMessage(chatMessages, imageFileForAPI);
 

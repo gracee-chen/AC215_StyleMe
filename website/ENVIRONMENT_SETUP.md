@@ -16,7 +16,7 @@ The frontend uses Vite, which reads environment variables from `.env` files. Vit
 1. Create `.env.local` in the `website/` directory:
    ```bash
    VITE_API_URL=http://localhost:5001
-   VITE_OPENAI_API_KEY=your_key_here  # Optional
+   # Note: OpenAI API key is configured on the backend, not in frontend .env
    ```
 
 2. Start dev server:
@@ -29,7 +29,7 @@ The frontend uses Vite, which reads environment variables from `.env` files. Vit
 1. Create `.env.production` in the `website/` directory:
    ```bash
    VITE_API_URL=https://styleme-inference-nty2g5pcpa-uc.a.run.app
-   VITE_OPENAI_API_KEY=your_key_here  # Optional
+   # Note: OpenAI API key is configured on the backend, not in frontend .env
    ```
 
 2. Build and deploy:

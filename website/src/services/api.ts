@@ -541,3 +541,114 @@ export function getImageUrl(imagePath: string): string {
   return imagePath;
 }
 
+/**
+ * Analyze a clothing item image (calls backend, which uses OpenAI securely)
+ */
+export interface ItemAnalysis {
+  category?: string;
+  color?: string;
+  style?: string;
+  material?: string;
+  pattern?: string;
+  season?: string;
+  occasion?: string;
+  description?: string;
+}
+
+export async function analyzeItem(imageFile: File): Promise<ItemAnalysis> {
+  const formData = new FormData();
+  formData.append('file', imageFile);
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/analyze-item`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to analyze item';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || errorMessage;
+      } catch {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Cannot connect to server. Please make sure the API server is running on ' + API_BASE_URL);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Send chat message to stylist (calls backend, which uses OpenAI securely)
+ */
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  imageUrl?: string;
+}
+
+export interface ChatResponse {
+  message: string;
+  error?: string;
+}
+
+export async function sendChatMessage(
+  messages: ChatMessage[],
+  imageFile?: File
+): Promise<ChatResponse> {
+  try {
+    // Convert image file to base64 if provided
+    let imageBase64: string | undefined;
+    if (imageFile) {
+      const reader = new FileReader();
+      imageBase64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to convert image to base64'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(imageFile);
+      });
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: messages,
+        image: imageBase64,
+      }),
+    });
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to get response from stylist';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || errorMessage;
+      } catch {
+        errorMessage = `Server error: ${response.status} ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error('Cannot connect to server. Please make sure the API server is running on ' + API_BASE_URL);
+    }
+    throw error;
+  }
+}
+
