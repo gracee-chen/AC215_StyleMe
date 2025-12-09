@@ -127,44 +127,6 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 > make setup  # Creates necessary directories
 > ```
 
-#### Kubernetes Deployment Prerequisites
-
-> - **Kubernetes cluster** (GKE or EKS) with kubectl configured
-> - **Docker images** built and pushed to a container registry (GCR, ECR, or Docker Hub)
-> - **GCP credentials** configured (for GCS access)
-> - **GPU nodes** (for training job) - if using GKE, ensure you have a GPU node pool
-
-#### Pulumi Infrastructure Prerequisites
-
-> - **Pulumi CLI** installed:
->   ```bash
->   curl -fsSL https://get.pulumi.com | sh
->   ```
-> - **Node.js** (v18+) and npm installed
-> - **GCP Account** with billing enabled and required APIs enabled
-> - **GCP Credentials** configured:
->   ```bash
->   gcloud auth login
->   gcloud auth application-default login
->   ```
-
-#### CI/CD Pipeline Prerequisites
-
-> - **GitHub repository** with Actions enabled
-> - **GCP service account** with permissions for:
->   - Artifact Registry (push/pull images)
->   - GKE (deploy to cluster)
->   - Cloud Storage (access data)
-> - **GitHub Secrets** configured:
->   - `GCP_SA_KEY`: Service account JSON key
-
-#### Machine Learning Workflow Prerequisites
-
-> - **GPU support** for model training (NVIDIA GPU with CUDA)
-> - **GCS access** for data storage and model checkpoints
-> - **DVC** configured for data versioning
-> - **Kubernetes cluster** with GPU nodes (for production training)
-
 ---
 
 ## Deployment Instructions
@@ -172,6 +134,13 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 ### Kubernetes Deployment
 
 StyleMe is deployed to a production **Google Kubernetes Engine (GKE)** cluster with full production configuration including ConfigMaps, PersistentVolumeClaims, Jobs for batch processing (ingestion, preprocessing, training), and Deployments for long-running services (inference API). The system demonstrates **reliability and scalability** through Horizontal Pod Autoscaling (HPA) that automatically scales inference pods based on CPU and memory metrics, with demonstrated scaling behavior from 2 to 10 replicas under load.
+
+#### Prerequisites
+
+> - **Kubernetes cluster** (GKE or EKS) with kubectl configured
+> - **Docker images** built and pushed to a container registry (GCR, ECR, or Docker Hub)
+> - **GCP credentials** configured (for GCS access)
+> - **GPU nodes** (for training job) - if using GKE, ensure you have a GPU node pool
 
 #### Deploy the Application to Kubernetes Cluster
 
@@ -245,6 +214,20 @@ See [Kubernetes Deployment Guide](k8s/README.md) for detailed instructions.
 
 StyleMe uses **Pulumi** to automate infrastructure provisioning and deployment on Google Cloud Platform. The Pulumi code manages the complete infrastructure lifecycle including GKE cluster creation, node pool configuration (default and GPU pools), networking setup, and automatic deployment of all Kubernetes manifests. Infrastructure changes are version-controlled, previewed before application, and can be easily replicated across environments.
 
+#### Prerequisites
+
+> - **Pulumi CLI** installed:
+>   ```bash
+>   curl -fsSL https://get.pulumi.com | sh
+>   ```
+> - **Node.js** (v18+) and npm installed
+> - **GCP Account** with billing enabled and required APIs enabled
+> - **GCP Credentials** configured:
+>   ```bash
+>   gcloud auth login
+>   gcloud auth application-default login
+>   ```
+
 #### Use Pulumi to Automate Infrastructure Provisioning and Deployment
 
 **Setup:**
@@ -290,6 +273,16 @@ See [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md) for detailed 
 ### CI/CD Pipeline Implementation (GitHub Actions)
 
 StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request, and deploys to Kubernetes on merges to main. The pipeline includes unit test suites for each service/container, integration tests on the codebase, and end-to-end tests. The system achieves **91.30% test coverage**, exceeding the 60% requirement, with clear documentation of excluded modules.
+
+#### Prerequisites
+
+> - **GitHub repository** with Actions enabled
+> - **GCP service account** with permissions for:
+>   - Artifact Registry (push/pull images)
+>   - GKE (deploy to cluster)
+>   - Cloud Storage (access data)
+> - **GitHub Secrets** configured:
+>   - `GCP_SA_KEY`: Service account JSON key
 
 #### Set Up CI/CD Pipeline with GitHub Actions
 
@@ -351,6 +344,13 @@ See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
 ### Machine Learning Workflow
 
 The production system integrates a complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers. StyleMe fine-tunes a **FashionCLIP model** (based on OpenAI CLIP ViT-B/32) to learn fashion compatibility relationships using a **triplet loss** objective. The system enforces validation checks to ensure only models meeting performance thresholds (minimum 70% triplet accuracy and 50% compatibility score) are deployed. Automated retraining is triggered by new data or codebase updates via Kubernetes CronJob, with complete reproducibility through DVC versioning.
+
+#### Prerequisites
+
+> - **GPU support** for model training (NVIDIA GPU with CUDA)
+> - **GCS access** for data storage and model checkpoints
+> - **DVC** configured for data versioning
+> - **Kubernetes cluster** with GPU nodes (for production training)
 
 #### Demonstrate Production-Ready ML Workflow
 
