@@ -326,7 +326,8 @@ gcloud iam service-accounts keys create key.json \
 # Add key.json contents as GCP_SA_KEY secret in GitHub repository settings
 ```
 
-See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
+<img width="1882" height="787" alt="cicd" src="https://github.com/user-attachments/assets/b0ffa6fc-bbda-448f-86ae-55fbab8b8dde" />
+
 
 ### Machine Learning Workflow
 
