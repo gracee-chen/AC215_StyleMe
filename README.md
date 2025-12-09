@@ -39,11 +39,29 @@ This milestone focused on **production deployment with Kubernetes, infrastructur
 
 StyleMe provides a comprehensive API interface through the inference service (`containers/inference/api_server.py`) that enables fashion recommendation queries via RESTful API endpoints. The API implements a two-tier search strategy: it first searches the user's personal wardrobe index (if available and similarity scores meet the threshold), and falls back to the catalog index for product recommendations when the wardrobe is empty or no matches are found. The frontend is a React-based single-page application built with TypeScript, Vite, and Tailwind CSS that provides a mobile-first interface for uploading wardrobe items, viewing collections organized by category, and receiving personalized fashion recommendations. The architecture supports seamless integration between the backend inference service and frontend through RESTful API structures, image upload/download capabilities, metadata-rich JSON responses, and per-user session management.
 
-<img width="2414" height="1712" alt="image" src="https://github.com/user-attachments/assets/7f9e9b3e-c244-4896-b0f1-36459bbe2b75" />
-<img width="2410" height="1712" alt="image" src="https://github.com/user-attachments/assets/a2429b0c-f9cf-4025-bcbf-630044563637" />
-<img width="2414" height="1714" alt="image" src="https://github.com/user-attachments/assets/d749fc9e-62a0-4966-9636-082ea10adaf2" />
-<img width="2404" height="1702" alt="image" src="https://github.com/user-attachments/assets/09141e1d-94cb-46e5-927c-6be054796e0a" />
-<img width="2412" height="1712" alt="image" src="https://github.com/user-attachments/assets/a847a264-d642-4bd0-adb2-f00c55fd6eaa" />
+<table>
+<tr>
+<td width="33%" style="padding: 5px;">
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/7f9e9b3e-c244-4896-b0f1-36459bbe2b75" />
+</td>
+<td width="33%" style="padding: 5px;">
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/a2429b0c-f9cf-4025-bcbf-630044563637" />
+</td>
+<td width="33%" style="padding: 5px;">
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/d749fc9e-62a0-4966-9636-082ea10adaf2" />
+</td>
+</tr>
+<tr>
+<td width="33%" style="padding: 5px;">
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/09141e1d-94cb-46e5-927c-6be054796e0a" />
+</td>
+<td width="33%" style="padding: 5px;">
+  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/a847a264-d642-4bd0-adb2-f00c55fd6eaa" />
+</td>
+<td width="33%" style="padding: 5px;">
+</td>
+</tr>
+</table>
 
 
 
