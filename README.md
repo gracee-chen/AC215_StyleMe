@@ -58,7 +58,11 @@ This milestone focused on **production deployment with Kubernetes, infrastructur
 
 ## Technical Implementation
 
-### 1. Kubernetes Deployment
+---
+
+### Kubernetes Deployment
+
+StyleMe is deployed to a production **Google Kubernetes Engine (GKE)** cluster with full production configuration including ConfigMaps, PersistentVolumeClaims, Jobs for batch processing (ingestion, preprocessing, training), and Deployments for long-running services (inference API). The system demonstrates **reliability and scalability** through Horizontal Pod Autoscaling (HPA) that automatically scales inference pods based on CPU and memory metrics, with demonstrated scaling behavior from 2 to 10 replicas under load. The deployment includes proper resource limits, health checks, and service exposure via LoadBalancer. All Kubernetes manifests are version-controlled and automatically deployed via CI/CD pipeline.
 
 #### Prerequisites
 
@@ -186,8 +190,9 @@ The cluster demonstrates reliability by:
 - Maintaining service availability during scaling events
 - Distributing load across multiple pod replicas
 
-**Usage Example - Accessing the Deployed Application:**
+#### Usage Examples
 
+**Accessing the Deployed Application:**
 ```bash
 # Get service URL
 EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
@@ -204,16 +209,20 @@ curl -X POST http://$EXTERNAL_IP/analyze_item \
 curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
 ```
 
-**Known Issues and Limitations:**
+#### Known Issues and Limitations
+
 - GPU nodes may not be available in all regions. Verify GPU quota before deployment.
 - PersistentVolumeClaims may fail to bind if storage class doesn't support requested access mode.
 - First inference request may be slow as models load from GCS. Consider pre-warming.
+- Current HPA configuration scales based on CPU/memory. For production, consider adding custom metrics (request rate, latency) for more intelligent scaling.
 
 See [Kubernetes Deployment Guide](k8s/README.md) for detailed deployment instructions and troubleshooting.
 
 ---
 
-### 2. Pulumi Infrastructure Code
+### Pulumi Infrastructure Code
+
+StyleMe uses **Pulumi** to automate infrastructure provisioning and deployment on Google Cloud Platform. The Pulumi code manages the complete infrastructure lifecycle including GKE cluster creation, node pool configuration (default and GPU pools), networking setup, and automatic deployment of all Kubernetes manifests. Infrastructure changes are version-controlled, previewed before application, and can be easily replicated across environments. The system supports multiple stacks (dev, staging, prod) and configuration management through Pulumi config, enabling infrastructure as code best practices and reducing manual deployment errors.
 
 #### Prerequisites
 
@@ -337,16 +346,20 @@ pulumi up      # Apply changes
 pulumi destroy  # ⚠️ This deletes everything!
 ```
 
-**Known Issues and Limitations:**
+#### Known Issues and Limitations
+
 - Pulumi requires Node.js and npm. Ensure correct versions are installed.
 - Cluster creation may fail if billing is not enabled or quota limits are reached.
 - GPU nodes require GPU quota in the target region.
+- Pulumi may fail if GCP credentials are not properly configured. Run `gcloud auth application-default login`.
 
 See [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md) for detailed documentation.
 
 ---
 
-### 3. CI/CD Pipeline Implementation (GitHub Actions)
+### CI/CD Pipeline Implementation (GitHub Actions)
+
+StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request, and deploys to Kubernetes on merges to main. The pipeline is configured in `.github/workflows/ci-cd.yml` and executes multiple jobs to ensure code quality, reliability, and automated deployment. The pipeline includes unit test suites for each service/container, integration tests on the codebase, and end-to-end tests that verify the complete pipeline. The system achieves **91.30% test coverage**, significantly exceeding the 60% requirement, with clear documentation of excluded modules. Upon merging changes into the main branch, the pipeline automatically builds Docker images, pushes them to Artifact Registry, and deploys updates to the Kubernetes cluster, ensuring only validated code reaches production.
 
 #### Prerequisites
 
@@ -498,7 +511,8 @@ git push origin main
 - Check individual job logs
 - Review coverage reports in artifacts
 
-**Known Issues and Limitations:**
+#### Known Issues and Limitations
+
 - CI/CD deployment may fail if GCP service account permissions are insufficient
 - Artifact Registry access requires proper authentication
 - GKE cluster must be accessible from GitHub Actions runner
@@ -508,7 +522,9 @@ See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
 
 ---
 
-### 4. Machine Learning Workflow
+### Machine Learning Workflow
+
+The production system integrates a complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers. StyleMe fine-tunes a **FashionCLIP model** (based on OpenAI CLIP ViT-B/32) to learn fashion compatibility relationships from curated product data using a **triplet loss** objective with partial layer freezing. The system enforces validation checks to ensure only models meeting performance thresholds (minimum 70% triplet accuracy and 50% compatibility score) are deployed. Automated retraining is triggered by new data or codebase updates via Kubernetes CronJob, with each experiment automatically generating unique IDs, comprehensive metadata records, and model checkpoints linked to versioned datasets through DVC. The workflow maintains complete reproducibility by linking model versions to training configurations, catalog versions, and GCS source data states.
 
 #### Prerequisites
 
@@ -640,11 +656,13 @@ gsutil cp new_data.json gs://styleme-data-bucket/json/
 kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
 ```
 
-**Known Issues and Limitations:**
+#### Known Issues and Limitations
+
 - Model training requires NVIDIA GPU with CUDA support. Training jobs will fail on CPU-only nodes.
 - Training time varies based on dataset size (typically 2-4 hours for full dataset).
-- Model validation thresholds are hardcoded. Consider making them configurable.
+- Model validation thresholds are hardcoded. Consider making them configurable via ConfigMap.
 - Retraining triggers require manual CronJob configuration. Consider event-driven triggers for production.
+- DVC is configured but requires manual tagging. Automated versioning on data updates is not yet implemented.
 
 See [Model Training Guide](docs/model_training.md) for complete training workflow and configuration details.
 
@@ -661,6 +679,18 @@ See [Model Training Guide](docs/model_training.md) for complete training workflo
 - **Pulumi**: Latest version (for infrastructure automation)
 - **Node.js**: v18+ (for Pulumi)
 - **GPU**: NVIDIA GPU with CUDA support (optional, required for training)
+
+### Cloud Platform Requirements
+
+- **Google Cloud Platform (GCP)** account with:
+  - Billing enabled
+  - Project ID: `styleme-475201` (or configure your own)
+  - Required APIs enabled:
+    - `container.googleapis.com` (GKE)
+    - `compute.googleapis.com` (Compute Engine)
+    - `storage.googleapis.com` (Cloud Storage)
+    - `artifactregistry.googleapis.com` (Artifact Registry)
+  - Service account with appropriate permissions
 
 ### Local Development Setup
 
@@ -806,103 +836,11 @@ make logs                                      # Check logs
 
 ---
 
-## Part II: Application Components
-
-### Documentation Index
-
-All detailed documentation for each component is available in the following guides:
-
-| Section | Topic | Documentation |
-|---------|-------|---------------|
-| [Section 1](#section-1-app-design-setup-and-code-organization) | App Design, Setup, and Code Organization | [Application Design Document](docs/Application%20design%20doc.md) |
-| [Section 2](#section-2-apis-frontend) | APIs & Frontend | [API Integration Guide](docs/api_integration.md) |
-| [Section 3](#section-3-continuous-integration-and-testing) | Continuous Integration and Testing | [CI/CD Guide](CI/README.md) |
-| [Section 4](#section-4-data-versioning-and-reproducibility) | Data Versioning and Reproducibility | [Data Versioning Guide](docs/data_versioning.md) |
-| [Section 5](#section-5-model-fine-tuning) | Model Fine-Tuning | [Model Training Guide](docs/model_training.md) |
-| [Section 6](#section-6-kubernetes-deployment) | Kubernetes Deployment | [K8s Deployment Guide](k8s/README.md) |
-| [Section 7](#section-7-infrastructure-automation) | Infrastructure Automation | [Pulumi Guide](infrastructure/pulumi/README.md) |
-
-**Note**: Each section below provides a brief overview. For complete details, methodology, usage instructions, and technical specifications, please refer to the corresponding documentation linked above.
-
----
-
-### Section 1: App Design, Setup, and Code Organization
-
-StyleMe follows a **containerized microservices architecture** with four specialized services (ingestion, preprocessing, training, and inference) that operate independently while maintaining seamless communication through Docker networking and Kubernetes orchestration. The system processes fashion images through a pipeline that includes data collection, cleaning, model training, and real-time recommendation generation using FAISS-based similarity search. The user interface is a mobile-first React-based SPA built with TypeScript, Vite, and Tailwind CSS that allows users to upload wardrobe items, view their collections organized by category, and receive personalized fashion recommendations. The architecture emphasizes modularity, scalability, and reproducibility through versioned datasets and model checkpoints managed with DVC, with automated testing and code quality checks via CI/CD pipelines, and production deployment on Kubernetes with infrastructure automation via Pulumi.
-
-**Documentation**: See [Application Design Document](docs/Application%20design%20doc.md) for detailed solution architecture, technical architecture, system components, and design patterns.
-
----
-
-### Section 2: APIs & Frontend
+## Frontend
 
 StyleMe provides a comprehensive API interface through the inference service (`containers/inference/api_server.py`) that enables fashion recommendation queries via RESTful API endpoints, command-line, or programmatic access. The system supports file-based input/output workflows where users upload query images and receive JSON responses with ranked product recommendations. The API implements a two-tier search strategy: it first searches the user's personal wardrobe index (if available and similarity scores meet the threshold), and falls back to the catalog index for product recommendations when the wardrobe is empty or no matches are found. The frontend is a React-based single-page application built with TypeScript, Vite, and Tailwind CSS that provides a mobile-first interface for uploading wardrobe items, viewing collections organized by category, and receiving personalized fashion recommendations. The architecture supports seamless integration between the backend inference service and frontend through RESTful API structures, image upload/download capabilities, metadata-rich JSON responses, and per-user session management.
 
 **Documentation**: See [API Integration Guide](docs/api_integration.md) for complete API specifications, frontend integration details, request/response formats, and workflow documentation.
-
----
-
-### Section 3: Continuous Integration and Testing
-
-StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request, and deploys to Kubernetes on merges to main. The pipeline is configured in `.github/workflows/ci-cd.yml` and executes multiple jobs to ensure code quality, reliability, and automated deployment. The **Lint and Code Quality** job performs automated build verification and code quality checks using Flake8. The **Unit Tests** job executes unit test suites with coverage reporting. The **Integration Tests** job tests component interactions. The **End-to-End Tests** job verifies the complete pipeline. The **Coverage Report** job generates and displays code coverage reports with a minimum requirement of 60%. The current coverage stands at **91.30%**, significantly exceeding the minimum requirement. Coverage reports are available in HTML format (`CI/coverage_html/index.html`) and XML format (`CI/coverage.xml`). The **Build Docker Images** job (main branch only) builds and pushes container images to Artifact Registry. The **Deploy to Kubernetes** job (main branch only) automatically deploys updated images to the Kubernetes cluster. All tests pass before deployment, ensuring only validated code reaches production.
-
-**Documentation**: See [CI/CD Guide](CI/README.md) for complete testing methodology, coverage documentation, and CI/CD pipeline details.
-
----
-
-### Section 4: Data Versioning and Reproducibility
-
-StyleMe implements **DVC (Data Version Control)** for managing datasets, model checkpoints, and large artifacts to ensure reproducibility and track data lineage throughout the project lifecycle. The system versions three types of artifacts: catalog indices (FAISS indices, embeddings, and metadata generated from GCS source data), user wardrobes (per-user FAISS indices and embeddings), and model checkpoints (trained model weights automatically linked to the data versions used during training). Source data in Google Cloud Storage is tracked via metadata snapshots, which record which GCS files were used, track gender filters, and maintain history of data states. The versioning system operates at three levels: Git commits for every data change, Git tags for named milestones, and GCS snapshots for source data state. Each experiment record includes the data version reference, GCS snapshot tag, full configuration, and training results, enabling complete reproducibility.
-
-**Documentation**: See [Data Versioning Guide](docs/data_versioning.md) for complete methodology, usage instructions, and reproducibility workflow.
-
----
-
-### Section 5: Model Fine-Tuning
-
-StyleMe fine-tunes a **FashionCLIP model** (based on OpenAI CLIP ViT-B/32) to learn fashion compatibility relationships from curated product data. The fine-tuning process uses a **triplet loss** objective with partial layer freezing to adapt the pre-trained vision-language model to fashion-specific compatibility patterns. Training is performed on versioned datasets tracked via DVC tags, with each experiment automatically generating unique IDs, comprehensive metadata records, and model checkpoints. The system enforces GPU requirements, implements early stopping based on validation accuracy, and optimizes I/O to prevent training interruptions. The production system includes automated retraining triggers that validate model performance and only deploy models meeting performance thresholds.
-
-**Documentation**: See [Model Training Guide](docs/model_training.md) for complete training workflow, configuration details, experiment tracking, and deployment strategies.
-
----
-
-### Section 6: Kubernetes Deployment
-
-StyleMe is deployed to a **Google Kubernetes Engine (GKE)** cluster with full production configuration including ConfigMaps, PersistentVolumeClaims, Jobs for batch processing (ingestion, preprocessing, training), and Deployments for long-running services (inference API). The system demonstrates **reliability and scalability** through Horizontal Pod Autoscaling (HPA) that automatically scales inference pods based on CPU and memory metrics, with demonstrated scaling behavior from 2 to 10 replicas under load. The deployment includes proper resource limits, health checks, and service exposure via LoadBalancer. All Kubernetes manifests are version-controlled and automatically deployed via CI/CD pipeline.
-
-**Documentation**: See [Kubernetes Deployment Guide](k8s/README.md) for complete deployment instructions, scaling demonstrations, and troubleshooting.
-
----
-
-### Section 7: Infrastructure Automation
-
-StyleMe uses **Pulumi** to automate infrastructure provisioning and deployment on Google Cloud Platform. The Pulumi code manages the complete infrastructure lifecycle including GKE cluster creation, node pool configuration (default and GPU pools), networking setup, and automatic deployment of all Kubernetes manifests. Infrastructure changes are version-controlled, previewed before application, and can be easily replicated across environments. The system supports multiple stacks (dev, staging, prod) and configuration management through Pulumi config.
-
-**Documentation**: See [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md) for complete setup instructions, configuration options, and infrastructure management.
-
----
-
-## Public Access and Demo
-
-The application is publicly accessible and ready for demonstration:
-
-- **Production URL**: Available via Kubernetes LoadBalancer service
-- **API Endpoints**: RESTful API for wardrobe management and recommendations
-- **Frontend**: React-based SPA for user interaction
-- **Stability**: Production-ready with health checks and monitoring
-- **Scalability**: Demonstrated through HPA and manual scaling
-
----
-
-## Additional Resources
-
-- [Application Design Document](docs/Application%20design%20doc.md)
-- [API Integration Guide](docs/api_integration.md)
-- [CI/CD Guide](CI/README.md)
-- [Data Versioning Guide](docs/data_versioning.md)
-- [Model Training Guide](docs/model_training.md)
-- [Kubernetes Deployment Guide](k8s/README.md)
-- [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md)
 
 ---
 
