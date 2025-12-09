@@ -136,7 +136,7 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 
 ## Deployment Instructions
 
-### Kubernetes Deployment
+### 1. Kubernetes Deployment
 
 StyleMe is deployed to a production **Google Kubernetes Engine (GKE)** cluster with full production configuration including ConfigMaps, PersistentVolumeClaims, Jobs for batch processing (ingestion, preprocessing, training), and Deployments for long-running services (inference API). The system demonstrates **reliability and scalability** through Horizontal Pod Autoscaling (HPA) that automatically scales inference pods based on CPU and memory metrics, with demonstrated scaling behavior from 2 to 10 replicas under load.
 
@@ -206,7 +206,7 @@ The system demonstrates reliability and scalability through both manual and auto
 
 
 
-### Pulumi Infrastructure Code
+### 2. Pulumi Infrastructure Code
 
 StyleMe uses **Pulumi** to automate infrastructure provisioning and deployment on Google Cloud Platform. The Pulumi code manages the complete infrastructure lifecycle including GKE cluster creation, node pool configuration (default and GPU pools), networking setup, and automatic deployment of all Kubernetes manifests. Infrastructure changes are version-controlled, previewed before application, and can be easily replicated across environments.
 
@@ -257,9 +257,11 @@ The Pulumi deployment process provides a comprehensive view of all infrastructur
 </p>
 
 
-### CI/CD Pipeline Implementation (GitHub Actions)
+### 3. CI/CD Pipeline Implementation (GitHub Actions)
 
 StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request, and deploys to Kubernetes on merges to main. The pipeline includes unit test suites for each service/container, integration tests on the codebase, and end-to-end tests. The system achieves **91.30% test coverage**, exceeding the 60% requirement, with clear documentation of excluded modules.
+
+The CI/CD pipeline serves as the backbone of our deployment automation, ensuring code quality, reliability, and consistent deployments. Every code change triggers a series of automated checks including linting, unit testing, integration testing, and end-to-end validation before any deployment occurs. For merges to the main branch, the pipeline automatically builds Docker images, pushes them to Artifact Registry, and deploys updates to the Kubernetes cluster, creating a seamless development-to-production workflow. This automation reduces manual errors, accelerates deployment cycles, and provides confidence that only tested and validated code reaches production environments.
 
 #### Prerequisites
 
@@ -272,6 +274,25 @@ StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that 
 >   - `GCP_SA_KEY`: Service account JSON key
 
 #### Set Up CI/CD Pipeline with GitHub Actions
+
+> **Deploy CI/CD Pipeline:**
+> ```bash
+> # 1. Create GCP Service Account
+> gcloud iam service-accounts create github-actions --display-name="GitHub Actions CI/CD"
+> gcloud projects add-iam-policy-binding styleme-475201 \
+>   --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
+>   --role="roles/container.developer"
+> gcloud projects add-iam-policy-binding styleme-475201 \
+>   --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
+>   --role="roles/storage.admin"
+>
+> # 2. Create and add secret to GitHub
+> gcloud iam service-accounts keys create key.json \
+>   --iam-account=github-actions@styleme-475201.iam.gserviceaccount.com
+> # Add key.json contents as GCP_SA_KEY secret in GitHub repository settings
+> ```
+>
+> Once configured, the pipeline automatically runs on every push and pull request. Merges to main trigger automatic deployment to Kubernetes.
 
 **Pipeline Jobs:**
 
@@ -309,26 +330,9 @@ StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that 
 - **Integration Tests**: `test_pipeline.py` - Pipeline component interactions
 - **End-to-End Tests**: `test_e2e.py` - Complete pipeline verification
 
-**Setup Instructions:**
-```bash
-# 1. Create GCP Service Account
-gcloud iam service-accounts create github-actions --display-name="GitHub Actions CI/CD"
-gcloud projects add-iam-policy-binding styleme-475201 \
-  --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
-  --role="roles/container.developer"
-gcloud projects add-iam-policy-binding styleme-475201 \
-  --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
-  --role="roles/storage.admin"
-
-# 2. Create and add secret to GitHub
-gcloud iam service-accounts keys create key.json \
-  --iam-account=github-actions@styleme-475201.iam.gserviceaccount.com
-# Add key.json contents as GCP_SA_KEY secret in GitHub repository settings
-```
-
 See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
 
-### Machine Learning Workflow
+### 4. Machine Learning Workflow
 
 The production system integrates a complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers. StyleMe fine-tunes a **FashionCLIP model** (based on OpenAI CLIP ViT-B/32) to learn fashion compatibility relationships using a **triplet loss** objective. The system enforces validation checks to ensure only models meeting performance thresholds (minimum 70% triplet accuracy and 50% compatibility score) are deployed. Automated retraining is triggered by new data or codebase updates via Kubernetes CronJob, with complete reproducibility through DVC versioning.
 
