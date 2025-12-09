@@ -9,6 +9,31 @@ StyleMe
 ## Project Description
 StyleMe is an AI-powered personal wardrobe stylist that helps users create cohesive outfits from their existing wardrobes. The system uses a fine-tuned FashionCLIP model to learn fashion compatibility relationships from curated product data and "complete the look" information. By integrating data processing pipelines with deep learning-based recommendation algorithms, StyleMe provides intelligent outfit suggestions that understand real-world style relationships and personalize recommendations based on visual and textual features.
 
+## 📁 Project Structure
+
+```
+StyleMe/
+├── containers/          # Docker container definitions
+│   ├── ingestion/      # Data collection service
+│   ├── preprocessing/  # Data cleaning service
+│   ├── training/       # Model training service
+│   └── inference/      # Inference service
+├── src/                # Source code
+│   ├── datapipeline/   # Data processing module
+│   └── models/         # Model training and inference
+├── CI/                 # CI/CD configuration and tests
+├── infrastructure/     # Pulumi infrastructure automation
+├── k8s/                # Kubernetes deployment manifests
+├── data_versioning/    # DVC configuration
+└── docs/               # Documentation
+```
+
+---
+
+## Milestone 5 Overview
+
+This milestone focused on **production deployment with Kubernetes, infrastructure automation, and comprehensive CI/CD**. We deployed the full application to a Google Kubernetes Engine (GKE) cluster with demonstrated scalability through horizontal pod autoscaling. We automated infrastructure provisioning using Pulumi to manage the Kubernetes cluster, node pools, and application deployments. We extended our GitHub Actions CI/CD pipeline to support automated deployment to Kubernetes upon merges to main, with comprehensive test coverage at 91.30% (exceeding the 60% requirement). We integrated the complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers into the production system. The application is publicly accessible, stable, and ready for demonstration.
+
 ---
 
 ## Prerequisites and Setup Instructions
@@ -70,31 +95,67 @@ gcloud auth configure-docker us-central1-docker.pkg.dev
 make setup  # Creates necessary directories
 ```
 
+### Kubernetes Deployment Prerequisites
+
+- **Kubernetes cluster** (GKE or EKS) with kubectl configured
+- **Docker images** built and pushed to a container registry (GCR, ECR, or Docker Hub)
+- **GCP credentials** configured (for GCS access)
+- **GPU nodes** (for training job) - if using GKE, ensure you have a GPU node pool
+
+### Pulumi Infrastructure Prerequisites
+
+- **Pulumi CLI** installed:
+  ```bash
+  curl -fsSL https://get.pulumi.com | sh
+  ```
+- **Node.js** (v18+) and npm installed
+- **GCP Account** with billing enabled and required APIs enabled
+- **GCP Credentials** configured:
+  ```bash
+  gcloud auth login
+  gcloud auth application-default login
+  ```
+
+### CI/CD Pipeline Prerequisites
+
+- **GitHub repository** with Actions enabled
+- **GCP service account** with permissions for:
+  - Artifact Registry (push/pull images)
+  - GKE (deploy to cluster)
+  - Cloud Storage (access data)
+- **GitHub Secrets** configured:
+  - `GCP_SA_KEY`: Service account JSON key
+
+### Machine Learning Workflow Prerequisites
+
+- **GPU support** for model training (NVIDIA GPU with CUDA)
+- **GCS access** for data storage and model checkpoints
+- **DVC** configured for data versioning
+- **Kubernetes cluster** with GPU nodes (for production training)
+
 ---
 
-## Technical Implementation
-
----
+## Deployment Instructions
 
 ### Kubernetes Deployment
 
 StyleMe is deployed to a production **Google Kubernetes Engine (GKE)** cluster with full production configuration including ConfigMaps, PersistentVolumeClaims, Jobs for batch processing (ingestion, preprocessing, training), and Deployments for long-running services (inference API). The system demonstrates **reliability and scalability** through Horizontal Pod Autoscaling (HPA) that automatically scales inference pods based on CPU and memory metrics, with demonstrated scaling behavior from 2 to 10 replicas under load.
 
-#### Deployment Steps
+#### Deploy the Application to Kubernetes Cluster
 
-**1. Build and Push Docker Images**
+**Step 1: Build and Push Docker Images**
 ```bash
 export REGISTRY=us-central1-docker.pkg.dev/styleme-475201/styleme-repo
 export IMAGE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
 ./scripts/build_and_push_images.sh
 ```
 
-**2. Update Kubernetes Manifests**
+**Step 2: Update Kubernetes Manifests**
 ```bash
 ./scripts/update_image_names.sh $IMAGE_TAG
 ```
 
-**3. Deploy to Kubernetes**
+**Step 3: Deploy to Kubernetes**
 ```bash
 kubectl apply -f k8s/01-configmap.yaml
 kubectl apply -f k8s/02-persistent-volume-claim.yaml
@@ -111,66 +172,57 @@ kubectl apply -f k8s/07-horizontal-pod-autoscaler.yaml
 kubectl wait --for=condition=available deployment/styleme-inference --timeout=300s
 ```
 
-**4. Verify Deployment**
+**Step 4: Verify Deployment**
 ```bash
 kubectl get pods -l app=styleme
 kubectl get service styleme-inference-service
 EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 ```
 
-#### Demonstrating Scaling Behavior
+#### Demonstrate Basic Scaling Behavior
 
 **Manual Scaling:**
 ```bash
+# Scale up inference deployment
 kubectl scale deployment styleme-inference --replicas=4
 kubectl get pods -l component=inference -w
+
+# Scale down
+kubectl scale deployment styleme-inference --replicas=2
 ```
 
 **Automatic Scaling (HPA):**
 The Horizontal Pod Autoscaler automatically scales between 2-10 replicas based on CPU utilization (target: 70%):
 ```bash
+# Check HPA status
 kubectl get hpa styleme-inference-hpa
+
 # Generate load to trigger scaling
 for i in {1..100}; do curl http://$EXTERNAL_IP/health & done
+
+# Watch HPA respond
+kubectl get hpa styleme-inference-hpa -w
 kubectl get pods -l component=inference -w
 ```
 
 The cluster demonstrates reliability by automatically scaling pods up/down based on load, maintaining service availability during scaling events, and distributing load across multiple replicas.
 
-#### Usage Examples
-
-```bash
-# Health check
-curl http://$EXTERNAL_IP/health
-
-# Upload image and get recommendations
-curl -X POST http://$EXTERNAL_IP/analyze_item \
-  -F "image=@/path/to/image.jpg" \
-  -F "user_id=user_001"
-
-# Get recommendations
-curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
-```
-
 See [Kubernetes Deployment Guide](k8s/README.md) for detailed instructions.
-
----
 
 ### Pulumi Infrastructure Code
 
 StyleMe uses **Pulumi** to automate infrastructure provisioning and deployment on Google Cloud Platform. The Pulumi code manages the complete infrastructure lifecycle including GKE cluster creation, node pool configuration (default and GPU pools), networking setup, and automatic deployment of all Kubernetes manifests. Infrastructure changes are version-controlled, previewed before application, and can be easily replicated across environments.
 
-#### Setup
+#### Use Pulumi to Automate Infrastructure Provisioning and Deployment
 
-**1. Install Pulumi**
+**Setup:**
 ```bash
+# Install Pulumi
 curl -fsSL https://get.pulumi.com | sh
 cd infrastructure/pulumi
 npm install
-```
 
-**2. Configure Pulumi**
-```bash
+# Configure Pulumi
 pulumi login
 pulumi stack init dev
 pulumi config set gcp:project styleme-475201
@@ -181,18 +233,19 @@ pulumi config set nodeCount 2
 pulumi config set gpuNodeCount 1
 ```
 
-#### Deployment
-
-**Preview and Deploy:**
+**Deploy Infrastructure:**
 ```bash
-pulumi preview  # Preview changes
-pulumi up       # Deploy infrastructure
+# Preview changes
+pulumi preview
+
+# Deploy infrastructure (creates GKE cluster, node pools, and all Kubernetes resources)
+pulumi up
 ```
 
-This automatically creates:
-- GKE cluster with default and GPU node pools
-- All Kubernetes resources from `k8s/` directory
-- Networking and storage configuration
+This automatically provisions:
+- **GKE Cluster** with default and GPU node pools
+- **Kubernetes Resources**: All resources from `k8s/` directory (ConfigMap, PVC, Jobs, Deployments, HPA)
+- **Networking and Storage** configuration
 
 **Get Cluster Connection:**
 ```bash
@@ -200,37 +253,27 @@ pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
 # Or: gcloud container clusters get-credentials styleme-cluster --zone us-central1-a
 ```
 
-#### Usage Examples
-
-```bash
-# Update infrastructure
-pulumi preview && pulumi up
-
-# Destroy infrastructure
-pulumi destroy  # ⚠️ Deletes everything
-```
-
 See [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md) for detailed documentation.
-
----
 
 ### CI/CD Pipeline Implementation (GitHub Actions)
 
-StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request, and deploys to Kubernetes on merges to main. The pipeline includes unit test suites for each service/container, integration tests on the codebase, and end-to-end tests. The system achieves **91.30% test coverage**, exceeding the 60% requirement, with clear documentation of excluded modules. Upon merging changes into the main branch, the pipeline automatically builds Docker images, pushes them to Artifact Registry, and deploys updates to the Kubernetes cluster.
+StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that automatically runs on every push and pull request, and deploys to Kubernetes on merges to main. The pipeline includes unit test suites for each service/container, integration tests on the codebase, and end-to-end tests. The system achieves **91.30% test coverage**, exceeding the 60% requirement, with clear documentation of excluded modules.
 
-#### Pipeline Jobs
+#### Set Up CI/CD Pipeline with GitHub Actions
+
+**Pipeline Jobs:**
 
 **For All Branches:**
 1. **Lint and Code Quality** - Flake8 code quality checks
-2. **Unit Tests** - Unit test suite with coverage (91.30% coverage)
-3. **Integration Tests** - Tests multiple modules working together
+2. **Unit Tests** - Unit test suite for each service/container
+3. **Integration Tests** - Runs integration tests on the codebase
 4. **End-to-End Tests** - Complete pipeline verification
-5. **Coverage Report** - Validates 60% minimum requirement
+5. **Coverage Report** - Validates minimum 60% coverage requirement
 6. **CI Summary** - Aggregates all check results
 
 **For Main Branch Only:**
-7. **Build Docker Images** - Builds and pushes to Artifact Registry
-8. **Deploy to Kubernetes** - Automatically deploys to GKE cluster
+7. **Build Docker Images** - Builds container images for all services
+8. **Deploy to Kubernetes** - Deploys updates to the Kubernetes cluster upon merging changes into the main branch
 
 #### Test Coverage
 
@@ -254,10 +297,9 @@ StyleMe implements a comprehensive CI/CD pipeline using **GitHub Actions** that 
 - **Integration Tests**: `test_pipeline.py` - Pipeline component interactions
 - **End-to-End Tests**: `test_e2e.py` - Complete pipeline verification
 
-#### Setup Instructions
-
-**1. Create GCP Service Account**
+**Setup Instructions:**
 ```bash
+# 1. Create GCP Service Account
 gcloud iam service-accounts create github-actions --display-name="GitHub Actions CI/CD"
 gcloud projects add-iam-policy-binding styleme-475201 \
   --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
@@ -265,43 +307,20 @@ gcloud projects add-iam-policy-binding styleme-475201 \
 gcloud projects add-iam-policy-binding styleme-475201 \
   --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
   --role="roles/storage.admin"
-```
 
-**2. Create and Add Secret to GitHub**
-```bash
+# 2. Create and add secret to GitHub
 gcloud iam service-accounts keys create key.json \
   --iam-account=github-actions@styleme-475201.iam.gserviceaccount.com
 # Add key.json contents as GCP_SA_KEY secret in GitHub repository settings
 ```
 
-**3. Verify Setup**
-- Push to `main` branch
-- Check GitHub Actions tab for pipeline execution
-- Verify deployment to Kubernetes cluster
-
-#### Usage Examples
-
-```bash
-# Trigger deployment by merging to main
-git checkout main
-git merge feature-branch
-git push origin main
-
-# Pipeline automatically:
-# 1. Runs all tests
-# 2. Builds Docker images
-# 3. Deploys to Kubernetes
-```
-
 See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
-
----
 
 ### Machine Learning Workflow
 
-The production system integrates a complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers. StyleMe fine-tunes a **FashionCLIP model** (based on OpenAI CLIP ViT-B/32) to learn fashion compatibility relationships using a **triplet loss** objective. The system enforces validation checks to ensure only models meeting performance thresholds (minimum 70% triplet accuracy and 50% compatibility score) are deployed. Automated retraining is triggered by new data or codebase updates via Kubernetes CronJob, with complete reproducibility through DVC versioning linking model versions to training configurations and data states.
+The production system integrates a complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers. StyleMe fine-tunes a **FashionCLIP model** (based on OpenAI CLIP ViT-B/32) to learn fashion compatibility relationships using a **triplet loss** objective. The system enforces validation checks to ensure only models meeting performance thresholds (minimum 70% triplet accuracy and 50% compatibility score) are deployed. Automated retraining is triggered by new data or codebase updates via Kubernetes CronJob, with complete reproducibility through DVC versioning.
 
-#### Workflow Components
+#### Demonstrate Production-Ready ML Workflow
 
 **1. Data Preprocessing**
 - Automatically processes new data from GCS
@@ -328,33 +347,16 @@ The production system integrates a complete ML workflow including data preproces
 - Triggers on new data or code updates
 - Validates and deploys improved models
 
-#### Usage Examples
-
-**Local Training:**
+**Deployment:**
 ```bash
-cd src/models/train
-python run_fine_tuning.py \
-  --config fine_tune_config.py \
-  --data-version catalog-v_men_women_20251123
-```
+# Preprocessing job runs automatically on deployment
+kubectl apply -f k8s/04-preprocessing-job.yaml
 
-**Production Training (Kubernetes):**
-```bash
-# Training job runs automatically on deployment
-# Or trigger manually:
-kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
+# Training job runs on GPU nodes
+kubectl apply -f k8s/05-training-job.yaml
+kubectl logs job/styleme-training -f
 
-# Monitor training
-kubectl logs job/styleme-retraining-<timestamp> -f
-```
-
-**Trigger Retraining on New Data:**
-```bash
-# Upload new data to GCS
-gsutil cp new_data.json gs://styleme-data-bucket/json/
-
-# Retraining CronJob will detect and process automatically
-# Or trigger immediately:
+# Automated retraining via CronJob
 kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
 ```
 
@@ -365,14 +367,6 @@ Models must meet:
 - Validation loss improvement
 
 See [Model Training Guide](docs/model_training.md) for complete training workflow.
-
----
-
-## Frontend
-
-StyleMe provides a comprehensive API interface through the inference service (`containers/inference/api_server.py`) that enables fashion recommendation queries via RESTful API endpoints. The API implements a two-tier search strategy: it first searches the user's personal wardrobe index (if available and similarity scores meet the threshold), and falls back to the catalog index for product recommendations when the wardrobe is empty or no matches are found. The frontend is a React-based single-page application built with TypeScript, Vite, and Tailwind CSS that provides a mobile-first interface for uploading wardrobe items, viewing collections organized by category, and receiving personalized fashion recommendations. The architecture supports seamless integration between the backend inference service and frontend through RESTful API structures, image upload/download capabilities, metadata-rich JSON responses, and per-user session management.
-
-**Documentation**: See [API Integration Guide](docs/api_integration.md) for complete API specifications, frontend integration details, request/response formats, and workflow documentation.
 
 ---
 
@@ -429,6 +423,95 @@ curl -X POST http://$EXTERNAL_IP/analyze_item \
 
 # Get recommendations
 curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
+```
+
+### Kubernetes Operations
+
+**Manual Scaling:**
+```bash
+kubectl scale deployment styleme-inference --replicas=4
+kubectl get pods -l component=inference -w
+```
+
+**Monitor HPA:**
+```bash
+kubectl get hpa styleme-inference-hpa
+kubectl get pods -l component=inference -w
+```
+
+### Pulumi Operations
+
+**Update Infrastructure:**
+```bash
+cd infrastructure/pulumi
+pulumi preview && pulumi up
+```
+
+**Destroy Infrastructure:**
+```bash
+pulumi destroy  # ⚠️ Deletes everything
+```
+
+### CI/CD Operations
+
+**Trigger Deployment:**
+```bash
+# Merge PR to main branch
+git checkout main
+git merge feature-branch
+git push origin main
+
+# Pipeline automatically:
+# 1. Runs all tests
+# 2. Builds Docker images
+# 3. Deploys to Kubernetes
+```
+
+**Check Pipeline Status:**
+- View in GitHub Actions tab
+- Check individual job logs
+- Review coverage reports in artifacts
+
+### Machine Learning Workflow
+
+**Local Training:**
+```bash
+cd src/models/train
+python run_fine_tuning.py \
+  --config fine_tune_config.py \
+  --data-version catalog-v_men_women_20251123
+```
+
+**Production Training (Kubernetes):**
+```bash
+# Training job runs automatically on deployment
+# Or trigger manually:
+kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
+
+# Monitor training
+kubectl logs job/styleme-retraining-<timestamp> -f
+```
+
+**Trigger Retraining on New Data:**
+```bash
+# Upload new data to GCS
+gsutil cp new_data.json gs://styleme-data-bucket/json/
+
+# Retraining CronJob will detect and process automatically
+# Or trigger immediately:
+kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
+```
+
+**Check Model Performance:**
+```bash
+# View experiment results
+ls src/models/train/experiments/
+
+# Check model checkpoints in GCS
+gsutil ls gs://styleme-production/experiments/
+
+# View training history
+cat src/models/train/experiments/exp_*/training_history_latest.json
 ```
 
 ---
@@ -493,24 +576,11 @@ curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
 
 ---
 
-## Project Structure
+## Frontend
 
-```
-StyleMe/
-├── containers/          # Docker container definitions
-│   ├── ingestion/      # Data collection service
-│   ├── preprocessing/  # Data cleaning service
-│   ├── training/       # Model training service
-│   └── inference/       # Inference service
-├── src/                # Source code
-│   ├── datapipeline/   # Data processing module
-│   └── models/         # Model training and inference
-├── CI/                 # CI/CD configuration and tests
-├── infrastructure/     # Pulumi infrastructure automation
-├── k8s/                # Kubernetes deployment manifests
-├── data_versioning/    # DVC configuration
-└── docs/               # Documentation
-```
+StyleMe provides a comprehensive API interface through the inference service (`containers/inference/api_server.py`) that enables fashion recommendation queries via RESTful API endpoints. The API implements a two-tier search strategy: it first searches the user's personal wardrobe index (if available and similarity scores meet the threshold), and falls back to the catalog index for product recommendations when the wardrobe is empty or no matches are found. The frontend is a React-based single-page application built with TypeScript, Vite, and Tailwind CSS that provides a mobile-first interface for uploading wardrobe items, viewing collections organized by category, and receiving personalized fashion recommendations. The architecture supports seamless integration between the backend inference service and frontend through RESTful API structures, image upload/download capabilities, metadata-rich JSON responses, and per-user session management.
+
+**Documentation**: See [API Integration Guide](docs/api_integration.md) for complete API specifications, frontend integration details, request/response formats, and workflow documentation.
 
 ---
 
