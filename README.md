@@ -446,11 +446,9 @@ This section documents key limitations and common issues encountered during depl
 
 2. **Storage Configuration**: The PersistentVolumeClaim uses the default storage class. For production, consider using NFS or other `ReadWriteMany` storage for shared access. PVCs may fail to bind if the storage class doesn't support the requested access mode.
 
-3. **Test Coverage**: While we achieve 91.30% coverage on tested modules, some modules are intentionally excluded (tested via integration/E2E tests, require GPU/GCS access, or are build scripts).
+3. **CI/CD Failures**: If CI/CD deployment fails, check GCP service account permissions, Artifact Registry access, GKE cluster connectivity, and image tag format.
 
-4. **CI/CD Failures**: If CI/CD deployment fails, check GCP service account permissions, Artifact Registry access, GKE cluster connectivity, and image tag format.
-
-5. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
+4. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
 
 ### Workarounds
 
