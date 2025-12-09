@@ -1,0 +1,8 @@
+{
+  "user_id": "sophie",
+  "built_at": "2025-10-24T22:43:51.849247",
+  "model": "FashionCLIP",
+  "dimension": 512,
+  "num_items": 17,
+  "index_type": "IndexFlatL2"
+}

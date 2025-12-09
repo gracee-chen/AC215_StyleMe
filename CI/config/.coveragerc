@@ -1,0 +1,55 @@
+[run]
+# Coverage configuration for StyleMe CI
+source = src,containers
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */experiments/*
+    */catalog/*
+    */wardrobes/*
+    */data/*
+    */logs/*
+    */results/*
+    */queries/*
+    */examples/*
+    */__init__.py
+    */setup.py
+    */config.py
+    */entrypoint.sh
+    */Dockerfile
+    */README.md
+    */TEST.md
+    */BACKGROUND_REMOVAL_GUIDE.md
+    */CONTAINERIZATION.md
+    */INFERENCE_*.md
+    */run_training.sh
+    */build_*.py
+    */retry_failed.py
+    */containers/inference/inference_service.py
+    */src/models/train/model_training.py
+    */src/datapipeline/dataloader.py
+    */src/datapipeline/bg_removal/batch_processor.py
+
+[report]
+# Minimum coverage requirement: 50%
+precision = 2
+show_missing = True
+skip_covered = False
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    @abstractmethod
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+
+[html]
+directory = CI/coverage_html
+
+[xml]
+output = CI/coverage.xml
+

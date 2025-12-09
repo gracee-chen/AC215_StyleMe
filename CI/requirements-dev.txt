@@ -1,0 +1,30 @@
+# Development dependencies for CI/CD pipeline
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-xdist>=3.3.1
+pytest-timeout>=2.1.0
+
+# Linting
+flake8>=6.1.0
+flake8-docstrings>=1.7.0
+flake8-import-order>=0.18.2
+
+# Coverage
+coverage>=7.3.0
+
+# Test utilities
+mock>=5.1.0
+responses>=0.23.1
+
+# Common dependencies (needed for tests)
+# Pin exact compatible versions (tested stable in CI - avoids register_pytree_node error)
+torch==2.1.2
+torchvision==0.16.2
+numpy==1.26.4
+transformers==4.35.2
+huggingface-hub>=0.20.0,<0.22.0
+Pillow>=9.0.0
+pandas>=1.5.0
+

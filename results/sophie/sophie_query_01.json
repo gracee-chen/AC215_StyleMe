@@ -1,0 +1,50 @@
+{
+  "user_id": "sophie",
+  "query_image": "/app/queries/sophie/sophie_query_01/cloth_02555.jpg",
+  "timestamp": "2025-10-24T22:56:27.750332",
+  "used_wardrobe": false,
+  "threshold": 0.5,
+  "items": [
+    {
+      "id": "32125782",
+      "title": "lace-up derby shoes",
+      "description": "lace-up derby shoes",
+      "brand": "Paul Smith",
+      "price": "$850",
+      "url": "https://www.farfetch.com/shopping/men/paul-smith-lace-up-derby-shoes-item-32125782.aspx",
+      "category": "Men, Shoes, Derby & Oxford Shoes, Derby Shoes",
+      "gender": "men",
+      "image_path": "32125782_index1.jpg",
+      "similarity": 0.5532383322715759,
+      "rank": 1
+    },
+    {
+      "id": "24138086",
+      "title": "P001 skinny jeans",
+      "description": "P001 skinny jeans",
+      "brand": "Purple Brand",
+      "price": "$250",
+      "url": "https://www.farfetch.com/shopping/men/purple-brand-p001-skinny-jeans-item-24138086.aspx?page=17&view=90",
+      "category": "Men, Clothing, Denim, Skinny Jeans",
+      "gender": "men",
+      "image_path": "24138086_index1.jpg",
+      "similarity": 0.5134938955307007,
+      "rank": 2
+    },
+    {
+      "id": "19774342",
+      "title": "Tech multi-pocket backpack",
+      "description": "GANNI offers accessories in eco-friendly materials, reflecting the label's conscious ethos. This multi-pocket Tech backpack is one such piece, made from recycled polyester.",
+      "brand": "GANNI",
+      "price": "R$ 2.780",
+      "url": "https://www.farfetch.com/br/shopping/women/ganni-tech-multi-pocket-backpack-item-19774342.aspx?page=8",
+      "category": "Women, Bags, Backpacks",
+      "gender": "women",
+      "image_path": "19774342_index1.jpg",
+      "similarity": 0.4978503882884979,
+      "rank": 3
+    }
+  ],
+  "num_results": 3,
+  "fallback_reason": "low_score"
+}

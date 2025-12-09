@@ -1,0 +1,6 @@
+# Version constraints to prevent incompatible upgrades
+numpy==1.26.4
+torch==2.1.2
+torchvision==0.16.2
+transformers==4.35.2
+

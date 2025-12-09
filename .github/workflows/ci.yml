@@ -1,0 +1,215 @@
+name: Continuous Integration and Testing
+
+on:
+  push:
+    branches: [ main, master, develop, milestone*, CI2.0 ]
+  pull_request:
+    branches: [ main, master, develop, milestone*, CI2.0 ]
+
+jobs:
+  build-and-lint:
+    name: Build and Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Clean up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+    
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1 libglib2.0-0
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Uninstall any existing incompatible versions first
+        pip uninstall -y torch torchvision numpy transformers || true
+        # Install exact compatible versions FIRST with --force-reinstall (tested stable - avoids register_pytree_node error)
+        pip install --force-reinstall --no-cache-dir "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
+        # Install CI dependencies with constraints file to prevent upgrades
+        pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
+        # Ensure pytest-xdist is installed for parallel test execution
+        pip install --no-cache-dir pytest-xdist || pip install pytest-xdist
+        # Install project dependencies with constraints (prevent NumPy/PyTorch/transformers upgrades)
+        pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
+        pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
+        pip install --no-cache-dir -r containers/preprocessing/requirements.txt -c CI/constraints.txt || true
+        # Verify versions and fail if wrong (PyTorch version may include CUDA suffix like +cu121)
+        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__.startswith('2.1.2'), f'PyTorch {torch.__version__} does not start with 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Clean pip cache to save space
+        pip cache purge || true
+    
+    - name: Run Flake8 linting
+      run: |
+        flake8 src/ containers/ scripts/ --config=CI/config/.flake8 --exclude=containers/inference/build_catalog_index.py
+      continue-on-error: false
+    
+    - name: Check code formatting
+      run: |
+        flake8 --statistics --count src/ containers/ scripts/ --config=CI/config/.flake8 --exclude=containers/inference/build_catalog_index.py
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Clean up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /opt/hostedtoolcache/CodeQL
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+    
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1 libglib2.0-0
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Uninstall any existing incompatible versions first
+        pip uninstall -y torch torchvision numpy transformers || true
+        # Install exact compatible versions FIRST with --force-reinstall (tested stable - avoids register_pytree_node error)
+        pip install --force-reinstall --no-cache-dir "torch==2.1.2" "torchvision==0.16.2" "numpy==1.26.4" "transformers==4.35.2" "huggingface-hub>=0.20.0,<0.22.0"
+        # Install CI dependencies with constraints file to prevent upgrades
+        pip install --no-cache-dir -r CI/requirements-dev.txt -c CI/constraints.txt
+        # Ensure pytest-xdist is installed for parallel test execution
+        pip install --no-cache-dir pytest-xdist || pip install pytest-xdist
+        # Install project dependencies with constraints (prevent NumPy/PyTorch/transformers upgrades)
+        pip install --no-cache-dir -r containers/training/requirements.txt -c CI/constraints.txt || true
+        pip install --no-cache-dir -r containers/inference/requirements.txt -c CI/constraints.txt || true
+        pip install --no-cache-dir -r containers/preprocessing/requirements.txt -c CI/constraints.txt || true
+        # Verify versions and fail if wrong (PyTorch version may include CUDA suffix like +cu121)
+        python -c "import numpy; import torch; import transformers; assert numpy.__version__ == '1.26.4', f'NumPy {numpy.__version__} != 1.26.4'; assert torch.__version__.startswith('2.1.2'), f'PyTorch {torch.__version__} does not start with 2.1.2'; assert transformers.__version__ == '4.35.2', f'Transformers {transformers.__version__} != 4.35.2'; print(f'✅ NumPy: {numpy.__version__}'); print(f'✅ PyTorch: {torch.__version__}'); print(f'✅ Transformers: {transformers.__version__}')"
+        # Clean pip cache to save space
+        pip cache purge || true
+    
+    - name: Run tests with coverage (excluding slow tests)
+      run: |
+        cd /home/runner/work/AC215_StyleMe/AC215_StyleMe || cd $GITHUB_WORKSPACE
+        python -c "import sys; print('Python path:', sys.path[:3])"
+        python -c "import os; print('Working dir:', os.getcwd())"
+        # Run all tests except slow ones, with coverage, in parallel
+        pytest CI/tests/ \
+          -m "not slow" \
+          --cov=src \
+          --cov=containers \
+          --cov-config=CI/config/.coveragerc \
+          --cov-report=term-missing \
+          --cov-report=xml:CI/coverage.xml \
+          --cov-report=html:CI/coverage_html \
+          --cov-fail-under=50 \
+          -n auto \
+          --dist=worksteal \
+          -v \
+          --tb=short \
+          -c CI/config/pytest.ini \
+          --rootdir=.
+    
+    # Slow tests are skipped - they require GCS access and full model setup
+    # Uncomment below to run slow tests (they are optional and may fail)
+    # - name: Run slow tests (optional)
+    #   run: |
+    #     pytest CI/tests/ -m "slow" -v --tb=short -c CI/config/pytest.ini --rootdir=.
+    #   continue-on-error: true  # Slow tests are optional
+
+  coverage:
+    name: Report Coverage
+    runs-on: ubuntu-latest
+    needs: [build-and-lint, test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r CI/requirements-dev.txt
+        pip install -r containers/training/requirements.txt || true
+    
+    - name: Generate coverage report (fast)
+      run: |
+        # Only run non-slow tests for coverage to save time
+        pytest CI/tests/ \
+          -m "not slow" \
+          --cov=src \
+          --cov=containers \
+          --cov-config=CI/config/.coveragerc \
+          --cov-report=term \
+          --cov-report=xml:CI/coverage.xml \
+          --cov-report=html:CI/coverage_html \
+          --cov-fail-under=50 \
+          -n auto \
+          -v \
+          --tb=short
+    
+    - name: Upload coverage to artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          CI/coverage.xml
+          CI/coverage_html/
+    
+    - name: Coverage summary
+      run: |
+        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Coverage reports generated:" >> $GITHUB_STEP_SUMMARY
+        echo "- XML: CI/coverage.xml" >> $GITHUB_STEP_SUMMARY
+        echo "- HTML: CI/coverage_html/" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Minimum coverage requirement: **50%**" >> $GITHUB_STEP_SUMMARY
+
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-lint, test, coverage]
+    if: always()
+    
+    steps:
+    - name: CI Status
+      run: |
+        echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Build and Lint: ${{ needs.build-and-lint.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Coverage: ${{ needs.coverage.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "All checks must pass for merge." >> $GITHUB_STEP_SUMMARY
+
