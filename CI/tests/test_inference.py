@@ -99,7 +99,7 @@ class TestBackgroundRemovalIntegration:
         wardrobes_dir.mkdir()
         
         # Mock BackgroundRemover to avoid model download
-        with patch('containers.inference.inference_service.BackgroundRemover') as mock_bg:
+        with patch('src.datapipeline.bg_removal.background_removal.BackgroundRemover') as mock_bg:
             mock_instance = Mock()
             mock_bg.return_value = mock_instance
             
@@ -142,7 +142,7 @@ class TestBackgroundRemovalIntegration:
         # Mock the service components
         with patch('containers.inference.inference_service.InferenceService._load_model') as mock_model, \
              patch('containers.inference.inference_service.InferenceService._load_catalog') as mock_catalog, \
-             patch('containers.inference.inference_service.BackgroundRemover') as mock_bg:
+             patch('src.datapipeline.bg_removal.background_removal.BackgroundRemover') as mock_bg:
             
             # Setup mocks
             mock_model_instance = Mock()

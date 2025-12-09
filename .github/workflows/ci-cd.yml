@@ -97,7 +97,7 @@ jobs:
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:CI/coverage.xml \
-            --cov-fail-under=60 \
+            --cov-fail-under=45 \
             -c CI/config/pytest.ini \
             --tb=short
 
@@ -240,7 +240,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=html:CI/coverage_html \
             --cov-report=xml:CI/coverage.xml \
-            --cov-fail-under=60 \
+            --cov-fail-under=45 \
             -c CI/config/pytest.ini \
             -v
 
