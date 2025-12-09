@@ -72,25 +72,25 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 
 #### System Requirements
 
-- **Operating System**: Linux, macOS, or Windows with WSL2
-- **Python**: 3.9+ (3.10 recommended)
-- **Docker**: 20.10+ with Docker Compose
-- **Kubernetes**: kubectl 1.24+ (for deployment)
-- **Pulumi**: Latest version (for infrastructure automation)
-- **Node.js**: v18+ (for Pulumi)
-- **GPU**: NVIDIA GPU with CUDA support (optional, required for training)
+> - **Operating System**: Linux, macOS, or Windows with WSL2
+> - **Python**: 3.9+ (3.10 recommended)
+> - **Docker**: 20.10+ with Docker Compose
+> - **Kubernetes**: kubectl 1.24+ (for deployment)
+> - **Pulumi**: Latest version (for infrastructure automation)
+> - **Node.js**: v18+ (for Pulumi)
+> - **GPU**: NVIDIA GPU with CUDA support (optional, required for training)
 
 #### Cloud Platform Requirements
 
-- **Google Cloud Platform (GCP)** account with:
-  - Billing enabled
-  - Project ID: `styleme-475201` (or configure your own)
-  - Required APIs enabled:
-    - `container.googleapis.com` (GKE)
-    - `compute.googleapis.com` (Compute Engine)
-    - `storage.googleapis.com` (Cloud Storage)
-    - `artifactregistry.googleapis.com` (Artifact Registry)
-  - Service account with appropriate permissions
+> - **Google Cloud Platform (GCP)** account with:
+>   - Billing enabled
+>   - Project ID: `styleme-475201` (or configure your own)
+>   - Required APIs enabled:
+>     - `container.googleapis.com` (GKE)
+>     - `compute.googleapis.com` (Compute Engine)
+>     - `storage.googleapis.com` (Cloud Storage)
+>     - `artifactregistry.googleapis.com` (Artifact Registry)
+>   - Service account with appropriate permissions
 
 #### Local Development Setup
 
@@ -129,41 +129,41 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 
 #### Kubernetes Deployment Prerequisites
 
-- **Kubernetes cluster** (GKE or EKS) with kubectl configured
-- **Docker images** built and pushed to a container registry (GCR, ECR, or Docker Hub)
-- **GCP credentials** configured (for GCS access)
-- **GPU nodes** (for training job) - if using GKE, ensure you have a GPU node pool
+> - **Kubernetes cluster** (GKE or EKS) with kubectl configured
+> - **Docker images** built and pushed to a container registry (GCR, ECR, or Docker Hub)
+> - **GCP credentials** configured (for GCS access)
+> - **GPU nodes** (for training job) - if using GKE, ensure you have a GPU node pool
 
 #### Pulumi Infrastructure Prerequisites
 
-- **Pulumi CLI** installed:
-  ```bash
-  curl -fsSL https://get.pulumi.com | sh
-  ```
-- **Node.js** (v18+) and npm installed
-- **GCP Account** with billing enabled and required APIs enabled
-- **GCP Credentials** configured:
-  ```bash
-  gcloud auth login
-  gcloud auth application-default login
-  ```
+> - **Pulumi CLI** installed:
+>   ```bash
+>   curl -fsSL https://get.pulumi.com | sh
+>   ```
+> - **Node.js** (v18+) and npm installed
+> - **GCP Account** with billing enabled and required APIs enabled
+> - **GCP Credentials** configured:
+>   ```bash
+>   gcloud auth login
+>   gcloud auth application-default login
+>   ```
 
 #### CI/CD Pipeline Prerequisites
 
-- **GitHub repository** with Actions enabled
-- **GCP service account** with permissions for:
-  - Artifact Registry (push/pull images)
-  - GKE (deploy to cluster)
-  - Cloud Storage (access data)
-- **GitHub Secrets** configured:
-  - `GCP_SA_KEY`: Service account JSON key
+> - **GitHub repository** with Actions enabled
+> - **GCP service account** with permissions for:
+>   - Artifact Registry (push/pull images)
+>   - GKE (deploy to cluster)
+>   - Cloud Storage (access data)
+> - **GitHub Secrets** configured:
+>   - `GCP_SA_KEY`: Service account JSON key
 
 #### Machine Learning Workflow Prerequisites
 
-- **GPU support** for model training (NVIDIA GPU with CUDA)
-- **GCS access** for data storage and model checkpoints
-- **DVC** configured for data versioning
-- **Kubernetes cluster** with GPU nodes (for production training)
+> - **GPU support** for model training (NVIDIA GPU with CUDA)
+> - **GCS access** for data storage and model checkpoints
+> - **DVC** configured for data versioning
+> - **Kubernetes cluster** with GPU nodes (for production training)
 
 ---
 
