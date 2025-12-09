@@ -320,49 +320,38 @@ The production system integrates a complete ML workflow including data preproces
 
 #### Demonstrate Production-Ready ML Workflow
 
-**1. Data Preprocessing**
-- Automatically processes new data from GCS
-- Validates data quality and format
-- Prepares data for training
+The production ML workflow integrates data preprocessing, model training, and evaluation steps into a seamless pipeline that ensures data quality, model performance, and automated deployment. The workflow begins with data preprocessing, where new data from Google Cloud Storage is automatically processed, validated for quality and format consistency, and prepared for training. This preprocessing step ensures that only clean, properly formatted data enters the training pipeline, reducing the risk of training failures and improving model quality. The preprocessed data is then used to fine-tune the FashionCLIP model, which learns fashion compatibility relationships from curated product data using a triplet loss objective. During training, experiments are tracked with versioned datasets through DVC, enabling complete reproducibility and allowing comparison across different training runs.
 
-**2. Model Training**
-- Fine-tunes FashionCLIP model on curated fashion data
-- Uses triplet loss for compatibility learning
-- Tracks experiments with versioned datasets
+The evaluation phase validates model performance against predefined thresholds before any deployment occurs. Models are tested on held-out validation sets, and comprehensive performance metrics are generated including triplet accuracy, compatibility scores, and validation loss. Only models that meet the strict performance criteria are considered for deployment, ensuring that production models maintain high quality standards. The validation checks enforce minimum thresholds of 70% triplet accuracy and 50% compatibility score, along with validation loss improvement, creating a gate that prevents underperforming models from reaching production.
 
-**3. Evaluation**
-- Validates model performance against thresholds
-- Tests on held-out validation set
-- Generates performance metrics
+Automated retraining and deployment are triggered by new data or updates to the codebase through Kubernetes CronJob scheduling. When new data arrives in GCS or code changes are detected, the retraining pipeline automatically initiates: it checks for new data, preprocesses the updated dataset, trains a new model with the latest data, evaluates the model performance, and deploys the model only if it meets the performance thresholds. This automation ensures that the production model stays current with the latest data and code improvements while maintaining quality standards through automated validation gates.
 
-**4. Deployment**
-- Only deploys models meeting performance criteria
-- Links model versions to training configurations
-- Maintains model registry in GCS
+The complete ML workflow is orchestrated through Kubernetes Jobs and CronJobs, providing scalable, reliable execution of data processing, training, and deployment tasks. Each step in the pipeline is containerized and can run independently, allowing for parallel execution where possible and easy debugging when issues arise. The workflow maintains complete traceability through DVC versioning, linking model checkpoints to training configurations, data versions, and GCS source data states.
 
-**5. Automated Retraining**
-- Scheduled retraining via Kubernetes CronJob
-- Triggers on new data or code updates
-- Validates and deploys improved models
+> **Deploy ML Workflow:**
+> ```bash
+> # Preprocessing job runs automatically on deployment
+> kubectl apply -f k8s/04-preprocessing-job.yaml
+>
+> # Training job runs on GPU nodes
+> kubectl apply -f k8s/05-training-job.yaml
+> kubectl logs job/styleme-training -f
+>
+> # Automated retraining via CronJob
+> kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
+> ```
 
-**Deployment:**
-```bash
-# Preprocessing job runs automatically on deployment
-kubectl apply -f k8s/04-preprocessing-job.yaml
+The workflow components and their integration points are summarized in the following table:
 
-# Training job runs on GPU nodes
-kubectl apply -f k8s/05-training-job.yaml
-kubectl logs job/styleme-training -f
+| Component | Function | Trigger | Validation |
+|-----------|----------|---------|------------|
+| **Data Preprocessing** | Processes and validates data from GCS | Automatic on deployment or new data | Data quality and format checks |
+| **Model Training** | Fine-tunes FashionCLIP with triplet loss | Manual or scheduled via CronJob | Training convergence and stability |
+| **Evaluation** | Tests model on validation set | After each training run | Performance thresholds (70% accuracy, 50% compatibility) |
+| **Deployment** | Deploys validated models to production | Automatic if validation passes | Model performance meets all criteria |
+| **Automated Retraining** | Triggers full pipeline on new data/code | Kubernetes CronJob or manual trigger | Complete pipeline validation |
 
-# Automated retraining via CronJob
-kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
-```
-
-**Validation Checks:**
-Models must meet:
-- Minimum triplet accuracy: 70%
-- Minimum compatibility score: 50%
-- Validation loss improvement
+Validation checks ensure that only models meeting performance thresholds are deployed. The system enforces minimum requirements of 70% triplet accuracy and 50% compatibility score, along with validation loss improvement, creating a quality gate that prevents underperforming models from reaching production. These thresholds are configurable and can be adjusted based on business requirements, but the default values ensure high-quality recommendations for end users.
 
 
 ---
