@@ -182,9 +182,16 @@ The deployment process involves building Docker images, updating Kubernetes mani
 > EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 > ```
 
+<img width="1411" height="765" alt="kubernete cluster" src="https://github.com/user-attachments/assets/ab026d6d-4097-4b6a-b170-0e3116ef883c" />
+
 #### Demonstrate Basic Scaling Behavior
 
 The system demonstrates reliability and scalability through both manual and automatic scaling capabilities. The Horizontal Pod Autoscaler (HPA) automatically adjusts the number of pod replicas based on CPU and memory metrics, ensuring optimal resource utilization and service availability under varying load conditions.
+
+<img width="638" height="177" alt="image" src="https://github.com/user-attachments/assets/4273ec9e-446e-4e86-9a47-da367e02f14e" />
+<img width="651" height="170" alt="autoscale2" src="https://github.com/user-attachments/assets/6b2e4bdd-2d0f-493e-9f4a-aa5f038fe7cd" />
+
+
 
 ### Pulumi Infrastructure Code
 
@@ -244,7 +251,6 @@ pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
 # Or: gcloud container clusters get-credentials styleme-cluster --zone us-central1-a
 ```
 
-See [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md) for detailed documentation.
 
 ### CI/CD Pipeline Implementation (GitHub Actions)
 
