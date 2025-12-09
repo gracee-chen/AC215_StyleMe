@@ -6,7 +6,7 @@ export default function AboutPage() {
   const navigate = useNavigate();
 
   const handleGetStarted = () => {
-    navigate('/app');
+    navigate('/app/wardrobe');
   };
 
   const steps = [
