@@ -13,7 +13,7 @@ export default function AboutPage() {
     {
       number: 'Step 1',
       title: 'Your Clothes',
-      description: 'Upload photos of your wardrobe items. Our AI automatically removes backgrounds and organizes your collection. You can add items quickly without taking perfect photos.',
+      description: 'Upload photos of your wardrobe items. Our AI automatically analyzes and tags your items, organizing your collection with smart categorization. You can add items quickly without taking perfect photos.',
       icon: Upload,
       details: 'In a matter of seconds, you can get all of your favorite clothes into the app. Start with our wardrobe templates or create your own from scratch. You can always add photos later, take screenshots, or even grab a URL.'
     },

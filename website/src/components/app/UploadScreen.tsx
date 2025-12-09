@@ -397,7 +397,7 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           <p className="text-stone-600 mb-4">
             {mode === 'wardrobe' 
               ? 'AI is analyzing your item and adding it to your wardrobe...'
-              : 'Our AI is removing the background and analyzing your item...'}
+              : 'Our AI is analyzing your item and generating smart tags...'}
           </p>
         </div>
       </div>
@@ -591,7 +591,7 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-stone-200">
               <Sparkles className="w-4 h-4 text-stone-700" />
             </div>
-            <span className="text-sm text-stone-700">AI removes background automatically</span>
+            <span className="text-sm text-stone-700">AI analyzes your item automatically</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-stone-200">
