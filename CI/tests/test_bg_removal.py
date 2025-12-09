@@ -216,4 +216,138 @@ class TestImageProcessing:
         loaded_img = Image.open(save_path)
         assert loaded_img.size == (100, 100)
         assert loaded_img.mode == 'RGB'
+    
+    @patch('src.datapipeline.bg_removal.background_removal.AutoModelForImageSegmentation')
+    @patch('src.datapipeline.bg_removal.background_removal.AutoProcessor')
+    def test_remove_background_with_model(self, mock_processor, mock_model, tmp_path):
+        """Test remove_background with mocked model"""
+        from src.datapipeline.bg_removal.background_removal import BackgroundRemover
+        
+        # Create test image
+        test_img = Image.new('RGB', (224, 224), color='red')
+        test_path = tmp_path / "test.jpg"
+        test_img.save(test_path)
+        
+        # Mock model and processor
+        mock_model_instance = Mock()
+        mock_model.from_pretrained.return_value = mock_model_instance
+        mock_model_instance.to.return_value = mock_model_instance
+        mock_model_instance.eval.return_value = None
+        
+        # Mock model output (mask)
+        import torch
+        mock_mask = torch.zeros(1, 1, 224, 224)
+        mock_mask[0, 0, 50:150, 50:150] = 1.0  # Center region
+        mock_output = Mock()
+        mock_output.logits = mock_mask
+        mock_model_instance.return_value = mock_output
+        
+        mock_processor_instance = Mock()
+        mock_processor.from_pretrained.return_value = mock_processor_instance
+        mock_processor_instance.return_value = {'pixel_values': torch.zeros(1, 3, 224, 224)}
+        
+        remover = BackgroundRemover(model_name="briaai/RMBG-1.4", device="cpu")
+        
+        # Mock the model call
+        with patch.object(remover.model, '__call__', return_value=mock_output):
+            result = remover.remove_background(test_img)
+            assert isinstance(result, Image.Image)
+            assert result.mode == 'RGBA'
+    
+    @patch('src.datapipeline.bg_removal.background_removal.AutoModelForImageSegmentation')
+    def test_remove_background_with_return_mask(self, mock_model, tmp_path):
+        """Test remove_background with return_mask=True"""
+        from src.datapipeline.bg_removal.background_removal import BackgroundRemover
+        
+        test_img = Image.new('RGB', (224, 224), color='blue')
+        
+        # Mock model to fail, use rembg fallback
+        mock_model.from_pretrained.side_effect = Exception("No model")
+        
+        try:
+            remover = BackgroundRemover(model_name="test", device="cpu")
+        except RuntimeError:
+            pytest.skip("rembg not available")
+        
+        if not hasattr(remover, 'rembg_available') or not remover.rembg_available:
+            pytest.skip("rembg not available")
+        
+        # Mock _remove_background_rembg to return both image and mask
+        mock_result = Image.new('RGBA', (224, 224), color=(255, 0, 0, 128))
+        mock_mask = Image.new('L', (224, 224), color=128)
+        with patch.object(remover, '_remove_background_rembg', return_value=(mock_result, mock_mask)):
+            result, mask = remover.remove_background(test_img, return_mask=True)
+            assert isinstance(result, Image.Image)
+            assert isinstance(mask, Image.Image)
+    
+    @patch('src.datapipeline.bg_removal.background_removal.AutoModelForImageSegmentation')
+    def test_remove_background_without_processor(self, mock_model, tmp_path):
+        """Test remove_background when processor is None"""
+        from src.datapipeline.bg_removal.background_removal import BackgroundRemover
+        
+        test_img = Image.new('RGB', (224, 224), color='green')
+        
+        # Mock model
+        mock_model_instance = Mock()
+        mock_model.from_pretrained.return_value = mock_model_instance
+        mock_model_instance.to.return_value = mock_model_instance
+        mock_model_instance.eval.return_value = None
+        
+        # Mock processor to return None
+        with patch('src.datapipeline.bg_removal.background_removal.AutoProcessor') as mock_processor:
+            mock_processor.from_pretrained.side_effect = Exception("No processor")
+            
+            remover = BackgroundRemover(model_name="briaai/RMBG-1.4", device="cpu")
+            assert remover.processor is None
+            
+            # Mock model output
+            import torch
+            mock_mask = torch.zeros(1, 1, 224, 224)
+            mock_mask[0, 0, 50:150, 50:150] = 1.0
+            mock_output = Mock()
+            mock_output.logits = mock_mask
+            
+            with patch.object(remover.model, '__call__', return_value=mock_output):
+                result = remover.remove_background(test_img)
+                assert isinstance(result, Image.Image)
+    
+    @patch('src.datapipeline.bg_removal.background_removal.AutoModelForImageSegmentation')
+    def test_init_person_removal(self, mock_model):
+        """Test _init_person_removal method"""
+        from src.datapipeline.bg_removal.background_removal import BackgroundRemover
+        
+        mock_model.from_pretrained.side_effect = Exception("No model")
+        
+        # Test with rembg available
+        with patch('src.datapipeline.bg_removal.background_removal.new_session') as mock_session:
+            mock_session.return_value = Mock()
+            remover = BackgroundRemover(model_name="test", device="cpu", remove_person=True)
+            # Person removal should be initialized
+            assert hasattr(remover, 'person_removal_available')
+    
+    @patch('src.datapipeline.bg_removal.background_removal.AutoModelForImageSegmentation')
+    def test_remove_background_rembg_fallback(self, mock_model):
+        """Test _remove_background_rembg method"""
+        from src.datapipeline.bg_removal.background_removal import BackgroundRemover
+        
+        mock_model.from_pretrained.side_effect = Exception("No model")
+        
+        try:
+            remover = BackgroundRemover(model_name="test", device="cpu")
+        except RuntimeError:
+            pytest.skip("rembg not available")
+        
+        if not hasattr(remover, 'rembg_available') or not remover.rembg_available:
+            pytest.skip("rembg not available")
+        
+        test_img = Image.new('RGB', (224, 224), color='yellow')
+        
+        # Mock rembg.remove
+        with patch('src.datapipeline.bg_removal.background_removal.remove') as mock_rembg:
+            mock_result = Image.new('RGBA', (224, 224), color=(255, 255, 0, 200))
+            mock_rembg.return_value = mock_result
+            
+            result = remover._remove_background_rembg(test_img)
+            assert isinstance(result, Image.Image)
+            assert result.mode == 'RGBA'
 
