@@ -448,8 +448,6 @@ This section documents key limitations and common issues encountered during depl
 
 3. **CI/CD Failures**: If CI/CD deployment fails, check GCP service account permissions, Artifact Registry access, GKE cluster connectivity, and image tag format.
 
-4. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
-
 ### Workarounds
 
 > **Local Development**: Use Docker Compose for local development to avoid Kubernetes complexity.
