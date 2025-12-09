@@ -70,7 +70,7 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 
 ## Prerequisites and Setup Instructions
 
-### System Requirements
+#### System Requirements
 
 - **Operating System**: Linux, macOS, or Windows with WSL2
 - **Python**: 3.9+ (3.10 recommended)
@@ -80,7 +80,7 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 - **Node.js**: v18+ (for Pulumi)
 - **GPU**: NVIDIA GPU with CUDA support (optional, required for training)
 
-### Cloud Platform Requirements
+#### Cloud Platform Requirements
 
 - **Google Cloud Platform (GCP)** account with:
   - Billing enabled
@@ -92,49 +92,49 @@ StyleMe provides a comprehensive API interface through the inference service (`c
     - `artifactregistry.googleapis.com` (Artifact Registry)
   - Service account with appropriate permissions
 
-### Local Development Setup
+#### Local Development Setup
 
-**1. Clone Repository**
-```bash
-git clone <repository-url>
-cd AC215_StyleMe-2
-```
+> **1. Clone Repository**
+> ```bash
+> git clone <repository-url>
+> cd AC215_StyleMe-2
+> ```
+>
+> **2. Install Dependencies**
+> ```bash
+> # Python dependencies
+> python3 -m venv venv
+> source venv/bin/activate
+> pip install --upgrade pip
+> pip install -r CI/requirements-dev.txt
+>
+> # Pulumi dependencies
+> cd infrastructure/pulumi
+> npm install
+> cd ../..
+> ```
+>
+> **3. Configure GCP Credentials**
+> ```bash
+> gcloud auth login
+> gcloud auth application-default login
+> gcloud config set project styleme-475201
+> gcloud auth configure-docker us-central1-docker.pkg.dev
+> ```
+>
+> **4. Initial Setup**
+> ```bash
+> make setup  # Creates necessary directories
+> ```
 
-**2. Install Dependencies**
-```bash
-# Python dependencies
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r CI/requirements-dev.txt
-
-# Pulumi dependencies
-cd infrastructure/pulumi
-npm install
-cd ../..
-```
-
-**3. Configure GCP Credentials**
-```bash
-gcloud auth login
-gcloud auth application-default login
-gcloud config set project styleme-475201
-gcloud auth configure-docker us-central1-docker.pkg.dev
-```
-
-**4. Initial Setup**
-```bash
-make setup  # Creates necessary directories
-```
-
-### Kubernetes Deployment Prerequisites
+#### Kubernetes Deployment Prerequisites
 
 - **Kubernetes cluster** (GKE or EKS) with kubectl configured
 - **Docker images** built and pushed to a container registry (GCR, ECR, or Docker Hub)
 - **GCP credentials** configured (for GCS access)
 - **GPU nodes** (for training job) - if using GKE, ensure you have a GPU node pool
 
-### Pulumi Infrastructure Prerequisites
+#### Pulumi Infrastructure Prerequisites
 
 - **Pulumi CLI** installed:
   ```bash
@@ -148,7 +148,7 @@ make setup  # Creates necessary directories
   gcloud auth application-default login
   ```
 
-### CI/CD Pipeline Prerequisites
+#### CI/CD Pipeline Prerequisites
 
 - **GitHub repository** with Actions enabled
 - **GCP service account** with permissions for:
@@ -158,7 +158,7 @@ make setup  # Creates necessary directories
 - **GitHub Secrets** configured:
   - `GCP_SA_KEY`: Service account JSON key
 
-### Machine Learning Workflow Prerequisites
+#### Machine Learning Workflow Prerequisites
 
 - **GPU support** for model training (NVIDIA GPU with CUDA)
 - **GCS access** for data storage and model checkpoints
