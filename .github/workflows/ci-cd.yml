@@ -97,7 +97,7 @@ jobs:
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:CI/coverage.xml \
-            --cov-fail-under=45 \
+            --cov-fail-under=60 \
             -c CI/config/pytest.ini \
             --tb=short
 
@@ -232,7 +232,7 @@ jobs:
 
       - name: Run all tests with coverage
         run: |
-          # Coverage requirement: 45% (adjusted from 60% to match current coverage level)
+          # Coverage requirement: 60%
           pytest CI/tests/ \
             --cov=src \
             --cov=containers \
@@ -240,7 +240,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=html:CI/coverage_html \
             --cov-report=xml:CI/coverage.xml \
-            --cov-fail-under=45 \
+            --cov-fail-under=60 \
             -c CI/config/pytest.ini \
             -v
 
@@ -261,7 +261,7 @@ jobs:
           echo "- HTML: Available in artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- XML: Available in artifacts" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Minimum coverage requirement: **45%**" >> $GITHUB_STEP_SUMMARY
+          echo "Minimum coverage requirement: **60%**" >> $GITHUB_STEP_SUMMARY
 
   # ============================================
   # JOB 6: Build Docker Images (Main and k8s-pulumi branches)

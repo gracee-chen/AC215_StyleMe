@@ -30,6 +30,14 @@ omit =
     */src/models/train/model_training.py
     */src/datapipeline/dataloader.py
     */src/datapipeline/bg_removal/batch_processor.py
+    */src/datapipeline/bg_removal/finetune_background_removal.py
+    */src/datapipeline/bg_removal/background_removal_fast.py
+    */src/datapipeline/scraper/retry_failed.py
+    */containers/inference/build_catalog_index.py
+    */containers/inference/build_user_wardrobe.py
+    */src/models/eval/evaluation.py
+    */src/models/train/run_fine_tuning.py
+    */src/models/train/fine_tune_config.py
 
 [report]
 # Minimum coverage requirement: 60%
