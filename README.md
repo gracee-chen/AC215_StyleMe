@@ -356,76 +356,82 @@ Validation checks enforce minimum thresholds of 70% triplet accuracy and 50% com
 
 ## Usage Details and Examples
 
-This section provides practical usage examples for common operations across local development and production environments. The examples complement the deployment instructions above by focusing on day-to-day operations, monitoring, and troubleshooting tasks that developers and operators will frequently perform.
+This section provides practical usage examples demonstrating how to use StyleMe for common tasks. The examples show complete workflows from uploading wardrobe items to receiving fashion recommendations, both through the API and command-line interface.
 
-### Local Development
+### Example 1: Get Fashion Recommendations via API
 
-> **Run Complete Pipeline:**
-> ```bash
-> make run  # Or: docker compose --profile pipeline up --build
-> ```
->
-> **Run Individual Services:**
-> ```bash
-> make run-ingestion      # Data collection only
-> make run-preprocessing  # Data processing only
-> make run-training       # Model training only
-> make run-inference      # Inference only
-> ```
->
-> **Running Inference:**
-> ```bash
-> # Using Makefile
-> make infer USER=grace QUERY=grace_query_01 THRESHOLD=0.3 GENDER=women
->
-> # Or manually
-> docker compose run inference python /app/inference_service.py \
->     --user-id user_001 \
->     --query /app/queries/user_001/req_001/query.jpg \
->     --output /app/results/user_001/req_001.json
-> ```
->
-> **View Results:**
-> ```bash
-> cat results/user_001/req_001.json
-> ls src/models/train/experiments/
-> make logs
-> ```
+This example demonstrates the complete workflow of uploading a query image and receiving personalized fashion recommendations.
 
-### Production Operations
-
-> **Access Deployed Application:**
+> **Step 1: Upload query image and get recommendations**
 > ```bash
 > # Get service URL
 > EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 >
-> # Health check
-> curl http://$EXTERNAL_IP/health
->
-> # Upload image and get recommendations
+> # Upload image and analyze
 > curl -X POST http://$EXTERNAL_IP/analyze_item \
->   -F "image=@/path/to/image.jpg" \
+>   -F "image=@/path/to/query_shirt.jpg" \
 >   -F "user_id=user_001"
 >
 > # Get recommendations
 > curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
 > ```
 >
-> **Monitor and Scale:**
+> **Expected Response:**
+> ```json
+> {
+>   "query_id": "req_001",
+>   "user_id": "user_001",
+>   "recommendations": [
+>     {
+>       "item_id": "item_123",
+>       "similarity_score": 0.85,
+>       "category": "pants",
+>       "image_url": "https://example.com/item_123.jpg"
+>     },
+>     {
+>       "item_id": "item_456",
+>       "similarity_score": 0.82,
+>       "category": "shoes",
+>       "image_url": "https://example.com/item_456.jpg"
+>     }
+>   ]
+> }
+> ```
+
+### Example 2: Local Development Workflow
+
+This example shows how to run the complete pipeline locally for development and testing.
+
+> **Run complete pipeline:**
 > ```bash
-> # Check HPA status
-> kubectl get hpa styleme-inference-hpa
-> kubectl get pods -l component=inference -w
->
-> # Manual scaling
-> kubectl scale deployment styleme-inference --replicas=4
+> make run  # Or: docker compose --profile pipeline up --build
 > ```
 >
-> **Check Model Performance:**
+> **Run inference locally:**
 > ```bash
-> # View experiment results
-> ls src/models/train/experiments/
-> gsutil ls gs://styleme-production/experiments/
+> make infer USER=grace QUERY=grace_query_01 THRESHOLD=0.3 GENDER=women
+> ```
+>
+> **View results:**
+> ```bash
+> cat results/grace/grace_query_01.json
+> ```
+
+### Example 3: Monitor Production Deployment
+
+This example demonstrates how to monitor and manage the production deployment.
+
+> **Check service health and status:**
+> ```bash
+> # Health check
+> curl http://$EXTERNAL_IP/health
+>
+> # Check pod status
+> kubectl get pods -l app=styleme
+>
+> # Monitor HPA scaling
+> kubectl get hpa styleme-inference-hpa
+> kubectl get pods -l component=inference -w
 > ```
 
 ---
