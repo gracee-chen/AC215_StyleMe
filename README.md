@@ -438,7 +438,7 @@ This example demonstrates how to monitor and manage the production deployment.
 
 ## Known Issues and Limitations
 
-This section documents known limitations and issues that users may encounter during deployment or operation, along with recommended workarounds.
+This section documents key limitations and common issues encountered during deployment or operation.
 
 ### Limitations and Known Issues
 
@@ -446,29 +446,11 @@ This section documents known limitations and issues that users may encounter dur
 
 2. **Storage Configuration**: The PersistentVolumeClaim uses the default storage class. For production, consider using NFS or other `ReadWriteMany` storage for shared access. PVCs may fail to bind if the storage class doesn't support the requested access mode.
 
-3. **Test Coverage**: While we achieve 91.30% coverage on tested modules, the following are intentionally excluded:
-   - `bg_removal` directory (not used in production)
-   - `inference_service.py` (tested via integration/E2E tests)
-   - `model_training.py` (requires GPU, tested with mocks)
-   - `dataloader.py` (requires GCS access, tested with mocks)
-   - `api_server.py` (tested via integration/E2E tests)
-   - Build scripts and CLI tools
+3. **Test Coverage**: While we achieve 91.30% coverage on tested modules, some modules are intentionally excluded (tested via integration/E2E tests, require GPU/GCS access, or are build scripts).
 
-4. **Scalability**: Current HPA configuration scales based on CPU/memory. For production, consider adding custom metrics (request rate, latency) for more intelligent scaling.
+4. **CI/CD Failures**: If CI/CD deployment fails, check GCP service account permissions, Artifact Registry access, GKE cluster connectivity, and image tag format.
 
-5. **Data Versioning**: DVC is configured but requires manual tagging. Automated versioning on data updates is not yet implemented.
-
-6. **Model Validation**: Model validation thresholds are hardcoded. Consider making them configurable via ConfigMap.
-
-7. **Retraining Triggers**: Retraining requires manual CronJob configuration. Consider event-driven triggers for production.
-
-8. **Image Pull Errors**: If using private registries, ensure image pull secrets are configured in Kubernetes.
-
-9. **CI/CD Failures**: If CI/CD deployment fails, check GCP service account permissions, Artifact Registry access, GKE cluster connectivity, and image tag format.
-
-10. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
-
-11. **Pulumi Credentials**: Pulumi may fail if GCP credentials are not properly configured. Run `gcloud auth application-default login`.
+5. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
 
 ### Workarounds
 
