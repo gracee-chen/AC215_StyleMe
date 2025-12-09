@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, createContext, useContext } from 'react';
 import { HomeScreen } from '@/components/app/HomeScreen';
 import { WardrobeScreen } from '@/components/app/WardrobeScreen';
@@ -163,8 +163,52 @@ function getOrCreateUserId(): string {
   return userId;
 }
 
+// Wrapper component to handle back navigation with state
+function ItemDetailsScreenWrapper({ 
+  item, 
+  onCompleteTheLook, 
+  onDelete 
+}: { 
+  item: ClothingItem; 
+  onCompleteTheLook: (item: ClothingItem) => void; 
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const handleBack = () => {
+    // Check if we came from recommendations via location state
+    const state = location.state as { 
+      fromRecommendations?: boolean;
+      recommendationState?: {
+        uploadedItem: ClothingItem | null;
+        wardrobeRecommendations: ClothingItem[];
+        catalogRecommendations: ClothingItem[];
+        wardrobeReason?: string;
+        catalogReason?: string;
+      };
+    } | null;
+    if (state?.fromRecommendations && state?.recommendationState) {
+      // Navigate back and restore recommendation state
+      navigate('/app/home', { state: { recommendationState: state.recommendationState } });
+    } else {
+      window.history.back();
+    }
+  };
+  
+  return (
+    <ItemDetailsScreen 
+      item={item} 
+      onBack={handleBack}
+      onCompleteTheLook={onCompleteTheLook}
+      onDelete={onDelete}
+    />
+  );
+}
+
 export default function AppLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ClothingItem | null>(null);
   const [userId] = useState<string>(getOrCreateUserId());
@@ -489,9 +533,8 @@ export default function AppLayout() {
             path="item-details"
             element={
               selectedItem ? (
-                <ItemDetailsScreen 
-                  item={selectedItem} 
-                  onBack={() => window.history.back()}
+                <ItemDetailsScreenWrapper 
+                  item={selectedItem}
                   onCompleteTheLook={handleCompleteLook}
                   onDelete={handleDeleteItem}
                 />

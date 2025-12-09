@@ -63,7 +63,10 @@ export function FashionLookDisplay({ mainItem, recommendations, onItemClick }: F
           return (
             <button
               key={item.id}
-              onClick={() => onItemClick(item)}
+              onClick={() => {
+                onItemClick(item);
+                // Navigation will be handled by parent component
+              }}
               className="absolute group cursor-pointer transition-all duration-300 hover:scale-110 hover:z-50"
               style={{
                 top: style.top,

@@ -1,10 +1,9 @@
 import { ArrowLeft, Trash2, RefreshCw, Save, Check, MessageCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ImageWithFallback } from '@/components/ui/ImageWithFallback';
 import { ClothingItem } from '@/services/api';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '@/pages/AppLayout';
 import {
@@ -102,13 +101,14 @@ const getStyleColor = (style: string) => {
 export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }: ItemDetailsScreenProps) {
   const navigate = useNavigate();
   const { loadWardrobe, userId } = useAppContext();
+  
+  // Check if this is a catalog item (has shopping URL)
+  const isCatalogItem = !!item.url;
   const [category, setCategory] = useState(item.category === 'Unknown' ? 'tops' : (item.category || 'tops'));
   const [color, setColor] = useState(item.color === 'Unknown' ? 'White' : (item.color || 'White'));
   const [style, setStyle] = useState((item as any).style || 'Casual');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [hasAnalyzed, setHasAnalyzed] = useState(false);
   
   // Save metadata function
   const saveMetadata = async () => {
@@ -146,52 +146,6 @@ export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }:
     }
   };
 
-  const handleManualAnalyze = async () => {
-    if (!item.image || isAnalyzing) return;
-
-    setIsAnalyzing(true);
-    setHasAnalyzed(true);
-
-    try {
-      // Convert image URL to File for analysis
-      const response = await fetch(item.image);
-      const blob = await response.blob();
-      const file = new File([blob], 'item.jpg', { type: blob.type });
-
-      const analysis = await analyzeClothingItem(file);
-      
-      // Auto-fill the fields
-      if (analysis.category) {
-        // Map AI category to our categories
-        const normalizedCategory = normalizeCategoryForSelect(analysis.category);
-        setCategory(normalizedCategory);
-      }
-      if (analysis.color) {
-        // Normalize color to our color list
-        const normalizedColor = normalizeColorForSelect(analysis.color);
-        setColor(normalizedColor);
-      }
-      if (analysis.style) {
-        // Normalize style to our style list
-        const normalizedStyle = normalizeStyleForSelect(analysis.style);
-        setStyle(normalizedStyle);
-      }
-      
-      // Save metadata
-      try {
-        const imagePath = item.image;
-        const filename = imagePath.split('/').pop() || '';
-        const metadataKey = `wardrobe_metadata_${userId}_${filename}`;
-        localStorage.setItem(metadataKey, JSON.stringify(analysis));
-      } catch (e) {
-        console.warn('Failed to save analysis metadata:', e);
-      }
-    } catch (error) {
-      console.error('Analysis failed:', error);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
 
   // Normalize AI category to our fixed category list - MUST return one of the fixed categories
   const normalizeCategoryForSelect = (aiCategory: string): string => {
@@ -420,103 +374,132 @@ export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }:
               <div className="space-y-4">
                 <div>
                   <Label className="text-stone-600 font-normal text-sm mb-2 block lowercase subtle-artistic-font">category</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="border-stone-300 rounded-lg focus:border-stone-500 bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2">
-                      <SelectValue placeholder="Select category">
-                        {category ? (
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(category)}`}>
-                            {category}
-                          </span>
-                        ) : (
-                          <span className="text-stone-500">Select category</span>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white">
-                      {CATEGORIES.map((cat) => (
-                        <SelectItem key={cat} value={cat} className="cursor-pointer">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(cat)}`}>
-                            {cat}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {isCatalogItem ? (
+                    // Static display for catalog items
+                    <div className="border-stone-300 rounded-lg bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2 px-3 flex items-center">
+                      {category ? (
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(category)}`}>
+                          {category}
+                        </span>
+                      ) : (
+                        <span className="text-stone-500">Not specified</span>
+                      )}
+                    </div>
+                  ) : (
+                    // Editable Select for wardrobe items
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger className="border-stone-300 rounded-lg focus:border-stone-500 bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2">
+                        <SelectValue placeholder="Select category">
+                          {category ? (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(category)}`}>
+                              {category}
+                            </span>
+                          ) : (
+                            <span className="text-stone-500">Select category</span>
+                          )}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat} className="cursor-pointer">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(cat)}`}>
+                              {cat}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label className="text-stone-600 font-normal text-sm mb-2 block lowercase subtle-artistic-font">color</Label>
-                  <Select value={color} onValueChange={setColor}>
-                    <SelectTrigger className="border-stone-300 rounded-lg focus:border-stone-500 bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2">
-                      <SelectValue placeholder="Select color">
-                        {color ? (
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getColorColor(color)}`}>
-                            {color}
-                          </span>
-                        ) : (
-                          <span className="text-stone-500">Select color</span>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white">
-                      {COLORS.map((col) => (
-                        <SelectItem key={col} value={col} className="cursor-pointer">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getColorColor(col)}`}>
-                            {col}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {isCatalogItem ? (
+                    // Static display for catalog items
+                    <div className="border-stone-300 rounded-lg bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2 px-3 flex items-center">
+                      {color ? (
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getColorColor(color)}`}>
+                          {color}
+                        </span>
+                      ) : (
+                        <span className="text-stone-500">Not specified</span>
+                      )}
+                    </div>
+                  ) : (
+                    // Editable Select for wardrobe items
+                    <Select value={color} onValueChange={setColor}>
+                      <SelectTrigger className="border-stone-300 rounded-lg focus:border-stone-500 bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2">
+                        <SelectValue placeholder="Select color">
+                          {color ? (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getColorColor(color)}`}>
+                              {color}
+                            </span>
+                          ) : (
+                            <span className="text-stone-500">Select color</span>
+                          )}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {COLORS.map((col) => (
+                          <SelectItem key={col} value={col} className="cursor-pointer">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getColorColor(col)}`}>
+                              {col}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label className="text-stone-600 font-normal text-sm mb-2 block lowercase subtle-artistic-font">style</Label>
-                  <Select value={style} onValueChange={setStyle}>
-                    <SelectTrigger className="border-stone-300 rounded-lg focus:border-stone-500 bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2">
-                      <SelectValue placeholder="Select style">
-                        {style ? (
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStyleColor(style)}`}>
-                            {style}
-                          </span>
-                        ) : (
-                          <span className="text-stone-500">Select style</span>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="bg-white">
-                      {STYLES.map((sty) => (
-                        <SelectItem key={sty} value={sty} className="cursor-pointer">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStyleColor(sty)}`}>
-                            {sty}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {isCatalogItem ? (
+                    // Static display for catalog items
+                    <div className="border-stone-300 rounded-lg bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2 px-3 flex items-center">
+                      {style ? (
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStyleColor(style)}`}>
+                          {style}
+                        </span>
+                      ) : (
+                        <span className="text-stone-500">Not specified</span>
+                      )}
+                    </div>
+                  ) : (
+                    // Editable Select for wardrobe items
+                    <Select value={style} onValueChange={setStyle}>
+                      <SelectTrigger className="border-stone-300 rounded-lg focus:border-stone-500 bg-stone-50 text-stone-900 h-auto min-h-[40px] py-2">
+                        <SelectValue placeholder="Select style">
+                          {style ? (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStyleColor(style)}`}>
+                              {style}
+                            </span>
+                          ) : (
+                            <span className="text-stone-500">Select style</span>
+                          )}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {STYLES.map((sty) => (
+                          <SelectItem key={sty} value={sty} className="cursor-pointer">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStyleColor(sty)}`}>
+                              {sty}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
-                {item.title && (
+                {/* Only show Title and Brand for catalog items */}
+                {isCatalogItem && item.title && (
                   <div>
                     <Label className="text-stone-600 font-normal text-sm mb-2 block">Title</Label>
                     <p className="text-stone-900 font-medium">{item.title}</p>
                   </div>
                 )}
-                {item.brand && (
+                {isCatalogItem && item.brand && (
                   <div>
                     <Label className="text-stone-600 font-normal text-sm mb-2 block">Brand</Label>
                     <p className="text-stone-900 font-medium">{item.brand}</p>
-                  </div>
-                )}
-                {item.url && (
-                  <div>
-                    <Label className="text-stone-600 font-normal text-sm mb-2 block">Shopping Link</Label>
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-stone-900 hover:text-stone-700 underline font-medium"
-                    >
-                      View Product
-                      <ExternalLink size={14} />
-                    </a>
                   </div>
                 )}
               </div>
@@ -525,7 +508,7 @@ export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }:
             {/* Actions */}
             <div className="space-y-3">
               {/* Shopping Link - Show prominently for catalog items */}
-              {item.url && (
+              {isCatalogItem && (
                 <Button 
                   onClick={() => window.open(item.url, '_blank', 'noopener,noreferrer')}
                   className="w-full py-5 text-sm font-semibold bg-stone-900 hover:bg-stone-800 text-white rounded-lg shadow-md"
@@ -537,59 +520,64 @@ export function ItemDetailsScreen({ item, onBack, onCompleteTheLook, onDelete }:
               
               {/* Primary Actions - Main CTAs in one row */}
               <div className="flex gap-2">
-                <Button 
-                  onClick={handleCompleteLook}
-                  className="flex-[3] py-5 text-sm font-semibold bg-stone-900 hover:bg-stone-800 text-white rounded-lg shadow-md"
-                >
-                  Complete the Look
-                </Button>
+                {/* Only show "Complete the Look" for wardrobe items */}
+                {!isCatalogItem && (
+                  <Button 
+                    onClick={handleCompleteLook}
+                    className="flex-[3] py-5 text-sm font-semibold bg-stone-900 hover:bg-stone-800 text-white rounded-lg shadow-md"
+                  >
+                    Complete the Look
+                  </Button>
+                )}
                 
                 <Button 
                   onClick={handleAskStylist}
-                  className="flex-[1] py-5 text-sm font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 rounded-lg px-2"
+                  className={isCatalogItem ? "w-full py-5 text-sm font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 rounded-lg" : "flex-[1] py-5 text-sm font-semibold bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300 rounded-lg px-2"}
                 >
                   <MessageCircle size={18} className="md:mr-2" />
                   <span className="hidden md:inline">Ask Stylist</span>
                 </Button>
               </div>
 
-              {/* Save and Delete - Side by side */}
-              <div className="flex gap-2">
-                <Button 
-                  onClick={saveMetadata}
-                  disabled={isSaving}
-                  className={`flex-1 py-4 text-sm font-medium rounded-lg ${
-                    saveSuccess 
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300'
-                  }`}
-                >
-                  {isSaving ? (
-                    <>
-                      <RefreshCw size={16} className="mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : saveSuccess ? (
-                    <>
-                      <Check size={16} className="mr-2" />
-                      Saved!
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} className="mr-2" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
+              {/* Save and Delete - Only show for wardrobe items */}
+              {!isCatalogItem && (
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={saveMetadata}
+                    disabled={isSaving}
+                    className={`flex-1 py-4 text-sm font-medium rounded-lg ${
+                      saveSuccess 
+                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                        : 'bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-300'
+                    }`}
+                  >
+                    {isSaving ? (
+                      <>
+                        <RefreshCw size={16} className="mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : saveSuccess ? (
+                      <>
+                        <Check size={16} className="mr-2" />
+                        Saved!
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} className="mr-2" />
+                        Save Changes
+                      </>
+                    )}
+                  </Button>
 
-                <Button 
-                  onClick={handleDelete}
-                  className="flex-1 py-4 text-sm font-medium rounded-lg bg-stone-100 hover:bg-stone-200 text-red-600 hover:text-red-700 border border-stone-300"
-                >
-                  <Trash2 size={16} className="mr-2" />
-                  Delete
-                </Button>
-              </div>
+                  <Button 
+                    onClick={handleDelete}
+                    className="flex-1 py-4 text-sm font-medium rounded-lg bg-stone-100 hover:bg-stone-200 text-red-600 hover:text-red-700 border border-stone-300"
+                  >
+                    <Trash2 size={16} className="mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>

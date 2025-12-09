@@ -61,9 +61,36 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
     checkApiHealth();
   }, []);
 
-  // Auto-trigger recommendations when coming from "Complete the Look"
+  // Restore recommendation state when coming back from item details
   useEffect(() => {
-    const state = location.state as { completeTheLook?: boolean; item?: ClothingItem } | null;
+    const state = location.state as { 
+      completeTheLook?: boolean; 
+      item?: ClothingItem;
+      recommendationState?: {
+        uploadedItem: ClothingItem | null;
+        wardrobeRecommendations: ClothingItem[];
+        catalogRecommendations: ClothingItem[];
+        wardrobeReason?: string;
+        catalogReason?: string;
+      };
+    } | null;
+    
+    // If we have recommendation state to restore (coming back from item details)
+    if (state?.recommendationState) {
+      const { uploadedItem: savedItem, wardrobeRecommendations: savedWardrobe, catalogRecommendations: savedCatalog, wardrobeReason: savedWardrobeReason, catalogReason: savedCatalogReason } = state.recommendationState;
+      if (savedItem) {
+        setUploadedItem(savedItem);
+        setWardrobeRecommendations(savedWardrobe || []);
+        setCatalogRecommendations(savedCatalog || []);
+        setWardrobeReason(savedWardrobeReason);
+        setCatalogReason(savedCatalogReason);
+        // Clear the state to prevent re-triggering
+        navigate(location.pathname, { replace: true, state: {} });
+        return;
+      }
+    }
+    
+    // Auto-trigger recommendations when coming from "Complete the Look"
     if (state?.completeTheLook && state?.item) {
       const item = state.item;
       
@@ -177,7 +204,19 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
 
   const handleItemClick = (item: ClothingItem) => {
     onItemClick(item);
-    navigate('/app/item-details');
+    // Pass recommendation state so we can restore it when coming back
+    navigate('/app/item-details', { 
+      state: { 
+        fromRecommendations: true,
+        recommendationState: {
+          uploadedItem,
+          wardrobeRecommendations,
+          catalogRecommendations,
+          wardrobeReason,
+          catalogReason
+        }
+      } 
+    });
   };
 
   // When an item is uploaded, automatically get recommendations
