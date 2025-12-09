@@ -263,6 +263,7 @@ This automatically provisions:
 pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
 # Or: gcloud container clusters get-credentials styleme-cluster --zone us-central1-a
 ```
+<img width="1106" height="726" alt="puluni" src="https://github.com/user-attachments/assets/34496611-3772-4027-aab6-60f832553eb2" />
 
 
 ### CI/CD Pipeline Implementation (GitHub Actions)
