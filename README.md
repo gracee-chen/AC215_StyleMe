@@ -356,147 +356,77 @@ Validation checks enforce minimum thresholds of 70% triplet accuracy and 50% com
 
 ## Usage Details and Examples
 
+This section provides practical usage examples for common operations across local development and production environments. The examples complement the deployment instructions above by focusing on day-to-day operations, monitoring, and troubleshooting tasks that developers and operators will frequently perform.
+
 ### Local Development
 
-**Run Complete Pipeline:**
-```bash
-make run  # Or: docker compose --profile pipeline up --build
-```
+> **Run Complete Pipeline:**
+> ```bash
+> make run  # Or: docker compose --profile pipeline up --build
+> ```
+>
+> **Run Individual Services:**
+> ```bash
+> make run-ingestion      # Data collection only
+> make run-preprocessing  # Data processing only
+> make run-training       # Model training only
+> make run-inference      # Inference only
+> ```
+>
+> **Running Inference:**
+> ```bash
+> # Using Makefile
+> make infer USER=grace QUERY=grace_query_01 THRESHOLD=0.3 GENDER=women
+>
+> # Or manually
+> docker compose run inference python /app/inference_service.py \
+>     --user-id user_001 \
+>     --query /app/queries/user_001/req_001/query.jpg \
+>     --output /app/results/user_001/req_001.json
+> ```
+>
+> **View Results:**
+> ```bash
+> cat results/user_001/req_001.json
+> ls src/models/train/experiments/
+> make logs
+> ```
 
-**Run Individual Services:**
-```bash
-make run-ingestion      # Data collection only
-make run-preprocessing  # Data processing only
-make run-training       # Model training only
-make run-inference      # Inference only
-```
+### Production Operations
 
-**Running Inference:**
-```bash
-# Using Makefile
-make infer USER=grace QUERY=grace_query_01 THRESHOLD=0.3 GENDER=women
-
-# Or manually
-docker compose run inference python /app/inference_service.py \
-    --user-id user_001 \
-    --query /app/queries/user_001/req_001/query.jpg \
-    --output /app/results/user_001/req_001.json
-```
-
-**View Results:**
-```bash
-cat results/user_001/req_001.json
-ls src/models/train/experiments/
-make logs
-```
-
-### Production Deployment
-
-**Access Deployed Application:**
-```bash
-# Get service URL
-EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-# Health check
-curl http://$EXTERNAL_IP/health
-
-# Upload image and get recommendations
-curl -X POST http://$EXTERNAL_IP/analyze_item \
-  -F "image=@/path/to/image.jpg" \
-  -F "user_id=user_001"
-
-# Get recommendations
-curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
-```
-
-### Kubernetes Operations
-
-**Manual Scaling:**
-```bash
-kubectl scale deployment styleme-inference --replicas=4
-kubectl get pods -l component=inference -w
-```
-
-**Monitor HPA:**
-```bash
-kubectl get hpa styleme-inference-hpa
-kubectl get pods -l component=inference -w
-```
-
-### Pulumi Operations
-
-**Update Infrastructure:**
-```bash
-cd infrastructure/pulumi
-pulumi preview && pulumi up
-```
-
-**Destroy Infrastructure:**
-```bash
-pulumi destroy  # ⚠️ Deletes everything
-```
-
-### CI/CD Operations
-
-**Trigger Deployment:**
-```bash
-# Merge PR to main branch
-git checkout main
-git merge feature-branch
-git push origin main
-
-# Pipeline automatically:
-# 1. Runs all tests
-# 2. Builds Docker images
-# 3. Deploys to Kubernetes
-```
-
-**Check Pipeline Status:**
-- View in GitHub Actions tab
-- Check individual job logs
-- Review coverage reports in artifacts
-
-### Machine Learning Workflow
-
-**Local Training:**
-```bash
-cd src/models/train
-python run_fine_tuning.py \
-  --config fine_tune_config.py \
-  --data-version catalog-v_men_women_20251123
-```
-
-**Production Training (Kubernetes):**
-```bash
-# Training job runs automatically on deployment
-# Or trigger manually:
-kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
-
-# Monitor training
-kubectl logs job/styleme-retraining-<timestamp> -f
-```
-
-**Trigger Retraining on New Data:**
-```bash
-# Upload new data to GCS
-gsutil cp new_data.json gs://styleme-data-bucket/json/
-
-# Retraining CronJob will detect and process automatically
-# Or trigger immediately:
-kubectl create job --from=cronjob/styleme-retraining styleme-retraining-$(date +%s)
-```
-
-**Check Model Performance:**
-```bash
-# View experiment results
-ls src/models/train/experiments/
-
-# Check model checkpoints in GCS
-gsutil ls gs://styleme-production/experiments/
-
-# View training history
-cat src/models/train/experiments/exp_*/training_history_latest.json
-```
+> **Access Deployed Application:**
+> ```bash
+> # Get service URL
+> EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+>
+> # Health check
+> curl http://$EXTERNAL_IP/health
+>
+> # Upload image and get recommendations
+> curl -X POST http://$EXTERNAL_IP/analyze_item \
+>   -F "image=@/path/to/image.jpg" \
+>   -F "user_id=user_001"
+>
+> # Get recommendations
+> curl http://$EXTERNAL_IP/recommendations?user_id=user_001&query_id=req_001
+> ```
+>
+> **Monitor and Scale:**
+> ```bash
+> # Check HPA status
+> kubectl get hpa styleme-inference-hpa
+> kubectl get pods -l component=inference -w
+>
+> # Manual scaling
+> kubectl scale deployment styleme-inference --replicas=4
+> ```
+>
+> **Check Model Performance:**
+> ```bash
+> # View experiment results
+> ls src/models/train/experiments/
+> gsutil ls gs://styleme-production/experiments/
+> ```
 
 ---
 
