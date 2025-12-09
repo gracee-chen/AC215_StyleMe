@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'train'))
 
 from model_training import FashionCLIPModel, TripletLoss
 from dataloader import create_dataloader
-import config
+from ..train.config import TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, SAVE_CONFIG, DATA_CONFIG, OPTIMIZER_CONFIG
 
 
 def quick_triplet_evaluation(model_path: str, num_batches: int = 10) -> Dict:
@@ -43,12 +43,12 @@ def quick_triplet_evaluation(model_path: str, num_batches: int = 10) -> Dict:
     # Create data loader
     try:
         train_loader, val_loader, test_loader = create_dataloader(
-            gcp_bucket_name=config.DATA_CONFIG['gcp_bucket_name'],
-            gcp_project_id=config.DATA_CONFIG['gcp_project_id'],
-            data_prefix=config.DATA_CONFIG['data_prefix'],
-            images_prefix=config.DATA_CONFIG['images_prefix'],
-            batch_size=config.TRAINING_CONFIG['batch_size'],
-            num_workers=config.TRAINING_CONFIG['num_workers'],
+            gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
+            gcp_project_id=DATA_CONFIG['gcp_project_id'],
+            data_prefix=DATA_CONFIG['data_prefix'],
+            images_prefix=DATA_CONFIG['images_prefix'],
+            batch_size=TRAINING_CONFIG['batch_size'],
+            num_workers=TRAINING_CONFIG['num_workers'],
             max_samples_per_file=100  # Limit for quick evaluation
         )
         
@@ -146,10 +146,10 @@ def test_data_loading() -> bool:
     
     try:
         train_loader, val_loader, test_loader = create_dataloader(
-            gcp_bucket_name=config.DATA_CONFIG['gcp_bucket_name'],
-            gcp_project_id=config.DATA_CONFIG['gcp_project_id'],
-            data_prefix=config.DATA_CONFIG['data_prefix'],
-            images_prefix=config.DATA_CONFIG['images_prefix'],
+            gcp_bucket_name=DATA_CONFIG['gcp_bucket_name'],
+            gcp_project_id=DATA_CONFIG['gcp_project_id'],
+            data_prefix=DATA_CONFIG['data_prefix'],
+            images_prefix=DATA_CONFIG['images_prefix'],
             batch_size=2,  # Small batch for testing
             num_workers=0,  # No multiprocessing for testing
             max_samples_per_file=10  # Limit for testing

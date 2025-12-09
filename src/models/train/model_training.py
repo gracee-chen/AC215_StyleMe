@@ -46,7 +46,7 @@ from src.datapipeline.dataloader import create_dataloader
 from typing import Tuple, List, Dict
 import warnings
 warnings.filterwarnings('ignore')
-from config import TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, SAVE_CONFIG, DATA_CONFIG, OPTIMIZER_CONFIG
+from .config import TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, SAVE_CONFIG, DATA_CONFIG, OPTIMIZER_CONFIG
 
 
 class FashionCLIPModel(nn.Module):

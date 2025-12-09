@@ -21,7 +21,7 @@ except ImportError:
     print("⚠️  psutil not installed. Resource monitoring disabled. Install with: pip install psutil")
 
 from model_training import FashionCLIPModel, TripletLoss, FashionTrainer
-from config import DATA_CONFIG, TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, OPTIMIZER_CONFIG, SAVE_CONFIG
+from .config import DATA_CONFIG, TRAINING_CONFIG, MODEL_CONFIG, TRIPLET_CONFIG, OPTIMIZER_CONFIG, SAVE_CONFIG
 import torch
 
 def load_fine_tune_config(config_path: str = None):
