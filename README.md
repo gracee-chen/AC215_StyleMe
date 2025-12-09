@@ -275,6 +275,10 @@ The CI/CD pipeline serves as the backbone of our deployment automation, ensuring
 
 #### Set Up CI/CD Pipeline with GitHub Actions
 
+The CI/CD pipeline executes a comprehensive suite of automated checks for every code change. For all branches, the pipeline runs linting and code quality checks using Flake8, executes unit test suites for each service and container, performs integration tests to verify component interactions, runs end-to-end tests to validate the complete pipeline, generates coverage reports to ensure minimum 60% test coverage (currently achieving 91.30%), and aggregates all check results in a CI summary. The system achieves 91.30% test coverage on tested modules, with intentional exclusions documented for modules tested via integration/E2E tests, requiring GPU or GCS access, or being build scripts and CLI tools. The test suites include unit tests covering data loading, scraping, image extraction, model training configuration, and inference utilities; integration tests verifying pipeline component interactions; and end-to-end tests ensuring complete pipeline functionality from data loading to inference.
+
+For merges to the main branch, the pipeline additionally builds Docker images for all services, pushes them to Artifact Registry, and automatically deploys updates to the Kubernetes cluster. This ensures that only tested and validated code reaches production, with the entire deployment process automated and traceable through GitHub Actions workflow logs.
+
 > **Deploy CI/CD Pipeline:**
 > ```bash
 > # 1. Create GCP Service Account
@@ -294,69 +298,14 @@ The CI/CD pipeline serves as the backbone of our deployment automation, ensuring
 >
 > Once configured, the pipeline automatically runs on every push and pull request. Merges to main trigger automatic deployment to Kubernetes.
 
-**Pipeline Jobs:**
+The CI/CD pipeline execution is visualized in the GitHub Actions interface, showing the sequential execution of all pipeline jobs and their status. The workflow logs provide detailed information about each step, including test results, coverage reports, and deployment status, enabling developers to quickly identify and resolve any issues in the automated pipeline.
 
-**For All Branches:**
-1. **Lint and Code Quality** - Flake8 code quality checks
-2. **Unit Tests** - Unit test suite for each service/container
-3. **Integration Tests** - Runs integration tests on the codebase
-4. **End-to-End Tests** - Complete pipeline verification
-5. **Coverage Report** - Validates minimum 60% coverage requirement
-6. **CI Summary** - Aggregates all check results
-
-**For Main Branch Only:**
-7. **Build Docker Images** - Builds container images for all services
-8. **Deploy to Kubernetes** - Deploys updates to the Kubernetes cluster upon merging changes into the main branch
-
-#### Test Coverage
-
-**Current Coverage: 91.30%** (exceeds 60% requirement)
-
-**Tested Modules:**
-- `src/datapipeline/scraper/extract_images.py` - 91.30% coverage
-
-**Excluded from Coverage** (intentionally documented):
-- `bg_removal` directory - Not used in production
-- `inference_service.py` - Tested via integration/E2E tests
-- `model_training.py` - Requires GPU, tested with mocks
-- `dataloader.py` - Requires GCS access, tested with mocks
-- `api_server.py` - Tested via integration/E2E tests
-- `build_catalog_index.py` - Requires large datasets
-- `build_user_wardrobe.py` - Requires model and user data
-- Build scripts and CLI tools
-
-**Test Suites:**
-- **Unit Tests**: `test_dataloader.py`, `test_scraper.py`, `test_scraper_extract.py`, `test_model_training.py`, `test_inference.py`
-- **Integration Tests**: `test_pipeline.py` - Pipeline component interactions
-- **End-to-End Tests**: `test_e2e.py` - Complete pipeline verification
-
-<<<<<<< HEAD
-See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
-=======
-**Setup Instructions:**
-```bash
-# 1. Create GCP Service Account
-gcloud iam service-accounts create github-actions --display-name="GitHub Actions CI/CD"
-gcloud projects add-iam-policy-binding styleme-475201 \
-  --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
-  --role="roles/container.developer"
-gcloud projects add-iam-policy-binding styleme-475201 \
-  --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
-  --role="roles/storage.admin"
-
-# 2. Create and add secret to GitHub
-gcloud iam service-accounts keys create key.json \
-  --iam-account=github-actions@styleme-475201.iam.gserviceaccount.com
-# Add key.json contents as GCP_SA_KEY secret in GitHub repository settings
-```
-
-<img width="1882" height="787" alt="cicd" src="https://github.com/user-attachments/assets/b0ffa6fc-bbda-448f-86ae-55fbab8b8dde" />
-<img width="1355" height="725" alt="image" src="https://github.com/user-attachments/assets/9d4f410f-906e-4b36-b48d-6a4a288adcb3" />
-
-
-
-
->>>>>>> 3eb74197ff96b739dce9a12606102322af38875b
+<p align="center">
+  <img width="48%" alt="CI/CD pipeline workflow" src="https://github.com/user-attachments/assets/b0ffa6fc-bbda-448f-86ae-55fbab8b8dde" />
+  <img width="48%" alt="CI/CD pipeline test results" src="https://github.com/user-attachments/assets/9d4f410f-906e-4b36-b48d-6a4a288adcb3" />
+  <br>
+  <em>Left: CI/CD pipeline workflow showing all jobs and their execution status. Right: CI/CD pipeline test results and coverage reports</em>
+</p>
 
 ### 4. Machine Learning Workflow
 
