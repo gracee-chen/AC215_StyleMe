@@ -144,71 +144,47 @@ StyleMe is deployed to a production **Google Kubernetes Engine (GKE)** cluster w
 
 #### Deploy the Application to Kubernetes Cluster
 
-**Step 1: Build and Push Docker Images**
-```bash
-export REGISTRY=us-central1-docker.pkg.dev/styleme-475201/styleme-repo
-export IMAGE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
-./scripts/build_and_push_images.sh
-```
+The deployment process involves building Docker images, updating Kubernetes manifests, and deploying all services to the cluster. Follow these steps to deploy the complete application.
 
-**Step 2: Update Kubernetes Manifests**
-```bash
-./scripts/update_image_names.sh $IMAGE_TAG
-```
-
-**Step 3: Deploy to Kubernetes**
-```bash
-kubectl apply -f k8s/01-configmap.yaml
-kubectl apply -f k8s/02-persistent-volume-claim.yaml
-kubectl wait --for=condition=Ready pvc/styleme-data-pvc --timeout=60s
-
-# Deploy jobs
-kubectl apply -f k8s/03-ingestion-job.yaml
-kubectl apply -f k8s/04-preprocessing-job.yaml
-kubectl apply -f k8s/05-training-job.yaml
-
-# Deploy inference service
-kubectl apply -f k8s/06-inference-deployment.yaml
-kubectl apply -f k8s/07-horizontal-pod-autoscaler.yaml
-kubectl wait --for=condition=available deployment/styleme-inference --timeout=300s
-```
-
-**Step 4: Verify Deployment**
-```bash
-kubectl get pods -l app=styleme
-kubectl get service styleme-inference-service
-EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-```
+> **Step 1: Build and Push Docker Images**
+> ```bash
+> export REGISTRY=us-central1-docker.pkg.dev/styleme-475201/styleme-repo
+> export IMAGE_TAG=$(date +%Y%m%d)-$(git rev-parse --short HEAD)
+> ./scripts/build_and_push_images.sh
+> ```
+>
+> **Step 2: Update Kubernetes Manifests**
+> ```bash
+> ./scripts/update_image_names.sh $IMAGE_TAG
+> ```
+>
+> **Step 3: Deploy to Kubernetes**
+> ```bash
+> kubectl apply -f k8s/01-configmap.yaml
+> kubectl apply -f k8s/02-persistent-volume-claim.yaml
+> kubectl wait --for=condition=Ready pvc/styleme-data-pvc --timeout=60s
+>
+> # Deploy jobs
+> kubectl apply -f k8s/03-ingestion-job.yaml
+> kubectl apply -f k8s/04-preprocessing-job.yaml
+> kubectl apply -f k8s/05-training-job.yaml
+>
+> # Deploy inference service
+> kubectl apply -f k8s/06-inference-deployment.yaml
+> kubectl apply -f k8s/07-horizontal-pod-autoscaler.yaml
+> kubectl wait --for=condition=available deployment/styleme-inference --timeout=300s
+> ```
+>
+> **Step 4: Verify Deployment**
+> ```bash
+> kubectl get pods -l app=styleme
+> kubectl get service styleme-inference-service
+> EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+> ```
 
 #### Demonstrate Basic Scaling Behavior
 
-**Manual Scaling:**
-```bash
-# Scale up inference deployment
-kubectl scale deployment styleme-inference --replicas=4
-kubectl get pods -l component=inference -w
-
-# Scale down
-kubectl scale deployment styleme-inference --replicas=2
-```
-
-**Automatic Scaling (HPA):**
-The Horizontal Pod Autoscaler automatically scales between 2-10 replicas based on CPU utilization (target: 70%):
-```bash
-# Check HPA status
-kubectl get hpa styleme-inference-hpa
-
-# Generate load to trigger scaling
-for i in {1..100}; do curl http://$EXTERNAL_IP/health & done
-
-# Watch HPA respond
-kubectl get hpa styleme-inference-hpa -w
-kubectl get pods -l component=inference -w
-```
-
-The cluster demonstrates reliability by automatically scaling pods up/down based on load, maintaining service availability during scaling events, and distributing load across multiple replicas.
-
-See [Kubernetes Deployment Guide](k8s/README.md) for detailed instructions.
+The system demonstrates reliability and scalability through both manual and automatic scaling capabilities. The Horizontal Pod Autoscaler (HPA) automatically adjusts the number of pod replicas based on CPU and memory metrics, ensuring optimal resource utilization and service availability under varying load conditions.
 
 ### Pulumi Infrastructure Code
 
