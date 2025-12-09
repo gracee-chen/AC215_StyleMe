@@ -39,8 +39,7 @@ omit =
     */src/datapipeline/bg_removal/*
     # Exclude eval tools
     */src/models/eval/quick_eval.py
-    # Exclude scraper extract_images (CLI tool, not core functionality)
-    */src/datapipeline/scraper/extract_images.py
+    # Note: extract_images.py is kept for coverage (has good test coverage ~91%)
     # Exclude API server (tested via integration/E2E tests)
     */containers/inference/api_server.py
 
