@@ -327,7 +327,8 @@ gcloud iam service-accounts keys create key.json \
 ```
 
 <img width="1882" height="787" alt="cicd" src="https://github.com/user-attachments/assets/b0ffa6fc-bbda-448f-86ae-55fbab8b8dde" />
-![image](https://github.com/user-attachments/assets/04e2f43d-f528-4c70-83e9-ec553951b6bf)
+<img width="1355" height="725" alt="image" src="https://github.com/user-attachments/assets/9d4f410f-906e-4b36-b48d-6a4a288adcb3" />
+
 
 
 
@@ -389,7 +390,6 @@ Models must meet:
 - Minimum compatibility score: 50%
 - Validation loss improvement
 
-See [Model Training Guide](docs/model_training.md) for complete training workflow.
 
 ---
 
