@@ -327,6 +327,9 @@ gcloud iam service-accounts keys create key.json \
 ```
 
 <img width="1882" height="787" alt="cicd" src="https://github.com/user-attachments/assets/b0ffa6fc-bbda-448f-86ae-55fbab8b8dde" />
+![image](https://github.com/user-attachments/assets/04e2f43d-f528-4c70-83e9-ec553951b6bf)
+
+
 
 
 ### Machine Learning Workflow
