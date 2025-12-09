@@ -306,6 +306,10 @@ jobs:
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
 
       - name: Generate image tags
         id: image-tags
@@ -324,6 +328,8 @@ jobs:
             -f containers/ingestion/Dockerfile \
             -t ${{ env.REGISTRY }}/styleme-ingestion:${{ steps.image-tags.outputs.IMAGE_TAG }} \
             -t ${{ env.REGISTRY }}/styleme-ingestion:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --cache-from type=registry,ref=${{ env.REGISTRY }}/styleme-ingestion:buildcache \
+            --cache-to type=registry,ref=${{ env.REGISTRY }}/styleme-ingestion:buildcache,mode=max \
             --push \
             .
           docker system prune -f || true
@@ -336,6 +342,8 @@ jobs:
             -f containers/preprocessing/Dockerfile \
             -t ${{ env.REGISTRY }}/styleme-preprocessing:${{ steps.image-tags.outputs.IMAGE_TAG }} \
             -t ${{ env.REGISTRY }}/styleme-preprocessing:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --cache-from type=registry,ref=${{ env.REGISTRY }}/styleme-preprocessing:buildcache \
+            --cache-to type=registry,ref=${{ env.REGISTRY }}/styleme-preprocessing:buildcache,mode=max \
             --push \
             .
           docker system prune -f || true
@@ -351,6 +359,8 @@ jobs:
             -f containers/training/Dockerfile \
             -t ${{ env.REGISTRY }}/styleme-training:${{ steps.image-tags.outputs.IMAGE_TAG }} \
             -t ${{ env.REGISTRY }}/styleme-training:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --cache-from type=registry,ref=${{ env.REGISTRY }}/styleme-training:buildcache \
+            --cache-to type=registry,ref=${{ env.REGISTRY }}/styleme-training:buildcache,mode=max \
             --push \
             .
           docker system prune -f || true
@@ -363,6 +373,8 @@ jobs:
             -f containers/inference/Dockerfile \
             -t ${{ env.REGISTRY }}/styleme-inference:${{ steps.image-tags.outputs.IMAGE_TAG }} \
             -t ${{ env.REGISTRY }}/styleme-inference:${{ steps.image-tags.outputs.LATEST_TAG }} \
+            --cache-from type=registry,ref=${{ env.REGISTRY }}/styleme-inference:buildcache \
+            --cache-to type=registry,ref=${{ env.REGISTRY }}/styleme-inference:buildcache,mode=max \
             --push \
             .
           docker system prune -f || true
