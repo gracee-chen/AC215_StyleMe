@@ -461,9 +461,3 @@ This section documents key limitations and common issues encountered during depl
 > **Debugging**: Use `kubectl describe` and `kubectl logs` for debugging deployment issues.
 >
 > **Resource Limits**: Adjust CPU/memory limits in Kubernetes manifests if pods are being killed due to resource constraints.
-
----
-
-## License
-
-This project is part of AC215 - Applied Machine Learning course.
