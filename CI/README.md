@@ -81,9 +81,10 @@ The CI pipeline must fulfill the following requirements:
 
 ### ✅ 3. Report Coverage
 - **Generate Coverage Reports**: HTML and XML formats
-- **Minimum Coverage**: 50%
+- **Minimum Coverage**: 60% (production requirement)
 - **Display Coverage**: In CI artifacts and summary
 - **Runs on**: Every push and pull request
+- **Documentation**: See [COVERAGE_DOCUMENTATION.md](./COVERAGE_DOCUMENTATION.md)
 
 ## 🔧 Configuration Files
 
@@ -95,14 +96,15 @@ The CI pipeline must fulfill the following requirements:
 ### Coverage Configuration (`.coveragerc`)
 - Sources: `src/`, `containers/`
 - Omits: test files, examples, documentation
-- Minimum coverage: 50%
+- Minimum coverage: 60% (production requirement)
 - Reports: HTML and XML formats
+- See [COVERAGE_DOCUMENTATION.md](./COVERAGE_DOCUMENTATION.md) for details
 
 ### Pytest Configuration (`pytest.ini`)
 - Test paths: `CI/tests`
 - Coverage: `src/`, `containers/`
 - Markers: `unit`, `integration`, `e2e`, `slow`, `gpu`, `docker`
-- Fail under: 50% coverage
+- Fail under: 60% coverage (production requirement)
 
 ## 🧪 Test Structure
 
@@ -135,26 +137,47 @@ pytest CI/tests/ --cov=src --cov=containers --cov-report=html:CI/coverage_html
 open CI/coverage_html/index.html
 ```
 
-## 🔄 GitHub Actions Workflow
+## 🔄 GitHub Actions CI/CD Pipeline
 
-The CI pipeline runs automatically on:
-- **Push** to `main`, `master`, or `develop` branches
-- **Pull Requests** to `main`, `master`, or `develop` branches
+The CI/CD pipeline runs automatically on:
+- **Push** to `main` or `master` branches
+- **Pull Requests** to `main` or `master` branches
 
 ### Workflow Jobs
 
-1. **build-and-lint**: Builds code and runs Flake8 linting
-2. **test**: Runs all test suites (unit, integration, e2e)
-3. **coverage**: Generates and reports code coverage
-4. **ci-summary**: Provides summary of all checks
+#### For All Branches (PRs and main):
+1. **lint**: Runs Flake8 code quality checks
+2. **unit-tests**: Runs unit test suite with coverage
+3. **integration-tests**: Runs integration test suite with coverage
+4. **e2e-tests**: Runs end-to-end test suite
+5. **coverage**: Generates combined coverage report (requires ≥60%)
+6. **ci-summary**: Provides summary of all checks
+
+#### For Main Branch Only (after merge):
+7. **build-images**: Builds and pushes Docker images to Artifact Registry
+8. **deploy-k8s**: Deploys updated images to Kubernetes cluster
 
 ### Workflow Features
 
-- ✅ Runs on Python 3.9 and 3.10
+- ✅ Runs on Python 3.10
 - ✅ Caches pip dependencies
 - ✅ Parallel job execution
-- ✅ Coverage artifacts upload
+- ✅ Coverage artifacts upload (HTML + XML)
 - ✅ Detailed test reports
+- ✅ Automatic Docker image building
+- ✅ Automatic Kubernetes deployment
+- ✅ Image tagging with commit SHA and date
+
+### Setup Instructions
+
+See **[CD_SETUP_GUIDE.md](./CD_SETUP_GUIDE.md)** for detailed setup instructions.
+
+**Quick Setup Checklist:**
+1. Create GCP service account with required permissions
+2. Add `GCP_SA_KEY` secret to GitHub repository
+3. Verify Artifact Registry repository exists
+4. Verify GKE cluster exists and is accessible
+5. Push to `main` branch to trigger deployment
 
 ## 📝 Writing New Tests
 
@@ -218,11 +241,12 @@ def test_complete_pipeline():
 2. **Fix line length**: Max 120 characters
 3. **Check excluded files**: Some files are excluded from linting
 
-### Coverage Below 50%
+### Coverage Below 60%
 
 1. **Add more tests**: Write tests for uncovered code
 2. **Check coverage report**: `CI/coverage_html/index.html`
-3. **Review omissions**: Some files are excluded from coverage
+3. **Review omissions**: See [COVERAGE_DOCUMENTATION.md](./COVERAGE_DOCUMENTATION.md)
+4. **Identify gaps**: Review coverage report to find untested modules
 
 ## 📚 Additional Resources
 
@@ -236,7 +260,7 @@ def test_complete_pipeline():
 Before pushing, ensure:
 - [ ] All tests pass locally: `./CI/scripts/run_tests.sh`
 - [ ] Linting passes: `./CI/scripts/run_lint.sh`
-- [ ] Coverage >= 50%: Check coverage report
+- [ ] Coverage >= 60%: Check coverage report
 - [ ] New tests added for new features
 - [ ] Documentation updated if needed
 
@@ -244,8 +268,15 @@ Before pushing, ensure:
 
 ✅ **Build and Lint**: Automated build and Flake8 code quality checks  
 ✅ **Run Tests**: Unit, integration, and end-to-end test suites  
-✅ **Report Coverage**: Generate and display coverage reports (minimum 50%)  
+✅ **Report Coverage**: Generate and display coverage reports (minimum 60%)  
 ✅ **GitHub Actions**: Runs on every push and pull request  
+✅ **Docker Build**: Automatic image building on main branch  
+✅ **Kubernetes Deployment**: Automatic deployment on main branch  
 
 All requirements are fulfilled! 🎉
+
+## 📚 Additional Documentation
+
+- **[CD_SETUP_GUIDE.md](./CD_SETUP_GUIDE.md)**: Step-by-step CI/CD setup instructions
+- **[COVERAGE_DOCUMENTATION.md](./COVERAGE_DOCUMENTATION.md)**: Detailed coverage documentation and untested modules
 

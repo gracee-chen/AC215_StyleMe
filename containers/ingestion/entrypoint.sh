@@ -3,41 +3,28 @@
 echo "🚀 Starting Data Ingestion Pipeline"
 echo "=================================="
 
-# Source data directory (where the actual data is located)
-SOURCE_DATA_DIR="/home/grace_chen/data"
+# In Kubernetes, data is loaded directly from GCS by the dataloader
+# This job just ensures the data directory structure exists
+# The actual data loading happens when training/inference runs
 
-# Check if source data exists
-if [ ! -d "$SOURCE_DATA_DIR" ]; then
-    echo "❌ Source data directory $SOURCE_DATA_DIR not found!"
-    echo "Please ensure data exists at $SOURCE_DATA_DIR"
-    exit 1
-fi
+# Create target directories
+mkdir -p $DATA_DIR/json
+mkdir -p $DATA_DIR/images
 
-# Check if data already exists in target directory
-if [ -d "$DATA_DIR/json" ] && [ "$(ls -A $DATA_DIR/json)" ]; then
-    echo "✅ Data already exists in $DATA_DIR/json"
-    echo "📊 Data directory contents:"
-    find $DATA_DIR/json -name "*.json" | wc -l | xargs echo "   JSON files:"
-    find $DATA_DIR/images -name "*.jpg" 2>/dev/null | wc -l | xargs echo "   Images:"
+# Check if data directory structure is ready
+if [ -d "$DATA_DIR" ]; then
+    echo "✅ Data directory structure created: $DATA_DIR"
+    echo "📁 Directories:"
+    echo "   - $DATA_DIR/json"
+    echo "   - $DATA_DIR/images"
+    echo ""
+    echo "ℹ️  Note: Data will be loaded from GCS bucket '$GCP_BUCKET_NAME'"
+    echo "   when training/inference services run."
+    echo ""
+    echo "✅ Ingestion pipeline finished (data structure ready)"
 else
-    echo "📥 Copying data from $SOURCE_DATA_DIR to $DATA_DIR..."
-    
-    # Create target directories
-    mkdir -p $DATA_DIR/json
-    mkdir -p $DATA_DIR/images
-    
-    # Copy JSON data
-    echo "📋 Copying JSON files..."
-    cp -r $SOURCE_DATA_DIR/json/* $DATA_DIR/json/
-    
-    # Copy images
-    echo "🖼️ Copying images..."
-    cp -r $SOURCE_DATA_DIR/images/* $DATA_DIR/images/
-    
-    echo "✅ Data ingestion completed"
-    echo "📊 Copied data:"
-    find $DATA_DIR/json -name "*.json" | wc -l | xargs echo "   JSON files:"
-    find $DATA_DIR/images -name "*.jpg" 2>/dev/null | wc -l | xargs echo "   Images:"
+    echo "❌ Failed to create data directory"
+    exit 1
 fi
 
 echo "🎯 Ingestion pipeline finished"

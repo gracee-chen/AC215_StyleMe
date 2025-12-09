@@ -60,7 +60,7 @@ case "$TEST_TYPE" in
             --cov-config=CI/config/.coveragerc \
             --cov-report=term-missing \
             --cov-report=html:CI/coverage_html \
-            --cov-fail-under=50 \
+            --cov-fail-under=60 \
             -c CI/config/pytest.ini \
             -v
         ;;

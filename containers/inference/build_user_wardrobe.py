@@ -188,7 +188,6 @@ class WardrobeIndexBuilder:
             # Try loading with map_location to device
             checkpoint_device = torch.load(str(model_path), map_location=self.device)
             model.load_state_dict(checkpoint_device['model_state_dict'], strict=False)
-        
         model.eval()
         
         return model

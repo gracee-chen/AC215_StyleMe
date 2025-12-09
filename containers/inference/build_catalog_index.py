@@ -42,18 +42,22 @@ class CatalogIndexBuilder:
         use_gcs_client = False
         local_experiments_dir = None
         
-        # Check if using GCS path
+        # If path starts with /gcs/ or looks like GCS path, try to access via filesystem first
         if experiments_path.startswith('/gcs/'):
+            # Check if gcsfuse mount worked
             if os.path.exists(experiments_path) and os.listdir(experiments_path):
                 print(f"   Using GCS mount at {experiments_path}")
                 local_experiments_dir = Path(experiments_path)
             else:
+                # Mount failed, use GCS client library
                 use_gcs_client = True
                 print(f"   GCS mount not available, using GCS client library")
         elif 'gs://' in experiments_path or 'styleme-production' in experiments_path:
+            # Explicit GCS path, use client library
             use_gcs_client = True
             print(f"   Using GCS client library for {experiments_path}")
         else:
+            # Local path
             local_experiments_dir = Path(experiments_path)
         
         model_path = None
@@ -162,7 +166,6 @@ class CatalogIndexBuilder:
             # Try loading with map_location to device
             checkpoint_device = torch.load(str(model_path), map_location=self.device)
             model.load_state_dict(checkpoint_device['model_state_dict'], strict=False)
-        
         model.eval()
         
         print("   ✅ Model loaded successfully")
@@ -243,6 +246,11 @@ class CatalogIndexBuilder:
         df = pd.DataFrame(items)
         print(f"   ✅ Loaded {len(df)} catalog items (before deduplication)")
         
+        if len(df) == 0:
+            print("   ⚠️  No catalog items found - catalog will be empty")
+            # Return empty dataframe with expected columns
+            return pd.DataFrame(columns=['id', 'title', 'description', 'brand', 'price', 'url', 'category', 'gender', 'image_path'])
+        
         # Deduplicate by product ID (keep first occurrence)
         df = df.drop_duplicates(subset='id', keep='first').reset_index(drop=True)
         print(f"   ✅ After deduplication: {len(df)} unique items")
@@ -298,6 +306,15 @@ class CatalogIndexBuilder:
     def build_faiss_index(self, embeddings):
         """Build FAISS index for fast similarity search"""
         print("\n🔍 Building FAISS index...")
+        
+        # Handle empty embeddings case
+        if len(embeddings) == 0 or embeddings.shape[0] == 0:
+            print("   ⚠️  No embeddings to index - returning empty index")
+            # Return a dummy index with expected dimension (512 for CLIP)
+            dimension = 512
+            index = faiss.IndexFlatL2(dimension)
+            print(f"   ✅ Empty FAISS index created (dimension: {dimension})")
+            return index
         
         dimension = embeddings.shape[1]
         

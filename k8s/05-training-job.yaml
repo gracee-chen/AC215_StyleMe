@@ -1,0 +1,69 @@
+---
+# Training Job - Runs after preprocessing, requires GPU
+# This trains the model and saves checkpoints
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: styleme-training
+  namespace: default
+  labels:
+    app: styleme
+    component: training
+spec:
+  backoffLimit: 2  # Training jobs are expensive, fewer retries
+  template:
+    metadata:
+      labels:
+        app: styleme
+        component: training
+    spec:
+      serviceAccountName: styleme-workload-identity
+      restartPolicy: Never
+      # Init container to wait for preprocessing to complete
+      initContainers:
+      - name: wait-for-preprocessing
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Waiting for preprocessing job to complete..."
+          sleep 10
+          echo "Proceeding with training..."
+      containers:
+      - name: training
+        image: us-central1-docker.pkg.dev/styleme-475201/styleme-repo/styleme-training:latest  # You'll need to build and push this image
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: styleme-config
+        volumeMounts:
+        - name: shared-data
+          mountPath: /app/data
+        - name: experiments
+          mountPath: /app/experiments
+        - name: logs
+          mountPath: /app/logs
+        # GPU configuration for GKE
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: 1  # Request 1 GPU
+          limits:
+            memory: "16Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: 1  # Limit to 1 GPU
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: styleme-data-pvc
+      - name: experiments
+        persistentVolumeClaim:
+          claimName: styleme-data-pvc  # Using same PVC, adjust if needed
+      - name: logs
+        emptyDir: {}
+      # Node selector for GPU nodes (adjust based on your cluster)
+      # Uncomment and adjust if you have specific GPU node pools
+      # nodeSelector:
+      #   accelerator: nvidia-tesla-t4  # Example: adjust to your GPU type
+

@@ -1,0 +1,94 @@
+---
+# Inference Deployment - Scalable version (without PVC requirement)
+# This version uses emptyDir instead of PVC to allow multiple replicas
+# The inference service uses GCS for all data, so PVC is not required
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: styleme-inference
+  namespace: default
+  labels:
+    app: styleme
+    component: inference
+spec:
+  replicas: 1  # Will be managed by HPA
+  selector:
+    matchLabels:
+      app: styleme
+      component: inference
+  template:
+    metadata:
+      labels:
+        app: styleme
+        component: inference
+    spec:
+      serviceAccountName: styleme-workload-identity
+      containers:
+      - name: inference
+        image: us-central1-docker.pkg.dev/styleme-475201/styleme-repo/styleme-inference:latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: styleme-config
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        # Use emptyDir instead of PVC - inference uses GCS for all data
+        volumeMounts:
+        - name: local-data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: local-data
+        emptyDir: {}  # Temporary storage - inference uses GCS for persistent data
+      - name: logs
+        emptyDir: {}
+
+---
+# Service to expose the inference deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: styleme-inference-service
+  namespace: default
+  labels:
+    app: styleme
+    component: inference
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: styleme
+    component: inference
+  sessionAffinity: None
+

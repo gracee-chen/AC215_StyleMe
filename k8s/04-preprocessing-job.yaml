@@ -1,0 +1,59 @@
+---
+# Preprocessing Job - Runs after ingestion completes
+# This processes the data (background removal, etc.)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: styleme-preprocessing
+  namespace: default
+  labels:
+    app: styleme
+    component: preprocessing
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: styleme
+        component: preprocessing
+    spec:
+      serviceAccountName: styleme-workload-identity
+      restartPolicy: Never
+      # Init container to wait for ingestion to complete
+      initContainers:
+      - name: wait-for-ingestion
+        image: busybox:1.35
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Waiting for ingestion job to complete..."
+          # Wait for ingestion job to be in Complete state
+          # This is a simple check - in production you might want a more sophisticated wait
+          sleep 10
+          echo "Proceeding with preprocessing..."
+      containers:
+      - name: preprocessing
+        image: us-central1-docker.pkg.dev/styleme-475201/styleme-repo/styleme-preprocessing:latest  # You'll need to build and push this image
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: styleme-config
+        volumeMounts:
+        - name: shared-data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: styleme-data-pvc
+      - name: logs
+        emptyDir: {}
+
