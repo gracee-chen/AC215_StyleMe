@@ -438,15 +438,15 @@ This example demonstrates how to monitor and manage the production deployment.
 
 ## Known Issues and Limitations
 
-### Current Limitations
+This section documents known limitations and issues that users may encounter during deployment or operation, along with recommended workarounds.
 
-1. **GPU Requirements**: Model training requires NVIDIA GPU with CUDA support. Training jobs will fail on CPU-only nodes.
+### Limitations and Known Issues
 
-2. **Storage**: The PersistentVolumeClaim uses the default storage class. For production, consider using NFS or other `ReadWriteMany` storage for shared access.
+1. **GPU Requirements**: Model training requires NVIDIA GPU with CUDA support. Training jobs will fail on CPU-only nodes. GPU nodes may not be available in all regions - verify GPU quota and availability before deployment.
 
-3. **Background Removal**: The background removal feature is currently excluded from production deployment and test coverage as it's not actively used in the core workflow.
+2. **Storage Configuration**: The PersistentVolumeClaim uses the default storage class. For production, consider using NFS or other `ReadWriteMany` storage for shared access. PVCs may fail to bind if the storage class doesn't support the requested access mode.
 
-4. **Test Coverage**: While we achieve 91.30% coverage on tested modules, the following are intentionally excluded:
+3. **Test Coverage**: While we achieve 91.30% coverage on tested modules, the following are intentionally excluded:
    - `bg_removal` directory (not used in production)
    - `inference_service.py` (tested via integration/E2E tests)
    - `model_training.py` (requires GPU, tested with mocks)
@@ -454,45 +454,35 @@ This example demonstrates how to monitor and manage the production deployment.
    - `api_server.py` (tested via integration/E2E tests)
    - Build scripts and CLI tools
 
-5. **Scalability**: Current HPA configuration scales based on CPU/memory. For production, consider adding custom metrics (request rate, latency) for more intelligent scaling.
+4. **Scalability**: Current HPA configuration scales based on CPU/memory. For production, consider adding custom metrics (request rate, latency) for more intelligent scaling.
 
-6. **Data Versioning**: DVC is configured but requires manual tagging. Automated versioning on data updates is not yet implemented.
+5. **Data Versioning**: DVC is configured but requires manual tagging. Automated versioning on data updates is not yet implemented.
 
-7. **Model Validation**: Model validation thresholds are hardcoded. Consider making them configurable via ConfigMap.
+6. **Model Validation**: Model validation thresholds are hardcoded. Consider making them configurable via ConfigMap.
 
-8. **Retraining Triggers**: Retraining requires manual CronJob configuration. Consider event-driven triggers for production.
+7. **Retraining Triggers**: Retraining requires manual CronJob configuration. Consider event-driven triggers for production.
 
-### Known Issues
+8. **Image Pull Errors**: If using private registries, ensure image pull secrets are configured in Kubernetes.
 
-1. **Image Pull Errors**: If using private registries, ensure image pull secrets are configured in Kubernetes.
+9. **CI/CD Failures**: If CI/CD deployment fails, check GCP service account permissions, Artifact Registry access, GKE cluster connectivity, and image tag format.
 
-2. **PVC Binding**: PersistentVolumeClaims may fail to bind if the storage class doesn't support the requested access mode. Check storage class configuration.
+10. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
 
-3. **GPU Node Availability**: GPU nodes may not be available in all regions. Verify GPU quota and availability before deployment.
-
-4. **CI/CD Failures**: If CI/CD deployment fails, check:
-   - GCP service account permissions
-   - Artifact Registry access
-   - GKE cluster connectivity
-   - Image tag format
-
-5. **Model Loading**: First inference request may be slow as models are loaded from GCS. Consider pre-warming or model caching.
-
-6. **Pulumi Credentials**: Pulumi may fail if GCP credentials are not properly configured. Run `gcloud auth application-default login`.
+11. **Pulumi Credentials**: Pulumi may fail if GCP credentials are not properly configured. Run `gcloud auth application-default login`.
 
 ### Workarounds
 
-1. **Local Development**: Use Docker Compose for local development to avoid Kubernetes complexity.
-
-2. **Testing**: Run tests locally before pushing:
-   ```bash
-   ./CI/scripts/run_tests.sh
-   ./CI/scripts/run_lint.sh
-   ```
-
-3. **Debugging**: Use `kubectl describe` and `kubectl logs` for debugging deployment issues.
-
-4. **Resource Limits**: Adjust CPU/memory limits in Kubernetes manifests if pods are being killed due to resource constraints.
+> **Local Development**: Use Docker Compose for local development to avoid Kubernetes complexity.
+>
+> **Testing**: Run tests locally before pushing to catch issues early:
+> ```bash
+> ./CI/scripts/run_tests.sh
+> ./CI/scripts/run_lint.sh
+> ```
+>
+> **Debugging**: Use `kubectl describe` and `kubectl logs` for debugging deployment issues.
+>
+> **Resource Limits**: Adjust CPU/memory limits in Kubernetes manifests if pods are being killed due to resource constraints.
 
 ---
 
