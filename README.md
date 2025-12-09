@@ -349,7 +349,7 @@ The workflow components and their integration points are summarized in the follo
 | **Deployment** | Deploys validated models to production | Automatic if validation passes | Model performance meets all criteria |
 | **Automated Retraining** | Triggers full pipeline on new data/code | Kubernetes CronJob or manual trigger | Complete pipeline validation |
 
-Validation checks ensure that only models meeting performance thresholds are deployed. The system enforces minimum requirements of 70% triplet accuracy and 50% compatibility score, along with validation loss improvement, creating a quality gate that prevents underperforming models from reaching production. These thresholds are configurable and can be adjusted based on business requirements, but the default values ensure high-quality recommendations for end users.
+Validation checks enforce minimum thresholds of 70% triplet accuracy and 50% compatibility score, along with validation loss improvement, creating a quality gate that prevents underperforming models from reaching production.
 
 
 ---
