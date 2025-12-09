@@ -187,14 +187,22 @@ The deployment process involves building Docker images for all services (ingesti
 > EXTERNAL_IP=$(kubectl get service styleme-inference-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 > ```
 
-<img width="1411" height="765" alt="kubernete cluster" src="https://github.com/user-attachments/assets/ab026d6d-4097-4b6a-b170-0e3116ef883c" />
+<p align="center">
+  <img width="80%" alt="Kubernetes cluster deployment" src="https://github.com/user-attachments/assets/ab026d6d-4097-4b6a-b170-0e3116ef883c" />
+  <br>
+  <em>Kubernetes cluster deployment showing all services and pods</em>
+</p>
 
 #### Demonstrate Basic Scaling Behavior
 
 The system demonstrates reliability and scalability through both manual and automatic scaling capabilities. Manual scaling allows administrators to directly control the number of pod replicas using kubectl commands, providing immediate response to anticipated load changes or maintenance requirements. The Horizontal Pod Autoscaler (HPA) automatically adjusts the number of pod replicas based on CPU and memory metrics, scaling between a minimum of 2 and maximum of 10 replicas to ensure optimal resource utilization and service availability under varying load conditions. When load increases, HPA automatically provisions additional pods to handle the traffic, and when load decreases, it scales down to reduce resource consumption and costs. This dynamic scaling behavior ensures the application maintains consistent performance and availability while efficiently managing infrastructure resources.
 
-<img width="638" height="177" alt="image" src="https://github.com/user-attachments/assets/4273ec9e-446e-4e86-9a47-da367e02f14e" />
-<img width="651" height="170" alt="autoscale2" src="https://github.com/user-attachments/assets/6b2e4bdd-2d0f-493e-9f4a-aa5f038fe7cd" />
+<p align="center">
+  <img width="45%" alt="HPA scaling metrics" src="https://github.com/user-attachments/assets/4273ec9e-446e-4e86-9a47-da367e02f14e" />
+  <img width="45%" alt="HPA autoscaling behavior" src="https://github.com/user-attachments/assets/6b2e4bdd-2d0f-493e-9f4a-aa5f038fe7cd" />
+  <br>
+  <em>Left: HPA scaling metrics showing CPU utilization. Right: HPA autoscaling behavior demonstrating pod replica adjustments</em>
+</p>
 
 
 
