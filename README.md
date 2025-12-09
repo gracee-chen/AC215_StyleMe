@@ -330,7 +330,33 @@ The CI/CD pipeline serves as the backbone of our deployment automation, ensuring
 - **Integration Tests**: `test_pipeline.py` - Pipeline component interactions
 - **End-to-End Tests**: `test_e2e.py` - Complete pipeline verification
 
+<<<<<<< HEAD
 See [CI/CD Setup Guide](CI/CD_SETUP_GUIDE.md) for detailed setup instructions.
+=======
+**Setup Instructions:**
+```bash
+# 1. Create GCP Service Account
+gcloud iam service-accounts create github-actions --display-name="GitHub Actions CI/CD"
+gcloud projects add-iam-policy-binding styleme-475201 \
+  --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
+  --role="roles/container.developer"
+gcloud projects add-iam-policy-binding styleme-475201 \
+  --member="serviceAccount:github-actions@styleme-475201.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+
+# 2. Create and add secret to GitHub
+gcloud iam service-accounts keys create key.json \
+  --iam-account=github-actions@styleme-475201.iam.gserviceaccount.com
+# Add key.json contents as GCP_SA_KEY secret in GitHub repository settings
+```
+
+<img width="1882" height="787" alt="cicd" src="https://github.com/user-attachments/assets/b0ffa6fc-bbda-448f-86ae-55fbab8b8dde" />
+<img width="1355" height="725" alt="image" src="https://github.com/user-attachments/assets/9d4f410f-906e-4b36-b48d-6a4a288adcb3" />
+
+
+
+
+>>>>>>> 3eb74197ff96b739dce9a12606102322af38875b
 
 ### 4. Machine Learning Workflow
 
@@ -389,7 +415,6 @@ Models must meet:
 - Minimum compatibility score: 50%
 - Validation loss improvement
 
-See [Model Training Guide](docs/model_training.md) for complete training workflow.
 
 ---
 
