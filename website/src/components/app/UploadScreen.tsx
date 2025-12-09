@@ -3,7 +3,7 @@ import { Camera, Upload, Image as ImageIcon, Sparkles, Tag, Check, AlertCircle, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { analyzeClothingItem } from '@/services/chatgpt';
+import { analyzeItem } from '@/services/api';
 
 // Fixed category mapping - AI returns simple categories, we map to display categories
 // MUST return one of: 'tops', 'bottoms', 'layers', 'shoes', 'dresses', 'accessories'
@@ -241,15 +241,15 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           // Analyze the item with AI FIRST - always succeeds with fallback values
           let analysis;
           try {
-            console.log('🔄 Calling ChatGPT API to analyze item...');
-            analysis = await analyzeClothingItem(file);
+            console.log('🔄 Calling backend API to analyze item...');
+            analysis = await analyzeItem(file);
             console.log('✅ Item analysis received:', analysis);
           } catch (analysisError) {
             // If analysis fails, use fallback values - never fail the upload
             console.error('❌ Analysis failed! Error:', analysisError);
-            console.error('❌ This means ChatGPT API is not working. Check:');
-            console.error('   1. Is VITE_OPENAI_API_KEY set in .env file?');
-            console.error('   2. Is the API key valid?');
+            console.error('❌ This means backend API is not working. Check:');
+            console.error('   1. Is the backend server running?');
+            console.error('   2. Is OPENAI_API_KEY set on the backend?');
             console.error('   3. Check browser console for network errors');
             console.warn('⚠️ Using fallback values (shirt, white, casual) - these are WRONG!');
             analysis = {
@@ -356,8 +356,8 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
       // In wardrobe mode, analyze the item first, then upload
       if (mode === 'wardrobe') {
         try {
-          // Analyze the item with AI
-          const analysis = await analyzeClothingItem(selectedFile);
+          // Analyze the item with AI (via backend)
+          const analysis = await analyzeItem(selectedFile);
           console.log('Item analysis:', analysis);
           // Analysis results are logged, can be used later if needed
           // For now, we just upload the image
@@ -397,7 +397,7 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
           <p className="text-stone-600 mb-4">
             {mode === 'wardrobe' 
               ? 'AI is analyzing your item and adding it to your wardrobe...'
-              : 'Our AI is removing the background and analyzing your item...'}
+              : 'Our AI is analyzing your item and generating smart tags...'}
           </p>
         </div>
       </div>
@@ -591,7 +591,7 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-stone-200">
               <Sparkles className="w-4 h-4 text-stone-700" />
             </div>
-            <span className="text-sm text-stone-700">AI removes background automatically</span>
+            <span className="text-sm text-stone-700">AI analyzes your item automatically</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-stone-200">

@@ -1126,6 +1126,239 @@ def upload_image():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/analyze-item', methods=['POST'])
+def analyze_item():
+    """
+    Analyze a clothing item image using OpenAI API
+    POST /api/analyze-item
+    Body: multipart/form-data with 'file' or JSON with 'image' (base64)
+    
+    Returns:
+    {
+        "category": "string",
+        "color": "string",
+        "style": "string",
+        "material": "string" (optional),
+        "pattern": "string" (optional),
+        "description": "string" (optional)
+    }
+    """
+    try:
+        # Handle file upload (multipart/form-data)
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename == '':
+                return jsonify({'error': 'No file provided'}), 400
+            
+            # Save to temporary file
+            temp_dir = Path('/tmp/styleme_analysis')
+            temp_dir.mkdir(exist_ok=True)
+            temp_path = temp_dir / secure_filename(file.filename)
+            file.save(str(temp_path))
+            
+            try:
+                # Use existing generate_clothing_tags function
+                result = generate_clothing_tags(temp_path)
+                
+                # Clean up temp file
+                temp_path.unlink()
+                
+                if not result:
+                    return jsonify({'error': 'Failed to analyze item'}), 500
+                
+                return jsonify(result), 200
+            except Exception as e:
+                # Clean up temp file on error
+                if temp_path.exists():
+                    temp_path.unlink()
+                raise e
+        
+        # Handle base64 image (JSON)
+        elif request.is_json:
+            data = request.get_json()
+            image_base64 = data.get('image')
+            
+            if not image_base64:
+                return jsonify({'error': 'No image provided'}), 400
+            
+            # Save base64 to temporary file
+            temp_dir = Path('/tmp/styleme_analysis')
+            temp_dir.mkdir(exist_ok=True)
+            temp_path = temp_dir / f"analyze_{int(time.time())}.jpg"
+            
+            success, error_msg = save_image_from_base64(image_base64, temp_path)
+            if not success:
+                return jsonify({'error': error_msg}), 400
+            
+            try:
+                # Use existing generate_clothing_tags function
+                result = generate_clothing_tags(temp_path)
+                
+                # Clean up temp file
+                temp_path.unlink()
+                
+                if not result:
+                    return jsonify({'error': 'Failed to analyze item'}), 500
+                
+                return jsonify(result), 200
+            except Exception as e:
+                # Clean up temp file on error
+                if temp_path.exists():
+                    temp_path.unlink()
+                raise e
+        else:
+            return jsonify({'error': 'No file or image provided'}), 400
+            
+    except Exception as e:
+        print(f"❌ Error analyzing item: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """
+    Send chat messages to OpenAI API for stylist chat functionality
+    POST /api/chat
+    Body: {
+        "messages": [
+            {"role": "user|assistant|system", "content": "string", "imageUrl": "string" (optional)}
+        ],
+        "image": "base64_encoded_image" (optional, for image in last message)
+    }
+    
+    Returns:
+    {
+        "message": "string",
+        "error": "string" (optional)
+    }
+    """
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        return jsonify({
+            'message': '',
+            'error': 'OpenAI API key is not configured on the server.'
+        }), 500
+    
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_api_key)
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        messages = data.get('messages', [])
+        if not messages:
+            return jsonify({'error': 'Messages array is required'}), 400
+        
+        # Prepare messages for OpenAI API
+        api_messages = []
+        for msg in messages:
+            if msg.get('imageUrl') and msg.get('role') == 'user':
+                # For messages with images, use vision API format
+                api_messages.append({
+                    'role': msg['role'],
+                    'content': [
+                        {
+                            'type': 'text',
+                            'text': msg.get('content', 'What styling advice can you give me about this item?')
+                        },
+                        {
+                            'type': 'image_url',
+                            'image_url': {
+                                'url': msg['imageUrl']  # base64 data URL
+                            }
+                        }
+                    ]
+                })
+            else:
+                api_messages.append({
+                    'role': msg['role'],
+                    'content': msg.get('content', '')
+                })
+        
+        # Add system message for stylist persona
+        system_message = {
+            'role': 'system',
+            'content': """You are a friendly and approachable AI fashion stylist. Your communication style should be:
+- CONVERSATIONAL: Talk like a real person, not a robot. Use natural, casual language.
+- BRIEF: Keep responses short and concise (2-3 sentences max). Avoid long paragraphs.
+- FRIENDLY: Use emojis occasionally (✨ 👗 💫 🎨 👔) to add warmth, but don't overuse them.
+- HELPFUL: Give practical, actionable advice without being overly formal.
+- ENTHUSIASTIC: Show genuine interest and excitement about fashion.
+
+When users share clothing items, provide brief, friendly analysis focusing on:
+- Category, color, and style
+- Quick styling suggestions
+- Occasion recommendations
+
+Remember: Keep it short, friendly, and conversational - like chatting with a friend who knows fashion!"""
+        }
+        
+        # Check if last message has an image file (separate from imageUrl)
+        image_file_base64 = data.get('image')
+        if image_file_base64 and api_messages:
+            # Convert base64 to data URL
+            if not image_file_base64.startswith('data:'):
+                image_data_url = f"data:image/jpeg;base64,{image_file_base64}"
+            else:
+                image_data_url = image_file_base64
+            
+            # Add image to last user message
+            last_msg = api_messages[-1]
+            if last_msg['role'] == 'user':
+                if isinstance(last_msg['content'], str):
+                    last_msg['content'] = [
+                        {'type': 'text', 'text': last_msg['content']},
+                        {'type': 'image_url', 'image_url': {'url': image_data_url}}
+                    ]
+                elif isinstance(last_msg['content'], list):
+                    last_msg['content'].append({
+                        'type': 'image_url',
+                        'image_url': {'url': image_data_url}
+                    })
+        
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[system_message] + api_messages,
+            max_tokens=150,
+            temperature=0.8
+        )
+        
+        assistant_message = response.choices[0].message.content or ''
+        
+        return jsonify({
+            'message': assistant_message
+        }), 200
+        
+    except ImportError:
+        return jsonify({
+            'message': '',
+            'error': 'OpenAI library not installed on server'
+        }), 500
+    except Exception as e:
+        print(f"❌ Error in chat endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        error_message = str(e)
+        # Provide user-friendly error messages
+        if 'quota' in error_message.lower() or 'billing' in error_message.lower():
+            error_message = 'You exceeded your current quota, please check your plan and billing details.'
+        elif 'rate limit' in error_message.lower():
+            error_message = 'Too many requests. Please wait a moment and try again.'
+        elif 'invalid_api_key' in error_message.lower():
+            error_message = 'Invalid API key. Please check server configuration.'
+        elif 'insufficient_quota' in error_message.lower():
+            error_message = 'Insufficient quota. Please check your OpenAI account billing.'
+        
+        return jsonify({
+            'message': '',
+            'error': error_message
+        }), 500
+
 @app.route('/api/recommend', methods=['POST'])
 def get_recommendations():
     """

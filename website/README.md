@@ -32,8 +32,8 @@ VITE_API_URL=http://localhost:5001
 # If running API server directly (not in Docker): use port 5000
 # VITE_API_URL=http://localhost:5000
 
-# OpenAI API Key for Stylist Chat feature (required for /app/chat)
-VITE_OPENAI_API_KEY=your_openai_api_key_here
+# Note: OpenAI API key is now configured on the backend, not in frontend .env
+# The backend handles all OpenAI API calls securely
 ```
 
 3. Start the development server:
@@ -100,8 +100,5 @@ The website is built with modern web technologies and follows best practices:
 - The frontend code in `/frontend` remains unchanged
 - All website code is in the `/website` directory
 - The website uses the same API as the frontend mobile app
-- **Stylist Chat Feature**: To use the chat feature, you need to:
-  1. Get an OpenAI API key from https://platform.openai.com/api-keys
-  2. Add it to your `.env` file as `VITE_OPENAI_API_KEY`
-  3. The chat feature uses GPT-4o model with vision capabilities for image analysis
+- **Stylist Chat Feature**: The chat feature uses GPT-4o model with vision capabilities for image analysis. The OpenAI API key is configured on the backend server (not in the frontend) for security. See backend documentation for API key setup.
 

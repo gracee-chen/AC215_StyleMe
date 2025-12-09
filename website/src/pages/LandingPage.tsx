@@ -30,7 +30,7 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   const handleGetStarted = () => {
-    navigate('/app');
+    navigate('/app/wardrobe');
   };
 
   // Brand data with logos
@@ -183,8 +183,8 @@ export default function LandingPage() {
                 <CheckCircle className="w-5 h-5 text-stone-500" />
               </h3>
               <p className="text-stone-600 leading-relaxed">
-                Simply upload photos of your wardrobe items. Our AI automatically removes backgrounds
-                and organizes your collection.
+                Simply upload photos of your wardrobe items. Our AI automatically analyzes and tags
+                your items, organizing your collection with smart categorization.
               </p>
             </div>
 
