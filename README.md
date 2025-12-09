@@ -34,6 +34,20 @@ StyleMe/
 
 This milestone focused on **production deployment with Kubernetes, infrastructure automation, and comprehensive CI/CD**. We deployed the full application to a Google Kubernetes Engine (GKE) cluster with demonstrated scalability through horizontal pod autoscaling. We automated infrastructure provisioning using Pulumi to manage the Kubernetes cluster, node pools, and application deployments. We extended our GitHub Actions CI/CD pipeline to support automated deployment to Kubernetes upon merges to main, with comprehensive test coverage at 91.30% (exceeding the 60% requirement). We integrated the complete ML workflow including data preprocessing, model training, evaluation, and automated retraining triggers into the production system. The application is publicly accessible, stable, and ready for demonstration.
 
+
+## Frontend
+
+StyleMe provides a comprehensive API interface through the inference service (`containers/inference/api_server.py`) that enables fashion recommendation queries via RESTful API endpoints. The API implements a two-tier search strategy: it first searches the user's personal wardrobe index (if available and similarity scores meet the threshold), and falls back to the catalog index for product recommendations when the wardrobe is empty or no matches are found. The frontend is a React-based single-page application built with TypeScript, Vite, and Tailwind CSS that provides a mobile-first interface for uploading wardrobe items, viewing collections organized by category, and receiving personalized fashion recommendations. The architecture supports seamless integration between the backend inference service and frontend through RESTful API structures, image upload/download capabilities, metadata-rich JSON responses, and per-user session management.
+
+<img width="2414" height="1712" alt="image" src="https://github.com/user-attachments/assets/7f9e9b3e-c244-4896-b0f1-36459bbe2b75" />
+<img width="2410" height="1712" alt="image" src="https://github.com/user-attachments/assets/a2429b0c-f9cf-4025-bcbf-630044563637" />
+<img width="2414" height="1714" alt="image" src="https://github.com/user-attachments/assets/d749fc9e-62a0-4966-9636-082ea10adaf2" />
+<img width="2404" height="1702" alt="image" src="https://github.com/user-attachments/assets/09141e1d-94cb-46e5-927c-6be054796e0a" />
+<img width="2412" height="1712" alt="image" src="https://github.com/user-attachments/assets/a847a264-d642-4bd0-adb2-f00c55fd6eaa" />
+
+
+
+
 ---
 
 ## Prerequisites and Setup Instructions
@@ -573,26 +587,6 @@ cat src/models/train/experiments/exp_*/training_history_latest.json
 3. **Debugging**: Use `kubectl describe` and `kubectl logs` for debugging deployment issues.
 
 4. **Resource Limits**: Adjust CPU/memory limits in Kubernetes manifests if pods are being killed due to resource constraints.
-
----
-
-## Frontend
-
-StyleMe provides a comprehensive API interface through the inference service (`containers/inference/api_server.py`) that enables fashion recommendation queries via RESTful API endpoints. The API implements a two-tier search strategy: it first searches the user's personal wardrobe index (if available and similarity scores meet the threshold), and falls back to the catalog index for product recommendations when the wardrobe is empty or no matches are found. The frontend is a React-based single-page application built with TypeScript, Vite, and Tailwind CSS that provides a mobile-first interface for uploading wardrobe items, viewing collections organized by category, and receiving personalized fashion recommendations. The architecture supports seamless integration between the backend inference service and frontend through RESTful API structures, image upload/download capabilities, metadata-rich JSON responses, and per-user session management.
-
-**Documentation**: See [API Integration Guide](docs/api_integration.md) for complete API specifications, frontend integration details, request/response formats, and workflow documentation.
-
----
-
-## Additional Documentation
-
-- [Application Design Document](docs/Application%20design%20doc.md)
-- [API Integration Guide](docs/api_integration.md)
-- [CI/CD Guide](CI/README.md)
-- [Data Versioning Guide](docs/data_versioning.md)
-- [Model Training Guide](docs/model_training.md)
-- [Kubernetes Deployment Guide](k8s/README.md)
-- [Pulumi Infrastructure Guide](infrastructure/pulumi/README.md)
 
 ---
 
