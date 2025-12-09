@@ -226,44 +226,35 @@ StyleMe uses **Pulumi** to automate infrastructure provisioning and deployment o
 
 #### Use Pulumi to Automate Infrastructure Provisioning and Deployment
 
-**Setup:**
-```bash
-# Install Pulumi
-curl -fsSL https://get.pulumi.com | sh
-cd infrastructure/pulumi
-npm install
+Pulumi enables infrastructure as code (IaC) for the entire StyleMe deployment, allowing us to define, version, and manage all cloud resources programmatically. The Pulumi code automates the creation of the GKE cluster, configures node pools for both regular workloads and GPU-accelerated training jobs, and deploys all Kubernetes manifests in a single operation. This approach eliminates manual configuration steps, reduces human error, and ensures consistent infrastructure across different environments (dev, staging, production). The infrastructure code is written in TypeScript and leverages Pulumi's GCP provider to interact with Google Cloud Platform services, making it easy to preview changes before applying them and track infrastructure state over time.
 
-# Configure Pulumi
-pulumi login
-pulumi stack init dev
-pulumi config set gcp:project styleme-475201
-pulumi config set gcp:region us-central1
-pulumi config set gcp:zone us-central1-a
-pulumi config set clusterName styleme-cluster
-pulumi config set nodeCount 2
-pulumi config set gpuNodeCount 1
-```
+> **Deploy Infrastructure:**
+> ```bash
+> # Preview changes
+> pulumi preview
+>
+> # Deploy infrastructure (creates GKE cluster, node pools, and all Kubernetes resources)
+> pulumi up
+> ```
+>
+> This automatically provisions:
+> - **GKE Cluster** with default and GPU node pools
+> - **Kubernetes Resources**: All resources from `k8s/` directory (ConfigMap, PVC, Jobs, Deployments, HPA)
+> - **Networking and Storage** configuration
+>
+> **Get Cluster Connection:**
+> ```bash
+> pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
+> # Or: gcloud container clusters get-credentials styleme-cluster --zone us-central1-a
+> ```
 
-**Deploy Infrastructure:**
-```bash
-# Preview changes
-pulumi preview
+The Pulumi deployment process provides a comprehensive view of all infrastructure components being created, as shown in the deployment output below. The preview functionality allows administrators to review exactly what resources will be created, modified, or destroyed before making any changes, ensuring safe and predictable infrastructure updates. Once deployed, the infrastructure state is tracked by Pulumi, enabling easy updates, rollbacks, and environment replication. The deployment output clearly shows the creation of the GKE cluster, node pools, and all associated Kubernetes resources, demonstrating the complete automation of infrastructure provisioning.
 
-# Deploy infrastructure (creates GKE cluster, node pools, and all Kubernetes resources)
-pulumi up
-```
-
-This automatically provisions:
-- **GKE Cluster** with default and GPU node pools
-- **Kubernetes Resources**: All resources from `k8s/` directory (ConfigMap, PVC, Jobs, Deployments, HPA)
-- **Networking and Storage** configuration
-
-**Get Cluster Connection:**
-```bash
-pulumi stack output kubeconfig --show-secrets > kubeconfig.yaml
-# Or: gcloud container clusters get-credentials styleme-cluster --zone us-central1-a
-```
-<img width="1106" height="726" alt="puluni" src="https://github.com/user-attachments/assets/34496611-3772-4027-aab6-60f832553eb2" />
+<p align="center">
+  <img width="80%" alt="Pulumi infrastructure deployment output" src="https://github.com/user-attachments/assets/34496611-3772-4027-aab6-60f832553eb2" />
+  <br>
+  <em>Pulumi infrastructure deployment output showing GKE cluster and Kubernetes resources creation</em>
+</p>
 
 
 ### CI/CD Pipeline Implementation (GitHub Actions)
