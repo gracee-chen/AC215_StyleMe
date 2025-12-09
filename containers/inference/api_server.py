@@ -115,6 +115,10 @@ inference_service = None
 inference_service_error = None
 _inference_service_lock = threading.Lock()
 
+# Wardrobe rebuild tracking (prevent concurrent builds for same user)
+_wardrobe_rebuild_locks = {}  # user_id -> threading.Lock
+_wardrobe_rebuild_locks_lock = threading.Lock()  # Lock for the locks dict
+
 def get_inference_service():
     """Lazy initialization of inference service with thread safety"""
     global inference_service, inference_service_error
@@ -573,6 +577,183 @@ def save_wardrobe_image_to_gcs(user_id: str, image_path: Path, metadata_path: Pa
         # Don't raise - allow local save to continue
         return False
 
+def rebuild_wardrobe_index_async(user_id: str):
+    """
+    Rebuild wardrobe index asynchronously in the background.
+    Downloads images from GCS, builds index, and uploads back to GCS.
+    This runs in a background thread and doesn't block the upload response.
+    """
+    def _rebuild_worker():
+        """Background worker function that does the actual rebuild"""
+        import subprocess
+        import tempfile
+        
+        # Get or create lock for this user
+        with _wardrobe_rebuild_locks_lock:
+            if user_id not in _wardrobe_rebuild_locks:
+                _wardrobe_rebuild_locks[user_id] = threading.Lock()
+            user_lock = _wardrobe_rebuild_locks[user_id]
+        
+        # Check if rebuild is already in progress for this user
+        if not user_lock.acquire(blocking=False):
+            print(f"   ⏭️  Wardrobe rebuild already in progress for {user_id}, skipping...")
+            return
+        
+        try:
+            print(f"   🔨 Starting async wardrobe index rebuild for {user_id}...")
+            
+            # Check if we're in Cloud Run (use GCS client)
+            is_cloud_run = os.getenv('CLOUD_RUN', '').lower() == 'true' or os.getenv('K_SERVICE') is not None
+            
+            if is_cloud_run:
+                # In Cloud Run: download from GCS, build, upload back
+                from google.cloud import storage
+                
+                gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+                gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+                
+                client = storage.Client(project=gcp_project_id)
+                bucket = client.bucket(gcp_bucket_name)
+                
+                # Check if images exist in GCS
+                images_prefix = f"wardrobes/{user_id}/images/"
+                image_blobs = list(bucket.list_blobs(prefix=images_prefix))
+                image_files = [b for b in image_blobs if b.name.lower().endswith(('.jpg', '.jpeg', '.png'))]
+                
+                if not image_files:
+                    print(f"   ⚠️  No wardrobe images found in GCS for {user_id}, skipping rebuild")
+                    return
+                
+                print(f"   📂 Found {len(image_files)} images in GCS for {user_id}")
+                
+                # Create temp directory for building index
+                temp_wardrobe_dir = Path(tempfile.gettempdir()) / "styleme_wardrobes" / user_id
+                temp_wardrobe_dir.mkdir(parents=True, exist_ok=True)
+                temp_images_dir = temp_wardrobe_dir / "images"
+                temp_images_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Download images and metadata files to temp directory
+                metadata_downloaded = 0
+                for blob in image_files[:50]:  # Limit to 50 images
+                    filename = blob.name.split('/')[-1]
+                    local_img_path = temp_images_dir / filename
+                    blob.download_to_filename(str(local_img_path))
+                    
+                    # Also download corresponding metadata JSON file if it exists
+                    metadata_filename = Path(filename).stem + '_metadata.json'
+                    metadata_blob_path = f"wardrobes/{user_id}/{metadata_filename}"
+                    metadata_blob = bucket.blob(metadata_blob_path)
+                    if metadata_blob.exists():
+                        local_metadata_path = temp_wardrobe_dir / metadata_filename
+                        metadata_blob.download_to_filename(str(local_metadata_path))
+                        metadata_downloaded += 1
+                
+                print(f"   ✅ Downloaded {len(image_files[:50])} images and {metadata_downloaded} metadata files")
+                
+                # Build index in temp directory
+                try:
+                    print(f"   🔨 Running build_user_wardrobe.py subprocess...")
+                    print(f"   📂 Temp wardrobe dir: {temp_wardrobe_dir}")
+                    print(f"   📂 Experiments dir: {EXPERIMENTS_DIR}")
+                    
+                    result = subprocess.run([
+                        sys.executable,
+                        "/app/build_user_wardrobe.py",
+                        "--user-id", user_id,
+                        "--wardrobe-dir", str(temp_wardrobe_dir),
+                        "--experiments-dir", str(EXPERIMENTS_DIR),
+                        "--wardrobes-base-dir", str(temp_wardrobe_dir.parent)
+                    ], capture_output=True, text=True, check=True, timeout=600)
+                    
+                    # Print subprocess output for debugging
+                    if result.stdout:
+                        print(f"   📝 Build stdout (last 1000 chars): {result.stdout[-1000:]}")
+                    if result.stderr:
+                        print(f"   ⚠️  Build stderr (last 1000 chars): {result.stderr[-1000:]}")
+                    
+                    print(f"   ✅ Wardrobe index built for {user_id} (exit code: {result.returncode})")
+                    
+                    # Upload index files back to GCS
+                    index_files = ['wardrobe.index.faiss', 'wardrobe.parquet', 'idmap.npy']
+                    uploaded_count = 0
+                    for filename in index_files:
+                        local_file = temp_wardrobe_dir / filename
+                        if local_file.exists():
+                            gcs_file_path = f"wardrobes/{user_id}/{filename}"
+                            gcs_blob = bucket.blob(gcs_file_path)
+                            gcs_blob.upload_from_filename(str(local_file))
+                            uploaded_count += 1
+                            print(f"   📤 Uploaded {filename} to GCS")
+                        else:
+                            print(f"   ⚠️  Index file {filename} not found at {local_file}")
+                    
+                    if uploaded_count > 0:
+                        print(f"   🎉 Wardrobe index rebuild completed for {user_id} ({uploaded_count} files uploaded)")
+                    else:
+                        print(f"   ⚠️  Wardrobe index built but no files were uploaded")
+                        
+                except subprocess.CalledProcessError as e:
+                    print(f"   ❌ Failed to build wardrobe index (exit code {e.returncode})")
+                    if e.stdout:
+                        print(f"   📝 stdout (last 1000 chars): {e.stdout[-1000:]}")
+                    if e.stderr:
+                        print(f"   📝 stderr (last 1000 chars): {e.stderr[-1000:]}")
+                    import traceback
+                    traceback.print_exc()
+                except subprocess.TimeoutExpired:
+                    print(f"   ❌ Wardrobe index build timed out after 600 seconds")
+                except Exception as build_error:
+                    print(f"   ❌ Error building wardrobe index: {type(build_error).__name__}: {build_error}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                # Local: use local paths directly
+                user_wardrobe_dir = WARDROBES_DIR / user_id
+                images_dir = user_wardrobe_dir / 'images'
+                
+                if not images_dir.exists() or not list(images_dir.glob('*.jpg')):
+                    print(f"   ⚠️  No images found for {user_id}, skipping rebuild")
+                    return
+                
+                # Build wardrobe index locally
+                try:
+                    result = subprocess.run([
+                        sys.executable,
+                        "/app/build_user_wardrobe.py",
+                        "--user-id", user_id,
+                        "--wardrobe-dir", str(user_wardrobe_dir),
+                        "--experiments-dir", str(EXPERIMENTS_DIR),
+                        "--wardrobes-base-dir", str(WARDROBES_DIR)
+                    ], capture_output=True, text=True, check=True, timeout=600)
+                    
+                    print(f"   🎉 Wardrobe index rebuild completed for {user_id}")
+                    
+                except subprocess.CalledProcessError as e:
+                    print(f"   ❌ Failed to build wardrobe index (exit code {e.returncode})")
+                    if e.stdout:
+                        print(f"   📝 stdout: {e.stdout[-500:]}")
+                    if e.stderr:
+                        print(f"   📝 stderr: {e.stderr[-500:]}")
+                except subprocess.TimeoutExpired:
+                    print(f"   ❌ Wardrobe index build timed out after 600 seconds")
+                except Exception as build_error:
+                    print(f"   ❌ Error building wardrobe index: {build_error}")
+                    import traceback
+                    traceback.print_exc()
+                    
+        except Exception as e:
+            print(f"   ❌ Unexpected error in wardrobe rebuild: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            user_lock.release()
+            print(f"   ✅ Wardrobe rebuild process finished for {user_id}")
+    
+    # Start rebuild in background thread
+    thread = threading.Thread(target=_rebuild_worker, daemon=True)
+    thread.start()
+    print(f"   🚀 Triggered async wardrobe index rebuild for {user_id} (running in background)")
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -884,20 +1065,54 @@ def upload_image():
             print(f"⚠️  Warning: Failed to upload to GCS, but local save succeeded: {gcs_error}")
             # Continue - local save is still valid
         
-        # Invalidate wardrobe index so it gets rebuilt on next search
-        # This ensures new items are included in recommendations
+        # Incrementally update wardrobe index using in-memory model
+        # This is much faster than rebuilding the entire index
         try:
-            wardrobe_index_path = WARDROBES_DIR / user_id / "wardrobe.index.faiss"
-            if wardrobe_index_path.exists():
-                print(f"🗑️  Removing stale wardrobe index to trigger rebuild on next search")
-                # Remove index files so they get rebuilt
-                for index_file in ['wardrobe.index.faiss', 'wardrobe.parquet', 'idmap.npy', 'wardrobe.vecs.npy']:
-                    index_path = WARDROBES_DIR / user_id / index_file
-                    if index_path.exists():
-                        index_path.unlink()
-        except Exception as index_error:
-            print(f"⚠️  Warning: Failed to invalidate wardrobe index: {index_error}")
-            # Continue - index will be rebuilt on next search anyway
+            service, error = get_inference_service()
+            if service and not error:
+                # Extract item_id from filename (without extension)
+                item_id = final_image_path.stem
+                
+                # Get metadata for the item
+                category = metadata_to_save.get('category') if metadata_to_save else None
+                color = metadata_to_save.get('color') if metadata_to_save else None
+                style = metadata_to_save.get('style') if metadata_to_save else None
+                
+                # The image should be saved locally at final_image_path before this point
+                # Use the local path for embedding generation (embed_image needs a local file)
+                if final_image_path.exists():
+                    print(f"   🔄 Updating wardrobe index incrementally for {item_id}...")
+                    success = service.add_item_to_wardrobe_index(
+                        user_id=user_id,
+                        image_path=str(final_image_path),
+                        item_id=item_id,
+                        category=category,
+                        color=color,
+                        style=style
+                    )
+                    
+                    if success:
+                        print(f"   ✅ Wardrobe index updated successfully for {item_id}")
+                    else:
+                        print(f"   ⚠️  Failed to update wardrobe index for {item_id}, will be available after next rebuild")
+                else:
+                    print(f"   ⚠️  Image file not found at {final_image_path}, skipping incremental update")
+                    # Fall back to async rebuild
+                    rebuild_wardrobe_index_async(user_id)
+            else:
+                print(f"   ⚠️  Inference service not available, skipping incremental update")
+                # Fall back to async rebuild if service not available
+                rebuild_wardrobe_index_async(user_id)
+        except Exception as update_error:
+            print(f"   ⚠️  Failed to update wardrobe index incrementally: {update_error}")
+            import traceback
+            traceback.print_exc()
+            # Fall back to async rebuild on error
+            try:
+                rebuild_wardrobe_index_async(user_id)
+            except Exception as rebuild_error:
+                print(f"   ⚠️  Failed to trigger wardrobe index rebuild: {rebuild_error}")
+                # Continue - index will be rebuilt on next search anyway
         
         # Return success with image info and metadata
         return jsonify({

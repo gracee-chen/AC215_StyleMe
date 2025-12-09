@@ -413,15 +413,23 @@ class InferenceService:
         use_gcs_client = False
         local_wardrobe_path = None
         
-        # Check if using GCS path
+        # Check if we're in Cloud Run (always use GCS client in Cloud Run)
+        is_cloud_run = os.getenv('CLOUD_RUN', '').lower() == 'true' or os.getenv('K_SERVICE') is not None
+        
         wardrobe_path_str = str(wardrobe_path)
-        if wardrobe_path_str.startswith('/gcs/'):
-            if wardrobe_path.exists() and list(wardrobe_path.glob("*")):
-                print(f"   Using GCS mount at {wardrobe_path}")
-                local_wardrobe_path = wardrobe_path
-            else:
-                use_gcs_client = True
-                print(f"   GCS mount not available, checking GCS for wardrobe...")
+        
+        # Always use GCS client if:
+        # 1. In Cloud Run (incremental updates save directly to GCS)
+        # 2. Path starts with /gcs/ (incremental updates use GCS client, not mount)
+        # 3. Path contains gs:// or styleme-production
+        # This ensures we read from the same place we write (GCS client, not mount)
+        if is_cloud_run:
+            use_gcs_client = True
+            print(f"   Cloud Run detected, using GCS client for wardrobe...")
+        elif wardrobe_path_str.startswith('/gcs/'):
+            # Even if mount exists, use GCS client to match incremental update behavior
+            use_gcs_client = True
+            print(f"   GCS path detected, using GCS client (incremental updates use client, not mount)...")
         elif 'gs://' in wardrobe_path_str or 'styleme-production' in wardrobe_path_str:
             use_gcs_client = True
         else:
@@ -489,66 +497,15 @@ class InferenceService:
                             print(f"   ⚠️  Could not check index for category field: {check_error}")
                     
                     if not index_blob.exists() or index_is_stale:
-                        # Need to build/rebuild index - download images first, then build
+                        # Index doesn't exist or is stale - don't build synchronously (causes timeout)
+                        # Instead, return None and let async rebuild handle it
                         if index_is_stale:
-                            print(f"   🔨 Rebuilding wardrobe index for {user_id} (index is stale)...")
+                            print(f"   ⚠️  Wardrobe index is stale for {user_id} - async rebuild should handle this")
                         else:
-                            print(f"   🔨 Building wardrobe index for {user_id} (images found in GCS)...")
-                        # Create temp directory for building index
-                        temp_wardrobe_dir = Path(tempfile.gettempdir()) / "styleme_wardrobes" / user_id
-                        temp_wardrobe_dir.mkdir(parents=True, exist_ok=True)
-                        temp_images_dir = temp_wardrobe_dir / "images"
-                        temp_images_dir.mkdir(parents=True, exist_ok=True)
-                        
-                        # Download images AND metadata files to temp directory
-                        metadata_downloaded = 0
-                        for blob in image_files[:50]:  # Limit to 50 images for building
-                            filename = blob.name.split('/')[-1]
-                            local_img_path = temp_images_dir / filename
-                            blob.download_to_filename(str(local_img_path))
-                            
-                            # Also download corresponding metadata JSON file if it exists
-                            metadata_filename = Path(filename).stem + '_metadata.json'
-                            metadata_blob_path = f"wardrobes/{user_id}/{metadata_filename}"
-                            metadata_blob = bucket.blob(metadata_blob_path)
-                            if metadata_blob.exists():
-                                local_metadata_path = temp_wardrobe_dir / metadata_filename
-                                metadata_blob.download_to_filename(str(local_metadata_path))
-                                metadata_downloaded += 1
-                                print(f"   📄 Downloaded metadata: {metadata_filename}")
-                            else:
-                                print(f"   ⚠️  Metadata file not found in GCS: {metadata_blob_path}")
-                        
-                        print(f"   ✅ Downloaded {len(image_files[:50])} images and {metadata_downloaded} metadata files")
-                        
-                        # Build index in temp directory
-                        try:
-                            result = subprocess.run([
-                                sys.executable,
-                                "/app/build_user_wardrobe.py",
-                                "--user-id", user_id,
-                                "--wardrobe-dir", str(temp_wardrobe_dir),
-                                "--experiments-dir", str(self.experiments_dir),
-                                "--wardrobes-base-dir", str(temp_wardrobe_dir.parent)
-                            ], capture_output=True, text=True, check=True, timeout=600)
-                            print(f"   ✅ Wardrobe index built for {user_id}")
-                            
-                            # Upload index files back to GCS
-                            index_files = ['wardrobe.index.faiss', 'wardrobe.parquet', 'idmap.npy']
-                            for filename in index_files:
-                                local_file = temp_wardrobe_dir / filename
-                                if local_file.exists():
-                                    gcs_file_path = f"wardrobes/{user_id}/{filename}"
-                                    gcs_blob = bucket.blob(gcs_file_path)
-                                    gcs_blob.upload_from_filename(str(local_file))
-                            
-                            local_wardrobe_path = temp_wardrobe_dir
-                        except subprocess.CalledProcessError as e:
-                            print(f"   ❌ Failed to build wardrobe index: {e.stderr}")
-                            return None, 0.0
-                        except subprocess.TimeoutExpired:
-                            print(f"   ❌ Wardrobe index build timed out")
-                            return None, 0.0
+                            print(f"   ⚠️  Wardrobe index not found for {user_id} - async rebuild should handle this")
+                        print(f"   💡 Skipping wardrobe search (index will be built asynchronously)")
+                        print(f"   📊 Returning catalog-only recommendations for now")
+                        return None, 0.0
                     else:
                         # Index exists in GCS - download to temp and verify
                         print(f"   📥 Downloading wardrobe index from GCS...")
@@ -589,67 +546,12 @@ class InferenceService:
                                 all_files_downloaded = False
                                 break
                         
-                        # If download failed or files are corrupted, rebuild
+                        # If download failed or files are corrupted, skip rebuild (async will handle it)
                         if not all_files_downloaded:
-                            print(f"   🔨 Rebuilding wardrobe index for {user_id} (corrupted or missing files)...")
-                            temp_images_dir = temp_wardrobe_dir / "images"
-                            temp_images_dir.mkdir(parents=True, exist_ok=True)
-                            
-                            # Clean up any existing corrupted files first
-                            for f in index_files.keys():
-                                (temp_wardrobe_dir / f).unlink(missing_ok=True)
-                            
-                            # Download images to temp directory
-                            for blob in image_files[:50]:  # Limit to 50 images for building
-                                filename = blob.name.split('/')[-1]
-                                local_img_path = temp_images_dir / filename
-                                blob.download_to_filename(str(local_img_path))
-                            
-                            # Build index in temp directory
-                            try:
-                                result = subprocess.run([
-                                    sys.executable,
-                                    "/app/build_user_wardrobe.py",
-                                    "--user-id", user_id,
-                                    "--wardrobe-dir", str(temp_wardrobe_dir),
-                                    "--experiments-dir", str(self.experiments_dir),
-                                    "--wardrobes-base-dir", str(temp_wardrobe_dir.parent)
-                                ], capture_output=True, text=True, check=True, timeout=600)
-                                print(f"   ✅ Wardrobe index rebuilt for {user_id}")
-                                
-                                # Verify the rebuilt parquet file is valid before using it
-                                rebuilt_parquet = temp_wardrobe_dir / "wardrobe.parquet"
-                                if rebuilt_parquet.exists():
-                                    try:
-                                        test_meta = pd.read_parquet(rebuilt_parquet)
-                                        if test_meta.empty:
-                                            print(f"   ⚠️  Rebuilt parquet file is empty")
-                                            return None, 0.0
-                                        print(f"   ✅ Verified rebuilt parquet file is valid ({len(test_meta)} items)")
-                                    except Exception as verify_error:
-                                        print(f"   ❌ Rebuilt parquet file is still corrupted: {verify_error}")
-                                        return None, 0.0
-                                else:
-                                    print(f"   ❌ Rebuilt parquet file not found")
-                                    return None, 0.0
-                                
-                                # Upload index files back to GCS (overwrite corrupted ones)
-                                for filename in index_files.keys():
-                                    local_file = temp_wardrobe_dir / filename
-                                    if local_file.exists():
-                                        gcs_file_path = f"wardrobes/{user_id}/{filename}"
-                                        gcs_blob = bucket.blob(gcs_file_path)
-                                        gcs_blob.upload_from_filename(str(local_file))
-                                        print(f"   ✅ Uploaded {filename} to GCS")
-                                
-                                # Use the newly built files (not the corrupted downloaded ones)
-                                local_wardrobe_path = temp_wardrobe_dir
-                            except subprocess.CalledProcessError as e:
-                                print(f"   ❌ Failed to rebuild wardrobe index: {e.stderr}")
-                                return None, 0.0
-                            except subprocess.TimeoutExpired:
-                                print(f"   ❌ Wardrobe index rebuild timed out")
-                                return None, 0.0
+                            print(f"   ⚠️  Wardrobe index files corrupted or missing for {user_id}")
+                            print(f"   💡 Skipping wardrobe search (async rebuild will handle this)")
+                            print(f"   📊 Returning catalog-only recommendations for now")
+                            return None, 0.0
                         else:
                             # Files downloaded successfully and verified - use them
                             local_wardrobe_path = temp_wardrobe_dir
@@ -662,29 +564,21 @@ class InferenceService:
         
         index_path = local_wardrobe_path / "wardrobe.index.faiss"
         
-        # Auto-build wardrobe index if images exist but index doesn't (local only)
-        if not index_path.exists() and not use_gcs_client:
-            images_dir = local_wardrobe_path / "images"
-            if images_dir.exists() and list(images_dir.glob("*.jpg")):
-                print(f"   🔨 Building wardrobe index for {user_id}...")
-                try:
-                    # Build the wardrobe index
-                    result = subprocess.run([
-                        sys.executable,
-                        "/app/build_user_wardrobe.py",
-                        "--user-id", user_id,
-                        "--wardrobe-dir", str(local_wardrobe_path),
-                        "--experiments-dir", str(self.experiments_dir),
-                        "--wardrobes-base-dir", str(self.wardrobes_dir)
-                    ], capture_output=True, text=True, check=True)
-                    print(f"   ✅ Wardrobe index built for {user_id}")
-                except subprocess.CalledProcessError as e:
-                    print(f"   ❌ Failed to build wardrobe index: {e.stderr}")
-                    return None, 0.0
-            else:
-                return None, 0.0
-        
+        # Check if index exists - if not, skip build (async rebuild will handle it)
+        # Don't build synchronously during recommendation requests (causes timeout)
         if not index_path.exists():
+            # Check if we're in Cloud Run or using GCS - if so, async rebuild should handle it
+            if is_cloud_run or use_gcs_client or wardrobe_path_str.startswith('/gcs/'):
+                print(f"   ⚠️  Wardrobe index not found for {user_id}")
+                print(f"   💡 Skipping wardrobe search (async rebuild will handle this)")
+                print(f"   📊 Returning catalog-only recommendations for now")
+            else:
+                # Local filesystem - check if images exist
+                images_dir = local_wardrobe_path / "images" if local_wardrobe_path else None
+                if images_dir and images_dir.exists() and list(images_dir.glob("*.jpg")):
+                    print(f"   ⚠️  Wardrobe index not found for {user_id} (local filesystem)")
+                    print(f"   💡 Skipping synchronous build to avoid timeout")
+                    print(f"   📊 Returning catalog-only recommendations for now")
             return None, 0.0
         
         try:
@@ -754,6 +648,16 @@ class InferenceService:
             # Load ID map
             idmap_path = local_wardrobe_path / "idmap.npy"
             idmap = np.load(idmap_path, allow_pickle=True)
+            # Unwrap if it's a 0-dimensional array containing a dict
+            if isinstance(idmap, np.ndarray) and idmap.ndim == 0:
+                idmap = idmap.item()
+            # Ensure it's a dict (convert from list/array if needed)
+            if not isinstance(idmap, dict):
+                if isinstance(idmap, (list, np.ndarray)):
+                    idmap = {i: item_id for i, item_id in enumerate(idmap)}
+                else:
+                    print(f"   ⚠️  Unexpected idmap type: {type(idmap)}, converting to dict")
+                    idmap = {}
             
             # Search more items initially for diversity
             search_k = min(max(k * 3, 15), index.ntotal)
@@ -849,6 +753,289 @@ class InferenceService:
         except Exception as e:
             print(f"⚠️  Error searching wardrobe: {e}")
             return None, 0.0
+    
+    def add_item_to_wardrobe_index(self, user_id: str, image_path: str, item_id: str, 
+                                   category: str = None, color: str = None, style: str = None) -> bool:
+        """
+        Incrementally add a single item to user's wardrobe index.
+        Uses the already-loaded model to generate embedding, then updates FAISS index.
+        
+        Args:
+            user_id: User identifier
+            image_path: Path to the image file (local or GCS)
+            item_id: Unique identifier for this item (filename without extension)
+            category: Item category (optional, from metadata)
+            color: Item color (optional, from metadata)
+            style: Item style (optional, from metadata)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            print(f"   🔄 Adding item {item_id} to wardrobe index incrementally...")
+            
+            # Step 1: Generate embedding for the new image
+            print(f"   📊 Generating embedding for {item_id}...")
+            embedding = self.embed_image(image_path)
+            
+            # Ensure embedding is 2D array (1, dimension)
+            if embedding.ndim == 1:
+                embedding = embedding.reshape(1, -1)
+            
+            # Step 2: Determine wardrobe path and whether to use GCS
+            wardrobe_path = self.wardrobes_dir / user_id
+            is_cloud_run = os.getenv('CLOUD_RUN', '').lower() == 'true' or os.getenv('K_SERVICE') is not None
+            use_gcs_client = is_cloud_run or str(wardrobe_path).startswith('/gcs/') or 'gs://' in str(wardrobe_path)
+            
+            if use_gcs_client:
+                # Use GCS client for Cloud Run
+                from google.cloud import storage
+                import tempfile
+                import json
+                
+                gcp_bucket_name = os.getenv('GCS_BUCKET', 'styleme-production')
+                gcp_project_id = os.getenv('GCP_PROJECT_ID', 'styleme-475201')
+                
+                client = storage.Client(project=gcp_project_id)
+                bucket = client.bucket(gcp_bucket_name)
+                
+                # Create temp directory for this operation
+                temp_wardrobe_dir = Path(tempfile.gettempdir()) / "styleme_wardrobes" / user_id
+                temp_wardrobe_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Check if index exists in GCS
+                index_blob_path = f"wardrobes/{user_id}/wardrobe.index.faiss"
+                index_blob = bucket.blob(index_blob_path)
+                
+                existing_index = None
+                existing_meta = None
+                existing_idmap = None
+                dimension = embedding.shape[1]
+                
+                if index_blob.exists():
+                    # Download existing index files
+                    print(f"   📥 Downloading existing wardrobe index...")
+                    
+                    # Download FAISS index
+                    temp_index_path = temp_wardrobe_dir / "wardrobe.index.faiss"
+                    index_blob.download_to_filename(str(temp_index_path))
+                    existing_index = faiss.read_index(str(temp_index_path))
+                    dimension = existing_index.d
+                    
+                    # Download parquet metadata
+                    parquet_blob = bucket.blob(f"wardrobes/{user_id}/wardrobe.parquet")
+                    if parquet_blob.exists():
+                        temp_parquet_path = temp_wardrobe_dir / "wardrobe.parquet"
+                        parquet_blob.download_to_filename(str(temp_parquet_path))
+                        existing_meta = pd.read_parquet(temp_parquet_path)
+                    
+                    # Download idmap
+                    idmap_blob = bucket.blob(f"wardrobes/{user_id}/idmap.npy")
+                    if idmap_blob.exists():
+                        temp_idmap_path = temp_wardrobe_dir / "idmap.npy"
+                        idmap_blob.download_to_filename(str(temp_idmap_path))
+                        existing_idmap = np.load(temp_idmap_path, allow_pickle=True)
+                        if isinstance(existing_idmap, np.ndarray) and existing_idmap.ndim == 0:
+                            existing_idmap = existing_idmap.item()
+                        if not isinstance(existing_idmap, dict):
+                            # Convert array to dict if needed
+                            existing_idmap = {i: item_id for i, item_id in enumerate(existing_idmap)}
+                else:
+                    # Create new index
+                    print(f"   🆕 Creating new wardrobe index...")
+                    existing_index = faiss.IndexFlatL2(dimension)
+                    existing_meta = pd.DataFrame(columns=['item_id', 'img_path', 'filename', 'category', 'color', 'style', 'added_at'])
+                    existing_idmap = {}
+                
+                # Step 3: Add embedding to FAISS index
+                print(f"   ➕ Adding embedding to FAISS index...")
+                existing_index.add(embedding.astype('float32'))
+                
+                # Step 4: Update metadata
+                new_row = {
+                    'item_id': item_id,
+                    'img_path': f"wardrobes/{user_id}/images/{Path(image_path).name}",
+                    'filename': Path(image_path).name,
+                    'category': category,
+                    'color': color,
+                    'style': style,
+                    'added_at': datetime.now().isoformat()
+                }
+                
+                # Add to metadata DataFrame
+                new_df = pd.DataFrame([new_row])
+                if existing_meta is None or existing_meta.empty:
+                    existing_meta = new_df
+                else:
+                    existing_meta = pd.concat([existing_meta, new_df], ignore_index=True)
+                
+                # Step 5: Update idmap
+                new_index = existing_index.ntotal - 1  # Index of the newly added item
+                if not isinstance(existing_idmap, dict):
+                    existing_idmap = {}
+                existing_idmap[new_index] = item_id
+                
+                # Step 6: Save updated files
+                print(f"   💾 Saving updated wardrobe index...")
+                
+                # Save FAISS index
+                temp_index_path = temp_wardrobe_dir / "wardrobe.index.faiss"
+                faiss.write_index(existing_index, str(temp_index_path))
+                
+                # Save parquet
+                temp_parquet_path = temp_wardrobe_dir / "wardrobe.parquet"
+                existing_meta.to_parquet(temp_parquet_path, index=False)
+                
+                # Save idmap
+                temp_idmap_path = temp_wardrobe_dir / "idmap.npy"
+                np.save(temp_idmap_path, existing_idmap)
+                
+                # Step 7: Upload to GCS
+                print(f"   📤 Uploading updated index to GCS...")
+                
+                # Upload FAISS index
+                try:
+                    index_blob.upload_from_filename(str(temp_index_path))
+                    print(f"   ✅ Uploaded wardrobe.index.faiss to GCS ({temp_index_path.stat().st_size} bytes)")
+                except Exception as e:
+                    print(f"   ❌ Failed to upload wardrobe.index.faiss: {e}")
+                    raise
+                
+                # Upload parquet
+                try:
+                    parquet_blob = bucket.blob(f"wardrobes/{user_id}/wardrobe.parquet")
+                    parquet_blob.upload_from_filename(str(temp_parquet_path))
+                    print(f"   ✅ Uploaded wardrobe.parquet to GCS ({temp_parquet_path.stat().st_size} bytes)")
+                except Exception as e:
+                    print(f"   ❌ Failed to upload wardrobe.parquet: {e}")
+                    raise
+                
+                # Upload idmap
+                try:
+                    idmap_blob = bucket.blob(f"wardrobes/{user_id}/idmap.npy")
+                    idmap_blob.upload_from_filename(str(temp_idmap_path))
+                    print(f"   ✅ Uploaded idmap.npy to GCS ({temp_idmap_path.stat().st_size} bytes)")
+                except Exception as e:
+                    print(f"   ❌ Failed to upload idmap.npy: {e}")
+                    raise
+                
+                # Update manifest if it exists
+                manifest_blob = bucket.blob(f"wardrobes/{user_id}/manifest.json")
+                if manifest_blob.exists():
+                    manifest_data = json.loads(manifest_blob.download_as_text())
+                else:
+                    manifest_data = {
+                        'user_id': user_id,
+                        'model': 'FashionCLIP',
+                        'dimension': int(dimension),
+                        'index_type': 'IndexFlatL2'
+                    }
+                
+                manifest_data['num_items'] = existing_index.ntotal
+                manifest_data['last_updated'] = datetime.now().isoformat()
+                manifest_blob.upload_from_string(
+                    json.dumps(manifest_data, indent=2),
+                    content_type='application/json'
+                )
+                
+                print(f"   ✅ Successfully added {item_id} to wardrobe index ({existing_index.ntotal} items total)")
+                return True
+                
+            else:
+                # Local filesystem path
+                wardrobe_path.mkdir(parents=True, exist_ok=True)
+                index_path = wardrobe_path / "wardrobe.index.faiss"
+                
+                existing_index = None
+                existing_meta = None
+                existing_idmap = None
+                dimension = embedding.shape[1]
+                
+                if index_path.exists():
+                    # Load existing index
+                    print(f"   📥 Loading existing wardrobe index...")
+                    existing_index = faiss.read_index(str(index_path))
+                    dimension = existing_index.d
+                    
+                    # Load metadata
+                    meta_path = wardrobe_path / "wardrobe.parquet"
+                    if meta_path.exists():
+                        existing_meta = pd.read_parquet(meta_path)
+                    
+                    # Load idmap
+                    idmap_path = wardrobe_path / "idmap.npy"
+                    if idmap_path.exists():
+                        existing_idmap = np.load(idmap_path, allow_pickle=True)
+                        if isinstance(existing_idmap, np.ndarray) and existing_idmap.ndim == 0:
+                            existing_idmap = existing_idmap.item()
+                        if not isinstance(existing_idmap, dict):
+                            existing_idmap = {i: item_id for i, item_id in enumerate(existing_idmap)}
+                else:
+                    # Create new index
+                    print(f"   🆕 Creating new wardrobe index...")
+                    existing_index = faiss.IndexFlatL2(dimension)
+                    existing_meta = pd.DataFrame(columns=['item_id', 'img_path', 'filename', 'category', 'color', 'style', 'added_at'])
+                    existing_idmap = {}
+                
+                # Add embedding to index
+                print(f"   ➕ Adding embedding to FAISS index...")
+                existing_index.add(embedding.astype('float32'))
+                
+                # Update metadata
+                new_row = {
+                    'item_id': item_id,
+                    'img_path': str(Path(image_path).relative_to(self.wardrobes_dir)),
+                    'filename': Path(image_path).name,
+                    'category': category,
+                    'color': color,
+                    'style': style,
+                    'added_at': datetime.now().isoformat()
+                }
+                
+                new_df = pd.DataFrame([new_row])
+                if existing_meta is None or existing_meta.empty:
+                    existing_meta = new_df
+                else:
+                    existing_meta = pd.concat([existing_meta, new_df], ignore_index=True)
+                
+                # Update idmap
+                new_index = existing_index.ntotal - 1
+                if not isinstance(existing_idmap, dict):
+                    existing_idmap = {}
+                existing_idmap[new_index] = item_id
+                
+                # Save files
+                print(f"   💾 Saving updated wardrobe index...")
+                faiss.write_index(existing_index, str(index_path))
+                existing_meta.to_parquet(wardrobe_path / "wardrobe.parquet", index=False)
+                np.save(wardrobe_path / "idmap.npy", existing_idmap)
+                
+                # Update manifest
+                manifest_path = wardrobe_path / "manifest.json"
+                if manifest_path.exists():
+                    with open(manifest_path, 'r') as f:
+                        manifest_data = json.load(f)
+                else:
+                    manifest_data = {
+                        'user_id': user_id,
+                        'model': 'FashionCLIP',
+                        'dimension': int(dimension),
+                        'index_type': 'IndexFlatL2'
+                    }
+                
+                manifest_data['num_items'] = existing_index.ntotal
+                manifest_data['last_updated'] = datetime.now().isoformat()
+                with open(manifest_path, 'w') as f:
+                    json.dump(manifest_data, f, indent=2)
+                
+                print(f"   ✅ Successfully added {item_id} to wardrobe index ({existing_index.ntotal} items total)")
+                return True
+                
+        except Exception as e:
+            print(f"   ❌ Failed to add item to wardrobe index: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def _extract_category(self, category_str: str) -> str:
         """Normalize category string to standard category names"""

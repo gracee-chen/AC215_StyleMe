@@ -87,6 +87,9 @@ services:
       - ./queries:/app/queries
       - ./results:/app/results
       - ./logs:/app/logs
+      # Mount code files for development (allows code changes without rebuild)
+      - ./containers/inference/inference_service.py:/app/inference_service.py
+      - ./containers/inference/api_server.py:/app/api_server.py
       # Mount gcloud credentials for GCS access (uses your user credentials)
       - ~/.config/gcloud:/root/.config/gcloud:ro
       # Alternative: Mount service account key file if you prefer (uncomment and place gcs-credentials.json in project root)
@@ -107,6 +110,7 @@ services:
       - RUN_API_SERVER=true
       - PORT=5000
       - FLASK_DEBUG=false
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports:
       - "5001:5000"
     profiles:
