@@ -42,21 +42,26 @@ StyleMe provides a comprehensive API interface through the inference service (`c
 <table>
 <tr>
 <td width="33%" style="padding: 5px;">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/7f9e9b3e-c244-4896-b0f1-36459bbe2b75" />
+  <img width="100%" alt="Frontend interface - wardrobe upload" src="https://github.com/user-attachments/assets/7f9e9b3e-c244-4896-b0f1-36459bbe2b75" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Frontend interface - wardrobe upload</em></p>
 </td>
 <td width="33%" style="padding: 5px;">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/a2429b0c-f9cf-4025-bcbf-630044563637" />
+  <img width="100%" alt="Frontend interface - category view" src="https://github.com/user-attachments/assets/a2429b0c-f9cf-4025-bcbf-630044563637" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Frontend interface - category view</em></p>
 </td>
 <td width="33%" style="padding: 5px;">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/d749fc9e-62a0-4966-9636-082ea10adaf2" />
+  <img width="100%" alt="Frontend interface - recommendations" src="https://github.com/user-attachments/assets/d749fc9e-62a0-4966-9636-082ea10adaf2" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Frontend interface - recommendations</em></p>
 </td>
 </tr>
 <tr>
 <td width="33%" style="padding: 5px;">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/09141e1d-94cb-46e5-927c-6be054796e0a" />
+  <img width="100%" alt="Frontend interface - outfit suggestions" src="https://github.com/user-attachments/assets/09141e1d-94cb-46e5-927c-6be054796e0a" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Frontend interface - outfit suggestions</em></p>
 </td>
 <td width="33%" style="padding: 5px;">
-  <img width="100%" alt="image" src="https://github.com/user-attachments/assets/a847a264-d642-4bd0-adb2-f00c55fd6eaa" />
+  <img width="100%" alt="Frontend interface - mobile view" src="https://github.com/user-attachments/assets/a847a264-d642-4bd0-adb2-f00c55fd6eaa" />
+  <p style="text-align: center; font-size: 0.85em; margin-top: 5px;"><em>Frontend interface - mobile view</em></p>
 </td>
 <td width="33%" style="padding: 5px;">
 </td>
@@ -144,7 +149,7 @@ StyleMe is deployed to a production **Google Kubernetes Engine (GKE)** cluster w
 
 #### Deploy the Application to Kubernetes Cluster
 
-The deployment process involves building Docker images, updating Kubernetes manifests, and deploying all services to the cluster. Follow these steps to deploy the complete application.
+The deployment process involves building Docker images for all services (ingestion, preprocessing, training, and inference), pushing them to a container registry, and updating Kubernetes manifests with the new image tags. The deployment follows a sequential approach: first, ConfigMaps and PersistentVolumeClaims are created to provide configuration and storage; then, batch processing jobs (ingestion, preprocessing, training) are deployed to process data and train models; finally, the inference service deployment and Horizontal Pod Autoscaler are configured to serve requests with automatic scaling capabilities. This approach ensures proper resource initialization and dependency management, allowing each component to start only after its prerequisites are ready. The entire deployment can be automated through CI/CD pipelines or executed manually using kubectl commands.
 
 > **Step 1: Build and Push Docker Images**
 > ```bash
@@ -186,7 +191,7 @@ The deployment process involves building Docker images, updating Kubernetes mani
 
 #### Demonstrate Basic Scaling Behavior
 
-The system demonstrates reliability and scalability through both manual and automatic scaling capabilities. The Horizontal Pod Autoscaler (HPA) automatically adjusts the number of pod replicas based on CPU and memory metrics, ensuring optimal resource utilization and service availability under varying load conditions.
+The system demonstrates reliability and scalability through both manual and automatic scaling capabilities. Manual scaling allows administrators to directly control the number of pod replicas using kubectl commands, providing immediate response to anticipated load changes or maintenance requirements. The Horizontal Pod Autoscaler (HPA) automatically adjusts the number of pod replicas based on CPU and memory metrics, scaling between a minimum of 2 and maximum of 10 replicas to ensure optimal resource utilization and service availability under varying load conditions. When load increases, HPA automatically provisions additional pods to handle the traffic, and when load decreases, it scales down to reduce resource consumption and costs. This dynamic scaling behavior ensures the application maintains consistent performance and availability while efficiently managing infrastructure resources.
 
 <img width="638" height="177" alt="image" src="https://github.com/user-attachments/assets/4273ec9e-446e-4e86-9a47-da367e02f14e" />
 <img width="651" height="170" alt="autoscale2" src="https://github.com/user-attachments/assets/6b2e4bdd-2d0f-493e-9f4a-aa5f038fe7cd" />
