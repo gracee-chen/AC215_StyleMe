@@ -669,6 +669,7 @@ class InferenceService:
             
             # Get items
             items = []
+            items_before_filtering = 0
             for idx, (faiss_idx, similarity) in enumerate(zip(indices[0], similarities)):
                 if faiss_idx < len(idmap):
                     item_id = idmap[faiss_idx]
@@ -676,6 +677,13 @@ class InferenceService:
                     
                     if not item_row.empty:
                         item = item_row.iloc[0].to_dict()
+                        items_before_filtering += 1
+                        
+                        item_category_raw = item.get('category', '')
+                        item_category = str(item_category_raw).lower().strip() if item_category_raw else ''
+                        
+                        # Log every item for debugging
+                        print(f"   🔍 Checking wardrobe item #{items_before_filtering}: category='{item_category}', similarity={similarity:.3f}")
                         
                         # Exclude the query image itself if provided
                         if exclude_image_path:
@@ -690,15 +698,30 @@ class InferenceService:
                             print(f"   🚫 Excluding wardrobe item (too similar, likely same image: similarity={similarity:.3f})")
                             continue
                         
-                        # Filter out items of the same category as query
+                        # Filter out items based on query category
                         # Normalize both for comparison
                         if query_category:
-                            item_category_raw = item.get('category', '')
                             if item_category_raw:
-                                item_category = str(item_category_raw).lower().strip()
                                 # Normalize query_category for comparison (it might be "Jackets" but item is "layers")
                                 query_cat_lower = query_category.lower().strip()
-                                # Map query category to wardrobe category format
+                                
+                                # Dress exclusion logic: Dresses exclude all tops and bottoms
+                                if query_cat_lower == 'dresses':
+                                    # When query is a dress, exclude all tops and bottoms
+                                    bottom_categories = ['bottoms', 'pants', 'jeans', 'trousers', 'skirts', 'skirt', 'shorts', 'short']
+                                    top_categories = ['tops', 'top', 'shirt', 'shirts', 'sweater', 'sweaters', 'blouse']
+                                    if item_category in bottom_categories or item_category in top_categories:
+                                        print(f"   🚫 Excluding wardrobe item (dress query excludes {item_category})")
+                                        continue
+                                
+                                # Top/Bottom exclusion logic: When query is any top or bottom, exclude dresses
+                                top_query_categories = ['tops', 'top']
+                                bottom_query_categories = ['pants', 'skirts', 'shorts', 'bottoms']
+                                if (query_cat_lower in top_query_categories or query_cat_lower in bottom_query_categories) and item_category == 'dresses':
+                                    print(f"   🚫 Excluding wardrobe item ({query_cat_lower} query excludes dresses)")
+                                    continue
+                                
+                                # Map query category to wardrobe category format (for same-category exclusion)
                                 query_to_wardrobe = {
                                     'jackets': ['layers', 'jacket', 'coat', 'blazer'],
                                     'pants': ['bottoms', 'pants', 'jeans', 'trousers'],
@@ -709,7 +732,7 @@ class InferenceService:
                                     'skirts': ['skirts'],
                                     'shorts': ['shorts']
                                 }
-                                # Check if item category matches query category
+                                # Check if item category matches query category (exclude same category)
                                 if query_cat_lower in query_to_wardrobe:
                                     if item_category in query_to_wardrobe[query_cat_lower]:
                                         print(f"   🚫 Excluding wardrobe item (same category: {item_category} matches {query_category})")
@@ -717,12 +740,21 @@ class InferenceService:
                                 elif item_category == query_cat_lower:
                                     print(f"   🚫 Excluding wardrobe item (same category: {item_category})")
                                     continue
+                                else:
+                                    # Item category doesn't match query category - should be included
+                                    print(f"   ✅ Including wardrobe item: category={item_category}, query={query_cat_lower}, similarity={similarity:.3f}")
+                            else:
+                                # No category for item - include it
+                                print(f"   ✅ Including wardrobe item (no category): similarity={similarity:.3f}")
+                        else:
+                            # No query category - include all items
+                            print(f"   ✅ Including wardrobe item (no query category): category={item_category}, similarity={similarity:.3f}")
                         
                         item['similarity'] = float(similarity)
                         item['rank'] = idx + 1
                         items.append(item)
             
-            print(f"   📊 Found {len(items)} wardrobe items after filtering (requested k={k})")
+            print(f"   📊 Found {len(items)} wardrobe items after filtering (requested k={k}, checked {items_before_filtering} items before filtering)")
             
             # Log categories of found items for debugging
             if items:
@@ -1112,10 +1144,13 @@ class InferenceService:
             for part in parts:
                 if part in category_mapping:
                     return category_mapping[part]
-                # Also check for partial matches
+                # Also check for partial matches (e.g., "sweatshirts" contains "sweater")
                 for key, value in category_mapping.items():
-                    if key in part:
+                    if key in part or part in key:
                         return value
+                # Special case: "sweatshirts", "knitwear", "knits" should map to Tops
+                if 'sweatshirt' in part or 'knitwear' in part or 'knits' in part or 'cardigan' in part:
+                    return 'Tops'
         
         # Fallback: check for partial matches in the category string
         for key, value in category_mapping.items():
@@ -1311,17 +1346,21 @@ class InferenceService:
             
             # Smart exclusion rules:
             # - If query is Tops, also exclude Dresses (dresses include tops)
-            # - If query is Dresses, also exclude Tops and Pants (dresses are complete outfits)
+            # - If query is Dresses, exclude ALL tops and ALL bottoms (dresses are complete outfits)
+            # - If query is any bottom type (Pants, Skirts, Shorts), exclude Dresses
             # - If query is Jackets, also exclude Tops (jackets are outerwear worn over tops)
             if query_category == "Tops":
                 categories_to_exclude.add("Dresses")
             elif query_category == "Dresses":
+                # Dresses are complete outfits - exclude all tops and all bottoms
                 categories_to_exclude.add("Tops")
                 categories_to_exclude.add("Pants")
                 categories_to_exclude.add("Skirts")
                 categories_to_exclude.add("Shorts")
-            elif query_category == "Pants":
-                categories_to_exclude.add("Dresses")  # Don't mix pants with dresses
+                # Note: Jeans are mapped to "Pants" via _extract_category, so they're already excluded
+            elif query_category in ["Pants", "Skirts", "Shorts"]:
+                # Any bottom type should exclude dresses (dresses are complete outfits)
+                categories_to_exclude.add("Dresses")
             elif query_category == "Jackets":
                 # Jackets are outerwear - recommend bottoms, bags, shoes, but NOT other tops or jackets
                 categories_to_exclude.add("Tops")  # Don't recommend tops when query is a jacket
@@ -1335,6 +1374,8 @@ class InferenceService:
         # Step 3: Group all items by category, excluding unwanted categories
         items_by_category = {}
         prioritized_items_by_category = {}  # Separate dict for prioritized categories
+        excluded_count = 0
+        total_checked = 0
         
         for idx, (faiss_idx, similarity) in enumerate(zip(indices[0], similarities)):
             if faiss_idx < len(self.catalog_idmap):
@@ -1343,6 +1384,7 @@ class InferenceService:
                 
                 if not item_row.empty:
                     item = item_row.iloc[0].to_dict()
+                    total_checked += 1
                     
                     # Filter by gender if specified
                     if gender:
@@ -1350,10 +1392,14 @@ class InferenceService:
                         if item_gender != gender.lower():
                             continue
                     
-                    item_category = self._extract_category(item.get('category', ''))
+                    raw_category = item.get('category', '')
+                    item_category = self._extract_category(raw_category)
                     
                     # Exclude unwanted categories
                     if item_category in categories_to_exclude:
+                        excluded_count += 1
+                        if excluded_count <= 5:  # Log first 5 exclusions
+                            print(f"   🚫 Excluding catalog item: {item.get('id', 'unknown')} (raw: '{raw_category}' -> extracted: {item_category} is in excluded: {categories_to_exclude})")
                         continue
                     
                     item['similarity'] = float(similarity)
@@ -1369,25 +1415,37 @@ class InferenceService:
                             items_by_category[item_category] = []
                         items_by_category[item_category].append(item)
         
+        print(f"   📊 Catalog filtering: checked {total_checked} items, excluded {excluded_count}, remaining categories: {list(items_by_category.keys())}")
+        
         # Step 4: Find highest match from each category, prioritizing complementary categories
+        # Ensure category uniqueness: track which categories we've already added
         outfit_items = []
+        added_categories = set()  # Track categories already added to ensure uniqueness
         
         # First, add best items from prioritized (complementary) categories
         for category in sorted(categories_to_prioritize):
+            if len(outfit_items) >= k:
+                break
             if category in prioritized_items_by_category and prioritized_items_by_category[category]:
-                best_item = max(prioritized_items_by_category[category], key=lambda x: x['similarity'])
-                outfit_items.append(best_item)
-                print(f"   ⭐ Best match from {category} (prioritized): {best_item.get('title', 'Unknown')[:50]} (similarity: {best_item['similarity']:.3f})")
+                # Only add if we haven't added this category yet
+                if category not in added_categories:
+                    best_item = max(prioritized_items_by_category[category], key=lambda x: x['similarity'])
+                    outfit_items.append(best_item)
+                    added_categories.add(category)
+                    print(f"   ⭐ Best match from {category} (prioritized): {best_item.get('title', 'Unknown')[:50]} (similarity: {best_item['similarity']:.3f})")
         
         # Then, add best items from other categories (if we haven't reached k yet)
         for category, category_items in items_by_category.items():
             if len(outfit_items) >= k:
                 break
             if category_items:
-                # Get best matching item from this category
-                best_item = max(category_items, key=lambda x: x['similarity'])
-                outfit_items.append(best_item)
-                print(f"   ✅ Best match from {category}: {best_item.get('title', 'Unknown')[:50]} (similarity: {best_item['similarity']:.3f})")
+                # Only add if we haven't added this category yet (ensures uniqueness)
+                if category not in added_categories:
+                    # Get best matching item from this category
+                    best_item = max(category_items, key=lambda x: x['similarity'])
+                    outfit_items.append(best_item)
+                    added_categories.add(category)
+                    print(f"   ✅ Best match from {category}: {best_item.get('title', 'Unknown')[:50]} (similarity: {best_item['similarity']:.3f})")
         
         # Step 5: Sort by similarity and return top k
         outfit_items.sort(key=lambda x: x['similarity'], reverse=True)
