@@ -536,6 +536,26 @@ export function UploadScreen({ userId, onUpload, onComplete, mode = 'recommendat
         <p className="text-stone-600 mt-1">Add new items to your virtual closet</p>
       </div>
 
+      {/* Upload Tips - only show in wardrobe mode */}
+      {mode === 'wardrobe' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <Clock className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-900 mb-1">First time upload photo</p>
+              <p className="text-xs text-blue-700">This may take 30s - 1min. If it fails, please refresh and re-upload the photo.</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-900 mb-1">Photo tips for best results</p>
+              <p className="text-xs text-blue-700">Upload photos with normal lighting, clear photos, try not to include multiple pieces of clothing in the frame, and get closer.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <input
         type="file"
         ref={fileInputRef}

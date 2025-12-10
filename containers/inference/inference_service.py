@@ -1337,8 +1337,11 @@ class InferenceService:
         categories_to_prioritize = set()
         
         if query_category:
-            # Use provided query_category directly (already normalized from frontend)
-            categories_to_exclude.add(query_category)
+            # Normalize query_category to match catalog category format (capitalized)
+            # Frontend might send lowercase "accessories" but catalog uses "Accessories" or "Bags"
+            normalized_query_category = self._extract_category(query_category)
+            categories_to_exclude.add(normalized_query_category)
+            query_category = normalized_query_category  # Use normalized version for rest of logic
             
             # Get complementary categories for this query
             complementary = self._get_complementary_categories(query_category)
@@ -1366,6 +1369,10 @@ class InferenceService:
                 categories_to_exclude.add("Tops")  # Don't recommend tops when query is a jacket
                 # Prioritize: bottoms (Pants/Skirts/Shorts), Shoes, Bags
                 # These are already in complementary categories
+            elif query_category in ["Accessories", "Bags"]:
+                # Accessories and Bags are the same category - exclude both
+                categories_to_exclude.add("Accessories")
+                categories_to_exclude.add("Bags")
         
         print(f"   🚫 Excluding categories: {sorted(categories_to_exclude)}")
         if categories_to_prioritize:

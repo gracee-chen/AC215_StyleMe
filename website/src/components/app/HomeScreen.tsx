@@ -404,83 +404,19 @@ export function HomeScreen({ items, userId, onAddItem, onItemClick }: HomeScreen
               </div>
             </div>
           ) : (
-            <Dialog open={isUploadDialogOpen} onOpenChange={handleDialogClose}>
-              <DialogTrigger asChild>
-                <div className="w-full bg-gradient-to-br from-stone-50 via-white to-stone-50 rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-lg transition-all duration-300 p-8 cursor-pointer group relative overflow-hidden">
-                  {/* Animated background icons on hover - randomly distributed with playful rotation */}
-                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none overflow-hidden rounded-xl">
-                    {/* Generate icons with random positions for playful distribution */}
-                    {(() => {
-                      const icons = [Shirt, Heart, Star, Sparkles, Wand2, Zap, Grid3x3, Tag, TrendingUp];
-                      const positions = [];
-                      
-                      // Generate 50 icons with random positions
-                      for (let i = 0; i < 50; i++) {
-                        const Icon = icons[i % icons.length];
-                        // Random positioning with some padding from edges
-                        const topPercent = 5 + Math.random() * 85; // 5% to 90%
-                        const leftPercent = 3 + Math.random() * 90; // 3% to 93%
-                        // Random size between 3-7 for more variety
-                        const size = 3 + Math.random() * 4;
-                        // Random rotation angle for playful tilt
-                        const rotation = (Math.random() - 0.5) * 30; // -15 to +15 degrees
-                        // Random delay for staggered animation
-                        const delay = Math.random() * 2;
-                        // Random animation type
-                        const animationType = Math.random() > 0.5 ? 'float' : 'floatReverse';
-                        // Random animation duration for more organic feel
-                        const duration = 2.5 + Math.random() * 1.5; // 2.5s to 4s
-                        
-                        positions.push(
-                          <Icon
-                            key={`icon-${i}`}
-                            className={`absolute text-stone-300`}
-                            style={{
-                              top: `${topPercent}%`,
-                              left: `${leftPercent}%`,
-                              width: `${size * 4}px`,
-                              height: `${size * 4}px`,
-                              transform: `rotate(${rotation}deg)`,
-                              animation: `${animationType} ${duration}s ease-in-out infinite`,
-                              animationDelay: `${delay}s`,
-                            }}
-                          />
-                        );
-                      }
-                      return positions;
-                    })()}
-                  </div>
-                  
-                  <div className="flex flex-col items-center justify-center space-y-4 relative z-10">
-                    <div className="relative">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-stone-200 to-stone-300 flex items-center justify-center group-hover:from-stone-300 group-hover:to-stone-400 transition-all duration-300 shadow-md group-hover:shadow-lg group-hover:scale-110">
-                        <Plus size={36} className="text-stone-700 group-hover:text-stone-900 transition-colors" strokeWidth={2.5} />
-                      </div>
-                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-stone-900 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Sparkles size={14} className="text-white" />
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <h3 className="text-xl subtle-artistic-font text-stone-900 mb-1">Add New Item</h3>
-                      <p className="text-sm text-stone-500">Upload to get style recommendations</p>
-                    </div>
+            <div className="w-full bg-gradient-to-br from-stone-50 via-white to-stone-50 rounded-xl border border-stone-200 p-8 relative overflow-hidden opacity-60">
+              <div className="flex flex-col items-center justify-center space-y-4 relative z-10">
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-stone-200 to-stone-300 flex items-center justify-center transition-all duration-300 shadow-md">
+                    <Plus size={36} className="text-stone-700 transition-colors" strokeWidth={2.5} />
                   </div>
                 </div>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[90vw] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add New Item</DialogTitle>
-                </DialogHeader>
-                <UploadScreen 
-                  userId={userId}
-                  onUpload={handleUploadComplete}
-                  onComplete={(addToWardrobe) => {
-                    // Navigation is handled in handleUploadComplete
-                  }}
-                  mode="recommendation"
-                />
-              </DialogContent>
-            </Dialog>
+                <div className="text-center">
+                  <h3 className="text-xl subtle-artistic-font text-stone-900 mb-1">Coming Soon</h3>
+                  <p className="text-sm text-stone-500 mb-2">Please go to the wardrobe section to add clothes first</p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
